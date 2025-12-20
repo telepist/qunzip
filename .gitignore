@@ -1,0 +1,80 @@
+# Kotlin Multiplatform .gitignore
+
+### Build outputs ###
+build/
+*.klib
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+*.kexe
+*.dSYM/
+
+### Gradle ###
+.gradle/
+.gradle-home/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+### IDE - IntelliJ IDEA ###
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.idea_modules/
+
+### IDE - VS Code ###
+.vscode/
+*.code-workspace
+
+### IDE - Eclipse ###
+.classpath
+.project
+.settings/
+bin/
+
+### Kotlin Native ###
+.konan/
+*.def
+*.bc
+*.o.d
+
+### macOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+### Linux ###
+*~
+.nfs*
+
+### Windows ###
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+### Logs ###
+*.log
+logs/
+
+### Temporary files ###
+*.swp
+*.swo
+*.tmp
+*.bak
+*.orig
+
+### Third-party binaries ###
+bin/7zip/7z.exe
+bin/7zip/7z.dll
+
+### Local configuration ###
+local.properties
+gradle.properties.local
+
+### Claude Code ###
+.claude/

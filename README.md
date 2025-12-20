@@ -1,0 +1,264 @@
+# Gunzip - Cross-Platform Archive Extraction Utility
+
+<div align="center">
+
+A fast, simple archive extraction utility inspired by macOS simplicity but built for Windows, Linux, and macOS.
+
+**Just double-click any archive to extract it.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.2.20-purple.svg)](https://kotlinlang.org/)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](https://github.com/yourusername/gunzip)
+
+</div>
+
+## Features
+
+✨ **Smart Extraction**
+- Single file → Extracts to same directory
+- Multiple files → Creates new folder with archive name
+- Single root folder → Extracts contents directly (no nested folders)
+- Auto-cleanup → Moves archive to Recycle Bin/Trash after extraction
+
+📦 **Wide Format Support**
+- ZIP, 7-Zip, RAR, TAR (+ .gz, .bz2, .xz variants)
+- Cabinet (.cab), ARJ (.arj), LZH (.lzh)
+
+🖱️ **Simple to Use**
+- Double-click any archive file
+- File associations automatically configured
+- No complex options or settings
+
+⚡ **Fast & Lightweight**
+- Native executables (no JVM required)
+- Powered by 7-Zip for fast decompression
+- Minimal system resource usage
+
+🏗️ **Clean Architecture**
+- MVVM pattern with Kotlin Flow
+- TDD with comprehensive test coverage
+- Platform-specific implementations for optimal UX
+
+## Installation
+
+### Windows
+
+#### Option 1: Installer (Recommended)
+
+1. Download `gunzip-setup-{version}.exe` from [Releases](https://github.com/yourusername/gunzip/releases)
+2. Run the installer
+3. Choose "Register file associations" during installation
+4. Done! Double-click any archive to extract
+
+#### Option 2: Portable ZIP
+
+1. Download `gunzip-{version}-windows-portable.zip` from [Releases](https://github.com/yourusername/gunzip/releases)
+2. Extract to any folder (e.g., `C:\Tools\Gunzip\`)
+3. Run `gunzip.exe` from command line
+4. (Optional) Register file associations:
+   ```cmd
+   gunzip.exe --register-associations
+   ```
+
+### macOS
+
+Coming soon! Currently in development.
+
+### Linux
+
+Coming soon! Currently in development.
+
+## Usage
+
+### Automatic Extraction (Recommended)
+
+Simply **double-click** any supported archive file. Gunzip will:
+1. Extract the contents intelligently
+2. Open the extraction folder (optional)
+3. Move the original archive to trash
+
+### Command Line
+
+```bash
+# Extract an archive
+gunzip path/to/archive.zip
+
+# Register file associations (Windows, requires admin)
+gunzip --register-associations
+
+# Unregister file associations
+gunzip --unregister-associations
+
+# Show help
+gunzip --help
+
+# Show version
+gunzip --version
+```
+
+## Supported Archive Formats
+
+| Format | Extensions | Compression |
+|--------|-----------|-------------|
+| **ZIP** | `.zip` | DEFLATE |
+| **7-Zip** | `.7z` | LZMA, LZMA2 |
+| **RAR** | `.rar` | RAR |
+| **TAR** | `.tar` | None (container) |
+| **TAR+GZIP** | `.tar.gz`, `.tgz` | GZIP |
+| **TAR+BZIP2** | `.tar.bz2`, `.tbz2` | BZIP2 |
+| **TAR+XZ** | `.tar.xz`, `.txz` | XZ/LZMA2 |
+| **Cabinet** | `.cab` | MSZIP, LZX |
+| **ARJ** | `.arj` | ARJ |
+| **LZH** | `.lzh` | LH |
+
+## Building from Source
+
+### Prerequisites
+
+- **JDK 11+** (for Gradle)
+- **Kotlin Native toolchain** (auto-downloaded by Gradle)
+- **Windows only:**
+  - Inno Setup 6.x (for installer builds)
+
+### Build Commands
+
+```bash
+# Build release executable for Windows
+./gradlew linkReleaseExecutableMingwX64
+
+# Build for all platforms
+./gradlew buildAllRelease
+
+# Run tests
+./gradlew testAll
+
+# Build Windows installer (Windows only, requires Inno Setup)
+./gradlew packageWindows
+
+# Build portable ZIP
+./gradlew createPortableZip
+```
+
+**Output locations:**
+- Executables: `build/bin/{platform}/releaseExecutable/`
+- Windows installer: `build/installer-output/gunzip-setup-{version}.exe`
+- Portable ZIP: `build/dist/gunzip-{version}-windows-portable.zip`
+
+See [docs/windows-installer.md](docs/windows-installer.md) for detailed build instructions.
+
+## Project Structure
+
+```
+src/
+├── commonMain/kotlin/gunzip/
+│   ├── domain/              # Business logic (platform-agnostic)
+│   │   ├── entities/        # Core models
+│   │   ├── usecases/        # Business operations
+│   │   └── repositories/    # Repository interfaces
+│   ├── presentation/        # ViewModels and UI state
+│   └── main.kt             # Application entry point
+│
+├── mingwX64Main/kotlin/     # Windows-specific implementations
+├── linuxX64Main/kotlin/     # Linux-specific implementations
+└── macosX64Main/kotlin/     # macOS-specific implementations
+
+installer/windows/           # Windows installer configuration
+├── gunzip.iss              # Inno Setup script
+├── LICENSE.txt             # Combined license
+├── README.txt              # Post-install readme
+└── create-icon.ps1         # Icon generation script
+
+docs/                       # Documentation
+└── windows-installer.md    # Installer build guide
+```
+
+## Architecture
+
+Gunzip follows **Clean Architecture** principles:
+
+- **Domain Layer**: Platform-agnostic business logic
+- **Data Layer**: Platform-specific repository implementations
+- **Presentation Layer**: MVVM with Kotlin Flow
+
+**Key design patterns:**
+- MVVM (Model-View-ViewModel)
+- Repository Pattern
+- Use Cases (Interactors)
+- Dependency Injection
+- Test-Driven Development (TDD)
+
+See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+./gradlew testAll
+
+# Run common (platform-agnostic) tests
+./gradlew test
+
+# Run Windows-specific tests
+./gradlew mingwX64Test
+```
+
+### Code Structure
+
+- **Clean Architecture**: Domain, Data, Presentation layers
+- **MVVM Pattern**: ViewModels with Kotlin Flow
+- **TDD**: Unit tests with Turbine for Flow testing
+- **Platform Abstraction**: Expect/actual for platform-specific code
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Roadmap
+
+- [x] Windows implementation
+- [x] Windows installer with file associations
+- [ ] Linux implementation
+- [ ] macOS implementation
+- [ ] Progress notifications during extraction
+- [ ] Drag-and-drop support
+- [ ] Multi-archive batch extraction
+- [ ] Custom extraction location
+
+## License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+**Bundled Components:**
+- **7-Zip** (7z.exe, 7z.dll) - GNU LGPL 2.1 - Copyright © 1999-2024 Igor Pavlov
+- See [installer/windows/LICENSE.txt](installer/windows/LICENSE.txt) for full license information
+
+## Acknowledgments
+
+- **7-Zip** by Igor Pavlov - Powerful compression library
+- **Kotlin Multiplatform** - Cross-platform development framework
+- **Kotlin/Native** - Native executable compilation
+- **Inno Setup** - Windows installer framework
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/gunzip/issues)
+- **Documentation**: [docs/](docs/)
+- **Build Guide**: [docs/windows-installer.md](docs/windows-installer.md)
+
+---
+
+<div align="center">
+
+**Made with ❤️ using Kotlin Multiplatform**
+
+[Report Bug](https://github.com/yourusername/gunzip/issues) · [Request Feature](https://github.com/yourusername/gunzip/issues)
+
+</div>
