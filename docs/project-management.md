@@ -1,69 +1,68 @@
-# Agile Project Management
+# Project Management
 
 ## Project Overview
 
 **Project Name**: Gunzip - Cross-Platform Archive Extractor
 **Vision**: Create the most intuitive archive extraction experience across all major desktop platforms
-**Duration**: 8-12 weeks (3-4 sprints)
 **Team Size**: 1-3 developers
 
 ## Product Roadmap
 
-### Phase 1: Core Functionality (Sprints 1-2)
+### Phase 1: Core Functionality
 **Goal**: MVP with basic double-click extraction
 
-#### Epic 1: Foundation Architecture
+#### Foundation Architecture
 - Clean Architecture setup with MVVM
 - Platform abstraction layer
 - Basic Kotlin Flow integration
 - TDD testing framework
 
-#### Epic 2: Core Extraction Engine
+#### Core Extraction Engine
 - 7zip integration
 - Archive analysis logic
 - Smart extraction strategies
 - Error handling framework
 
-#### Epic 3: Platform Integration
+#### Platform Integration
 - File association registration
 - Double-click handling
 - Basic notifications
 
-### Phase 2: Enhanced UX (Sprint 3)
+### Phase 2: Enhanced UX
 **Goal**: Polish user experience and add advanced features
 
-#### Epic 4: Advanced Notifications
+#### Advanced Notifications
 - Progress tracking for large files
 - Rich notification content
 - Cancellation support
 
-#### Epic 5: Error Handling & Recovery
+#### Error Handling & Recovery
 - Comprehensive error scenarios
 - User-friendly error messages
 - Automatic retry mechanisms
 
-#### Epic 6: Platform-Specific Features
+#### Platform-Specific Features
 - Native trash integration
 - OS-specific optimizations
 - Accessibility support
 
-### Phase 3: Future Enhancements (Sprint 4+)
+### Phase 3: Future Enhancements
 **Goal**: Advanced features and extensibility
 
-#### Epic 7: Advanced Archive Support
+#### Advanced Archive Support
 - Password-protected archives
 - Encrypted archive handling
 - Archive creation functionality
 
-#### Epic 8: Batch Operations
+#### Batch Operations
 - Multiple archive selection
 - Drag-and-drop support
 - Extraction queue management
 
-## Sprint Planning
+## Feature Planning
 
-### Sprint 1 (Weeks 1-3): Foundation
-**Sprint Goal**: Establish architecture and basic extraction
+### Foundation Features
+**Goal**: Establish architecture and basic extraction
 
 #### User Stories
 
@@ -100,8 +99,8 @@
   - All files extracted correctly
   - Folder naming follows conventions
 
-### Sprint 2 (Weeks 4-6): Core Features
-**Sprint Goal**: Complete cross-platform functionality
+### Core Platform Features
+**Goal**: Complete cross-platform functionality
 
 #### User Stories
 
@@ -138,8 +137,8 @@
   - Desktop notifications appear
   - Files go to trash folder
 
-### Sprint 3 (Weeks 7-9): Enhanced Experience
-**Sprint Goal**: Polish UX and add advanced features
+### Enhanced Experience Features
+**Goal**: Polish UX and add advanced features
 
 #### User Stories
 
@@ -176,9 +175,9 @@
 - [ ] Documentation updated
 - [ ] Acceptance criteria met
 
-### Sprint DoD
-- [ ] All user stories meet DoD
-- [ ] Sprint goal achieved
+### Feature Set DoD
+- [ ] All user stories in feature set meet DoD
+- [ ] Feature set goal achieved
 - [ ] No critical bugs remaining
 - [ ] Performance benchmarks met
 - [ ] Security review completed
@@ -242,17 +241,17 @@
 
 ## Communication Plan
 
-### Daily Standups
-- What did you work on yesterday?
-- What will you work on today?
+### Regular Check-ins
+- What have you been working on?
+- What will you work on next?
 - Any blockers or impediments?
 
-### Sprint Reviews
+### Progress Reviews
 - Demo completed functionality
 - Gather stakeholder feedback
 - Update product backlog priorities
 
-### Sprint Retrospectives
+### Retrospectives
 - What went well?
 - What could be improved?
-- Action items for next sprint
+- Action items for improvement

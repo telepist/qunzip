@@ -108,9 +108,13 @@ src/
 │   │   └── viewmodels/        # State management
 │   └── main.kt               # Application entry point
 ├── commonTest/kotlin/gunzip/  # Shared tests
-├── windowsMain/kotlin/        # Windows-specific implementations
-├── linuxMain/kotlin/          # Linux-specific implementations
-└── macosMain/kotlin/          # macOS-specific implementations
+├── mingwX64Main/kotlin/gunzip/     # Windows x64 (MinGW) implementations
+│   ├── platform/                   # Windows repository implementations
+│   └── WindowsPlatform.kt          # DI and platform utilities
+├── linuxX64Main/kotlin/gunzip/     # Linux x64 implementations
+├── linuxArm64Main/kotlin/gunzip/   # Linux ARM64 implementations
+├── macosX64Main/kotlin/gunzip/     # macOS Intel implementations
+└── macosArm64Main/kotlin/gunzip/   # macOS Apple Silicon implementations
 ```
 
 ## Core Functionality
@@ -164,8 +168,8 @@ src/
 
 ## Current Development Status
 
-**Phase**: Sprint 1 - Foundation Architecture
-**Progress**: Core architecture complete, platform implementations pending
+**Phase**: Foundation Architecture
+**Progress**: Core architecture complete, Windows platform implemented, build errors preventing testing
 
 ### ✅ Completed
 - Clean Architecture with MVVM setup (100%)
@@ -174,17 +178,27 @@ src/
 - ViewModels with Kotlin Flow (100%)
 - TDD framework with 40 passing tests (100%)
 - Build configuration for all platforms (100%)
+- **Windows Platform Implementation (100%)**
+  - WindowsArchiveRepository (7zip integration)
+  - WindowsFileSystemRepository (file ops, Recycle Bin)
+  - WindowsNotificationRepository (console notifications)
+  - WindowsFileAssociationRepository (stub)
+  - WindowsPlatform.kt (DI and platform utilities)
+- **Black Box E2E Test Scripts**
+  - Windows, Linux, and macOS test scripts created
+  - Test fixtures prepared
+  - Ready to run once build is fixed
 
-### 🔄 In Progress
-- Platform-specific repository implementations (0%)
-- 7zip integration (pending)
-- File association registration (pending)
+### 🔴 Blocking Issues
+- **BUILD FAILURE**: Linux/macOS platforms missing `getCurrentExecutablePath()` implementations
+- Cannot run tests or compile project until fixed
 
 ### ⏳ Pending
-- Windows platform implementation
-- Linux platform implementation
-- macOS platform implementation
-- End-to-end integration testing
+- Fix build errors (immediate priority)
+- Linux platform full repository implementations
+- macOS platform full repository implementations
+- End-to-end integration testing (blocked by build)
+- Windows Registry file associations (advanced feature)
 
 See `docs/development-progress.md` for detailed status and next steps.
 

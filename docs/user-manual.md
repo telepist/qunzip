@@ -1,5 +1,7 @@
 # User Manual
 
+> **⚠️ Note**: This manual describes the intended functionality of Gunzip. The project is currently under active development. Windows platform implementation is complete but not yet fully tested. Linux and macOS implementations are pending. See [development-progress.md](development-progress.md) for current status.
+
 ## Overview
 
 **Gunzip** is a cross-platform archive extraction utility that provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives. Inspired by macOS simplicity, it works intelligently in the background to extract your files exactly where you expect them.
@@ -7,19 +9,27 @@
 ## Installation
 
 ### Windows
-1. Download `gunzip-windows.exe` from releases
-2. Run the installer
-3. Archive file associations will be configured automatically
+
+**Current Status**: Build from source required. Pre-built installers coming soon.
+
+1. Build the executable:
+   ```bash
+   ./gradlew linkReleaseExecutableMingwX64
+   ```
+2. Executable location: `build/bin/mingwX64/releaseExecutable/gunzip.exe`
+3. (Optional) Build installer:
+   ```bash
+   ./gradlew packageWindows  # Requires Inno Setup 6
+   ```
+4. For build requirements, see [windows-installer.md](windows-installer.md)
 
 ### macOS
-1. Download `gunzip-macos.dmg` from releases
-2. Drag Gunzip to Applications folder
-3. Grant necessary permissions when prompted
+
+**Status**: Implementation pending. Not yet available.
 
 ### Linux
-1. Download `gunzip-linux.tar.gz` from releases
-2. Extract and run: `sudo ./install.sh`
-3. File associations will be configured for your desktop environment
+
+**Status**: Implementation pending. Not yet available.
 
 ## Basic Usage
 
@@ -135,17 +145,18 @@ This happens when:
 
 ### Getting Help
 
+> **Note**: Logging features are implemented but not yet tested in the current development build.
+
 #### Log Files
 Application logs are stored at:
-- **Windows**: `%APPDATA%\Gunzip\logs\`
-- **macOS**: `~/Library/Logs/Gunzip/`
-- **Linux**: `~/.local/share/gunzip/logs/`
+- **Windows**: `%APPDATA%\Gunzip\logs/` _(planned)_
+- **macOS**: `~/Library/Logs/Gunzip/` _(pending implementation)_
+- **Linux**: `~/.local/share/gunzip/logs/` _(pending implementation)_
 
 #### Reporting Issues
-1. Check the log files for error details
-2. Note your operating system and version
-3. Include the archive format and approximate size
-4. Report at: [GitHub Issues](https://github.com/your-repo/gunzip/issues)
+For development feedback and bug reports, see the project's documentation:
+- [Development Progress](development-progress.md)
+- [Architecture Documentation](architecture.md)
 
 ## Keyboard Shortcuts
 

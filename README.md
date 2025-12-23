@@ -6,9 +6,11 @@ A fast, simple archive extraction utility inspired by macOS simplicity but built
 
 **Just double-click any archive to extract it.**
 
+> **⚠️ Development Status**: This project is under active development. Windows platform implementation is complete but not yet fully tested. Linux and macOS implementations are pending. See [development-progress.md](docs/development-progress.md) for current status.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.20-purple.svg)](https://kotlinlang.org/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](https://github.com/yourusername/gunzip)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)
 
 </div>
 
@@ -41,32 +43,21 @@ A fast, simple archive extraction utility inspired by macOS simplicity but built
 
 ## Installation
 
-### Windows
+> **Note**: Pre-built releases are not yet available. To use Gunzip, you must build from source (see "Building from Source" section below).
 
-#### Option 1: Installer (Recommended)
+### Windows (Build from Source)
 
-1. Download `gunzip-setup-{version}.exe` from [Releases](https://github.com/yourusername/gunzip/releases)
-2. Run the installer
-3. Choose "Register file associations" during installation
-4. Done! Double-click any archive to extract
-
-#### Option 2: Portable ZIP
-
-1. Download `gunzip-{version}-windows-portable.zip` from [Releases](https://github.com/yourusername/gunzip/releases)
-2. Extract to any folder (e.g., `C:\Tools\Gunzip\`)
-3. Run `gunzip.exe` from command line
-4. (Optional) Register file associations:
-   ```cmd
-   gunzip.exe --register-associations
-   ```
+1. Build the executable: `./gradlew linkReleaseExecutableMingwX64`
+2. Executable location: `build/bin/mingwX64/releaseExecutable/gunzip.exe`
+3. (Optional) Build installer: `./gradlew packageWindows` (requires Inno Setup 6)
 
 ### macOS
 
-Coming soon! Currently in development.
+Coming soon! Implementation pending.
 
 ### Linux
 
-Coming soon! Currently in development.
+Coming soon! Implementation pending.
 
 ## Usage
 
@@ -223,14 +214,25 @@ Contributions are welcome! Please:
 
 ## Roadmap
 
-- [x] Windows implementation
+### Current Phase (In Progress)
+- [x] Core architecture with Clean Architecture + MVVM
+- [x] Windows platform repository implementations
+- [x] Black box E2E test framework
+- [ ] Fix build errors (missing platform implementations)
+- [ ] Windows E2E testing and validation
 - [x] Windows installer with file associations
-- [ ] Linux implementation
-- [ ] macOS implementation
-- [ ] Progress notifications during extraction
+
+### Next Phase
+- [ ] Linux platform implementation
+- [ ] macOS platform implementation
+- [ ] Cross-platform testing
+
+### Future Enhancements
+- [ ] Real-time progress notifications during extraction
+- [ ] Advanced file association management (Windows Registry)
 - [ ] Drag-and-drop support
 - [ ] Multi-archive batch extraction
-- [ ] Custom extraction location
+- [ ] Custom extraction location selection
 
 ## License
 
@@ -249,8 +251,8 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/gunzip/issues)
 - **Documentation**: [docs/](docs/)
+- **Development Progress**: [docs/development-progress.md](docs/development-progress.md)
 - **Build Guide**: [docs/windows-installer.md](docs/windows-installer.md)
 
 ---
@@ -258,7 +260,5 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 <div align="center">
 
 **Made with ❤️ using Kotlin Multiplatform**
-
-[Report Bug](https://github.com/yourusername/gunzip/issues) · [Request Feature](https://github.com/yourusername/gunzip/issues)
 
 </div>

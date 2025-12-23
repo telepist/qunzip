@@ -103,20 +103,28 @@ File Double-Click → OS Handler → Application Entry Point
 
 ```
 src/
-├── commonMain/kotlin/
+├── commonMain/kotlin/gunzip/
 │   ├── domain/
-│   │   ├── entities/
-│   │   ├── usecases/
-│   │   └── repositories/
-│   ├── data/
-│   │   ├── repositories/
-│   │   └── models/
-│   └── presentation/
-│       └── viewmodels/
-├── windowsMain/kotlin/
-│   └── data/repositories/
-├── linuxMain/kotlin/
-│   └── data/repositories/
-└── macosMain/kotlin/
-    └── data/repositories/
+│   │   ├── entities/          # Core business objects
+│   │   ├── usecases/          # Business logic
+│   │   └── repositories/      # Repository interfaces
+│   ├── presentation/
+│   │   └── viewmodels/        # State management
+│   └── main.kt               # Application entry point
+├── commonTest/kotlin/gunzip/  # Shared unit tests
+├── mingwX64Main/kotlin/gunzip/
+│   ├── platform/              # Windows repository implementations
+│   └── WindowsPlatform.kt     # DI and platform utilities
+├── linuxX64Main/kotlin/gunzip/
+│   ├── platform/              # Linux repository implementations
+│   └── LinuxPlatform.kt       # DI and platform utilities
+├── linuxArm64Main/kotlin/gunzip/
+│   ├── platform/              # Linux ARM64 repository implementations
+│   └── LinuxPlatform.kt
+├── macosX64Main/kotlin/gunzip/
+│   ├── platform/              # macOS Intel repository implementations
+│   └── MacosPlatform.kt       # DI and platform utilities
+└── macosArm64Main/kotlin/gunzip/
+    ├── platform/              # macOS ARM64 repository implementations
+    └── MacosPlatform.kt
 ```
