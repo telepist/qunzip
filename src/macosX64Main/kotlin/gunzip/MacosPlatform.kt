@@ -23,3 +23,12 @@ internal actual fun exitProcess(code: Int): Nothing {
     exit(code)
     throw RuntimeException("exit() should not return")
 }
+
+/**
+ * macOS x64-specific executable path
+ */
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun getCurrentExecutablePath(): String {
+    // TODO: Implement using _NSGetExecutablePath
+    return "/usr/local/bin/gunzip"
+}

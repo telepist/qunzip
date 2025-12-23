@@ -1,6 +1,7 @@
 plugins {
     kotlin("multiplatform") version "2.2.20"
     kotlin("plugin.serialization") version "2.2.20"
+    kotlin("plugin.compose") version "2.2.20"
 }
 
 // Application version
@@ -60,6 +61,9 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.5.0")
                 implementation("co.touchlab:kermit:2.0.3") // Logging
+
+                // Mosaic for TUI
+                implementation("com.jakewharton.mosaic:mosaic-runtime:0.18.0")
             }
         }
 

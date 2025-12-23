@@ -23,3 +23,12 @@ internal actual fun exitProcess(code: Int): Nothing {
     exit(code)
     throw RuntimeException("exit() should not return")
 }
+
+/**
+ * Linux-specific executable path
+ */
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun getCurrentExecutablePath(): String {
+    // TODO: Implement using readlink on /proc/self/exe
+    return "/usr/local/bin/gunzip"
+}

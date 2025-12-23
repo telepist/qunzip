@@ -3,6 +3,7 @@ package gunzip.presentation.viewmodels
 import gunzip.domain.usecases.ExtractArchiveUseCase
 import gunzip.domain.usecases.ManageFileAssociationsUseCase
 import gunzip.domain.usecases.ValidateArchiveUseCase
+import gunzip.domain.repositories.PreferencesRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
@@ -15,6 +16,7 @@ class ApplicationViewModel(
     private val extractArchiveUseCase: ExtractArchiveUseCase,
     private val validateArchiveUseCase: ValidateArchiveUseCase,
     private val manageFileAssociationsUseCase: ManageFileAssociationsUseCase,
+    private val preferencesRepository: PreferencesRepository,
     private val scope: CoroutineScope,
     private val logger: Logger = Logger.withTag("ApplicationViewModel")
 ) {
@@ -22,12 +24,19 @@ class ApplicationViewModel(
     val extractionViewModel = ExtractionViewModel(
         extractArchiveUseCase = extractArchiveUseCase,
         validateArchiveUseCase = validateArchiveUseCase,
+        preferencesRepository = preferencesRepository,
         scope = scope,
         logger = logger
     )
 
     val fileAssociationViewModel = FileAssociationViewModel(
         manageFileAssociationsUseCase = manageFileAssociationsUseCase,
+        scope = scope,
+        logger = logger
+    )
+
+    val settingsViewModel = SettingsViewModel(
+        preferencesRepository = preferencesRepository,
         scope = scope,
         logger = logger
     )
@@ -62,8 +71,11 @@ class ApplicationViewModel(
                 when (event) {
                     is ExtractionEvent.ExtractionCompleted -> {
                         _events.tryEmit(ApplicationEvent.ExtractionCompleted)
-                        // Auto-exit after successful extraction
-                        _uiState.value = _uiState.value.copy(shouldExit = true)
+                        // Check preference before auto-exiting
+                        val preferences = preferencesRepository.loadPreferences()
+                        if (preferences.autoCloseAfterExtraction) {
+                            _uiState.value = _uiState.value.copy(shouldExit = true)
+                        }
                     }
                     is ExtractionEvent.ExtractionFailed -> {
                         _events.tryEmit(ApplicationEvent.ExtractionFailed(event.throwable))

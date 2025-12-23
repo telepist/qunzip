@@ -1,6 +1,7 @@
 package gunzip.presentation.viewmodels
 
 import gunzip.domain.entities.*
+import gunzip.domain.repositories.PreferencesRepository
 import gunzip.domain.usecases.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
@@ -11,6 +12,7 @@ class ExtractionViewModelTest {
 
     private lateinit var mockExtractUseCase: MockExtractArchiveUseCase
     private lateinit var mockValidateUseCase: MockValidateArchiveUseCase
+    private lateinit var mockPreferencesRepository: MockPreferencesRepository
     private lateinit var testScope: TestScope
     private lateinit var viewModel: ExtractionViewModel
 
@@ -18,11 +20,13 @@ class ExtractionViewModelTest {
     fun setup() {
         mockExtractUseCase = MockExtractArchiveUseCase()
         mockValidateUseCase = MockValidateArchiveUseCase()
+        mockPreferencesRepository = MockPreferencesRepository()
         testScope = TestScope()
 
         viewModel = ExtractionViewModel(
             extractArchiveUseCase = mockExtractUseCase,
             validateArchiveUseCase = mockValidateUseCase,
+            preferencesRepository = mockPreferencesRepository,
             scope = testScope
         )
     }
@@ -233,7 +237,7 @@ class ExtractionViewModelTest {
     ) {
         var progressFlow = flowOf<ExtractionProgress>()
 
-        override suspend operator fun invoke(archivePath: String) = progressFlow
+        override suspend operator fun invoke(archivePath: String, options: ExtractionOptions) = progressFlow
     }
 
     private class MockValidateArchiveUseCase(
@@ -279,5 +283,24 @@ class ExtractionViewModelTest {
         )
 
         override suspend operator fun invoke(archivePath: String) = result
+    }
+
+    private class MockPreferencesRepository : PreferencesRepository {
+        var preferences: UserPreferences = UserPreferences.DEFAULT
+        var saveSuccess: Boolean = true
+
+        override suspend fun loadPreferences() = preferences
+        override suspend fun savePreferences(preferences: UserPreferences): Boolean {
+            if (saveSuccess) {
+                this.preferences = preferences
+            }
+            return saveSuccess
+        }
+        override fun getPreferencesPath() = "/mock/settings.json"
+        override suspend fun preferencesExist() = true
+        override suspend fun resetToDefaults(): Boolean {
+            preferences = UserPreferences.DEFAULT
+            return true
+        }
     }
 }

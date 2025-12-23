@@ -53,6 +53,23 @@ enum class ExtractionStrategy {
     SINGLE_FOLDER_TO_DIRECTORY // Single root folder -> extract contents to same directory
 }
 
+/**
+ * Options for archive extraction behavior
+ */
+data class ExtractionOptions(
+    /**
+     * Whether to move the original archive to trash after successful extraction.
+     * Default is false for safety.
+     */
+    val moveToTrashAfterExtraction: Boolean = false,
+
+    /**
+     * Whether to show a notification when extraction completes.
+     * Default is true.
+     */
+    val showCompletionNotification: Boolean = true
+)
+
 sealed class ExtractionError(override val message: String, override val cause: Throwable? = null) : Throwable(message, cause) {
     class CorruptedArchive(message: String = "Archive is corrupted or invalid") : ExtractionError(message)
     class UnsupportedFormat(format: String) : ExtractionError("Unsupported archive format: $format")

@@ -2,14 +2,30 @@ package gunzip
 
 import gunzip.presentation.viewmodels.ApplicationViewModel
 import gunzip.presentation.viewmodels.ApplicationEvent
+import gunzip.presentation.ui.*
 import gunzip.domain.usecases.*
+import gunzip.domain.repositories.PreferencesRepository
+import gunzip.domain.entities.UserPreferences
 import kotlinx.coroutines.*
 import co.touchlab.kermit.Logger
+import co.touchlab.kermit.Severity
 
 /**
  * Main entry point for the Gunzip application
  */
 fun main(args: Array<String>) {
+    // Determine UI mode early to configure logging appropriately
+    val uiMode = selectUiMode(args.toList())
+
+    // Suppress logging and console output in TUI mode to keep the display clean
+    // Also suppress if we're in a terminal, as we'll likely fall back to TUI
+    val shouldSuppressForTui = uiMode == UiMode.TUI ||
+            (uiMode == UiMode.GUI && isTerminal()) // Will likely fall back to TUI
+    if (shouldSuppressForTui) {
+        Logger.setMinSeverity(Severity.Assert) // Effectively disables logging
+        UiConfig.enableTuiMode() // Suppress println notifications
+    }
+
     // Configure logging
     val logger = Logger.withTag("Main")
 
@@ -81,6 +97,46 @@ fun main(args: Array<String>) {
             }
         }
 
+        args.contains("--set-trash-on") -> {
+            runBlocking {
+                try {
+                    val dependencies = initializeDependencies()
+                    val currentPrefs = dependencies.preferencesRepository.loadPreferences()
+                    val newPrefs = currentPrefs.copy(moveToTrashAfterExtraction = true)
+                    if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
+                        println("Setting updated: Move archive to trash after extraction = ON")
+                        exitProcess(0)
+                    } else {
+                        println("Error: Failed to save preferences")
+                        exitProcess(1)
+                    }
+                } catch (e: Exception) {
+                    println("Error: ${e.message}")
+                    exitProcess(1)
+                }
+            }
+        }
+
+        args.contains("--set-trash-off") -> {
+            runBlocking {
+                try {
+                    val dependencies = initializeDependencies()
+                    val currentPrefs = dependencies.preferencesRepository.loadPreferences()
+                    val newPrefs = currentPrefs.copy(moveToTrashAfterExtraction = false)
+                    if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
+                        println("Setting updated: Move archive to trash after extraction = OFF")
+                        exitProcess(0)
+                    } else {
+                        println("Error: Failed to save preferences")
+                        exitProcess(1)
+                    }
+                } catch (e: Exception) {
+                    println("Error: ${e.message}")
+                    exitProcess(1)
+                }
+            }
+        }
+
         args.contains("--help") || args.contains("-h") -> {
             printHelp()
             exitProcess(0)
@@ -100,7 +156,7 @@ fun main(args: Array<String>) {
 
     runBlocking {
         try {
-            // Initialize dependency injection (would be replaced with proper DI in real implementation)
+            // Initialize dependency injection
             val dependencies = initializeDependencies()
 
             // Create main ViewModel
@@ -108,17 +164,42 @@ fun main(args: Array<String>) {
                 extractArchiveUseCase = dependencies.extractArchiveUseCase,
                 validateArchiveUseCase = dependencies.validateArchiveUseCase,
                 manageFileAssociationsUseCase = dependencies.manageFileAssociationsUseCase,
+                preferencesRepository = dependencies.preferencesRepository,
                 scope = applicationScope,
                 logger = logger
             )
 
-            // Start the application
-            val app = GunzipApplication(
-                viewModel = applicationViewModel,
-                logger = logger
-            )
+            // Initialize application with arguments (filter out UI mode flags)
+            val appArgs = args.toList().filterNot { it == "--gui" || it == "--tui" }
+            applicationViewModel.handleApplicationStart(appArgs)
 
-            app.run(args.toList())
+            // Determine UI mode (GUI or TUI)
+            val uiMode = selectUiMode(args.toList())
+            logger.i { "Selected UI mode: $uiMode" }
+
+            // Select appropriate renderer
+            val renderer = when (uiMode) {
+                UiMode.GUI -> {
+                    val nativeGui = createNativeGuiRenderer()
+                    if (nativeGui?.isAvailable() == true) {
+                        logger.i { "Using native GUI renderer" }
+                        nativeGui
+                    } else {
+                        logger.w { "Native GUI not available, falling back to TUI" }
+                        // Enable TUI mode suppression since we're falling back to TUI
+                        Logger.setMinSeverity(Severity.Assert)
+                        UiConfig.enableTuiMode()
+                        MosaicTuiRenderer()
+                    }
+                }
+                UiMode.TUI -> {
+                    logger.i { "Using Mosaic TUI renderer" }
+                    MosaicTuiRenderer()
+                }
+            }
+
+            // Render UI
+            renderer.render(applicationViewModel, applicationScope)
 
         } catch (e: Exception) {
             logger.e(e) { "Fatal error during application startup" }
@@ -142,6 +223,10 @@ fun printHelp() {
           <archive-file>              Path to archive file to extract
 
         Options:
+          --gui                       Force GUI mode (native dialogs)
+          --tui                       Force TUI mode (terminal UI)
+          --set-trash-on              Enable moving archive to trash after extraction
+          --set-trash-off             Disable moving archive to trash (default)
           --register-associations     Register file associations for supported formats
           --unregister-associations   Remove file associations
           --help, -h                  Show this help message
@@ -153,83 +238,11 @@ fun printHelp() {
 
         Examples:
           gunzip archive.zip                    Extract archive.zip
+          gunzip --tui archive.zip              Extract with terminal UI
+          gunzip --gui archive.zip              Extract with native GUI
           gunzip --register-associations        Register file associations
           gunzip --unregister-associations      Remove file associations
     """.trimIndent())
-}
-
-/**
- * Main application class that handles the UI-less extraction process
- */
-class GunzipApplication(
-    private val viewModel: ApplicationViewModel,
-    private val logger: Logger
-) {
-    suspend fun run(args: List<String>) {
-        logger.i { "Running Gunzip application" }
-
-        // Handle application start
-        viewModel.handleApplicationStart(args)
-
-        // Collect application events and handle them
-        val eventJob = CoroutineScope(Dispatchers.Default).launch {
-            viewModel.events.collect { event ->
-                handleApplicationEvent(event)
-            }
-        }
-
-        // Wait for application to complete
-        val exitJob = CoroutineScope(Dispatchers.Default).launch {
-            viewModel.uiState.collect { state ->
-                if (state.shouldExit) {
-                    logger.i { "Application exit requested" }
-                    // Cancel this job to exit the collect loop
-                    this.cancel()
-                }
-            }
-        }
-
-        // Wait for exit condition
-        exitJob.join()
-
-        // Cancel event collection
-        eventJob.cancel()
-
-        logger.i { "Gunzip application completed" }
-    }
-
-    private fun handleApplicationEvent(event: ApplicationEvent) {
-        when (event) {
-            is ApplicationEvent.AutoExtractionStarted -> {
-                logger.i { "Auto-extraction started for: ${event.filePath}" }
-            }
-
-            is ApplicationEvent.ExtractionCompleted -> {
-                logger.i { "Extraction completed successfully" }
-                // Application will exit automatically
-            }
-
-            is ApplicationEvent.ExtractionFailed -> {
-                logger.e { "Extraction failed: ${event.error?.message}" }
-                exitProcess(1)
-            }
-
-            is ApplicationEvent.UnsupportedFileOpened -> {
-                logger.w { "Unsupported file opened: ${event.filePath}" }
-                println("Error: Unsupported file format")
-                exitProcess(1)
-            }
-
-            is ApplicationEvent.StartupError -> {
-                logger.e(event.error) { "Startup error occurred" }
-                exitProcess(1)
-            }
-
-            is ApplicationEvent.ApplicationExit -> {
-                logger.i { "Application exit event received" }
-            }
-        }
-    }
 }
 
 /**
@@ -238,7 +251,8 @@ class GunzipApplication(
 data class ApplicationDependencies(
     val extractArchiveUseCase: ExtractArchiveUseCase,
     val validateArchiveUseCase: ValidateArchiveUseCase,
-    val manageFileAssociationsUseCase: ManageFileAssociationsUseCase
+    val manageFileAssociationsUseCase: ManageFileAssociationsUseCase,
+    val preferencesRepository: PreferencesRepository
 )
 
 /**

@@ -21,6 +21,7 @@ internal actual fun initializeDependencies(): ApplicationDependencies {
     val fileSystemRepository = WindowsFileSystemRepository()
     val notificationRepository = WindowsNotificationRepository()
     val fileAssociationRepository = WindowsFileAssociationRepository()
+    val preferencesRepository = WindowsPreferencesRepository()
 
     // Create use cases
     val extractArchiveUseCase = ExtractArchiveUseCase(
@@ -43,7 +44,8 @@ internal actual fun initializeDependencies(): ApplicationDependencies {
     return ApplicationDependencies(
         extractArchiveUseCase = extractArchiveUseCase,
         validateArchiveUseCase = validateArchiveUseCase,
-        manageFileAssociationsUseCase = manageFileAssociationsUseCase
+        manageFileAssociationsUseCase = manageFileAssociationsUseCase,
+        preferencesRepository = preferencesRepository
     )
 }
 

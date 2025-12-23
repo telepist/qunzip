@@ -18,7 +18,10 @@ This project implements a cross-platform unzip application using Clean Architect
 
 ### 3. Presentation Layer
 - **ViewModels**: State management with Kotlin Flow
-- **UI**: Native platform interfaces (when needed)
+- **UI Layer**: Hybrid approach with multiple UI backends
+  - **Mosaic TUI**: Interactive terminal UI (all platforms)
+  - **Native GUIs**: Platform-specific dialogs (Windows, macOS, Linux)
+  - **UI Renderer Interface**: Common abstraction for UI backends
 - **Mappers**: Convert between domain and presentation models
 
 ## MVVM with Kotlin Flow
@@ -27,10 +30,117 @@ This project implements a cross-platform unzip application using Clean Architect
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   View/UI       │◄──►│   ViewModel     │◄──►│   Repository    │
 │                 │    │                 │    │                 │
-│ - File Dialog   │    │ - State Flow    │    │ - File Ops      │
-│ - Progress UI   │    │ - Commands      │    │ - 7zip Calls    │
+│ - TUI (Mosaic)  │    │ - State Flow    │    │ - File Ops      │
+│ - Native GUI    │    │ - Commands      │    │ - 7zip Calls    │
 │ - Notifications │    │ - Error Handle  │    │ - OS Integration│
 └─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+## UI Architecture (Hybrid Approach)
+
+### UI Renderer Interface
+
+The application uses a common `UiRenderer` interface that allows multiple UI backends:
+
+```kotlin
+interface UiRenderer {
+    suspend fun render(viewModel: ApplicationViewModel, scope: CoroutineScope)
+    fun isAvailable(): Boolean
+}
+```
+
+### UI Backends
+
+#### 1. Mosaic Terminal UI (Implemented)
+- **Technology**: [Mosaic](https://github.com/JakeWharton/mosaic) library for terminal UI
+- **Availability**: All platforms (Windows, macOS, Linux)
+- **Features**:
+  - Real-time progress bars with percentage
+  - Color-coded stages (Analyzing, Extracting, Finalizing, Complete)
+  - File count and byte statistics
+  - Emojis for visual feedback
+  - Box drawing characters for UI elements
+  - Dynamic updates using ANSI escape codes
+
+**TUI Components**:
+- `MosaicApp`: Root composable that switches between modes
+- `ExtractionTui`: Extraction progress display
+- `SettingsTui`: File associations and settings display
+
+#### 2. Native GUI (Planned)
+- **Windows**: Win32 API dialogs (progress dialog, settings window)
+- **macOS**: Cocoa/AppKit dialogs (NSProgressIndicator, NSWindow)
+- **Linux**: GTK dialogs (GtkProgressBar, GtkWindow)
+- **Implementation**: Platform-specific using C/Objective-C interop
+
+### Launch Context Detection
+
+The application auto-detects how it was launched and selects the appropriate UI:
+
+```kotlin
+fun selectUiMode(args: List<String>): UiMode {
+    return when {
+        args.contains("--tui") -> UiMode.TUI        // Force TUI
+        args.contains("--gui") -> UiMode.GUI        // Force GUI
+        isGuiAvailable() && !isTerminal() -> UiMode.GUI  // Auto-detect GUI
+        else -> UiMode.TUI                          // Default to TUI
+    }
+}
+```
+
+**Detection Logic**:
+- **Windows**: Uses `GetStdHandle` and `GetFileType` to check if stdout is a console
+- **macOS/Linux**: Uses POSIX `isatty()` to check if stdout is a TTY
+- **GUI Launch**: Double-clicking file in Explorer/Finder (no console attached)
+- **Terminal Launch**: Running from cmd.exe, PowerShell, bash, etc.
+
+### UI Flow
+
+```
+Application Start
+       ↓
+┌──────────────┐
+│ Parse Args   │
+└──────┬───────┘
+       ↓
+┌──────────────────┐
+│ Select UI Mode   │
+│ (GUI or TUI)     │
+└──────┬───────────┘
+       ↓
+┌──────────────────────┐
+│ Create Renderer      │
+│ - NativeGuiRenderer  │
+│ - MosaicTuiRenderer  │
+└──────┬───────────────┘
+       ↓
+┌──────────────────────┐
+│ renderer.render()    │
+│ - Observe ViewModel  │
+│ - Update UI          │
+│ - Handle events      │
+└──────────────────────┘
+```
+
+### Mosaic Composables Structure
+
+```
+@Composable
+MosaicApp(viewModel)
+    ├── when (mode)
+    │   ├── EXTRACTION → ExtractionTui
+    │   │   ├── Column
+    │   │   │   ├── Header (archive name)
+    │   │   │   ├── Progress Bar ([████░░░] 67%)
+    │   │   │   ├── Statistics (files, bytes)
+    │   │   │   ├── Stage Indicator (🔍📦✨✅)
+    │   │   │   └── Error Display (if any)
+    │   │
+    │   └── SETUP → SettingsTui
+    │       ├── Column
+    │       │   ├── File Associations Status
+    │       │   ├── Supported Formats List
+    │       │   └── Available Commands
 ```
 
 ## Platform Abstraction
@@ -87,10 +197,12 @@ File Double-Click → OS Handler → Application Entry Point
 ## Technology Stack
 
 - **Kotlin Multiplatform**: Cross-platform business logic
+- **Kotlin Compose Compiler Plugin**: Required for Mosaic composables
 - **Kotlin Coroutines**: Async operations
 - **Kotlin Flow**: Reactive state management
+- **Mosaic**: Terminal UI framework for Kotlin/Native
 - **7zip**: Archive handling (via executable or library)
-- **Platform APIs**: File system, trash, associations
+- **Platform APIs**: File system, trash, associations, native GUIs
 
 ## Testing Strategy
 
@@ -109,20 +221,36 @@ src/
 │   │   ├── usecases/          # Business logic
 │   │   └── repositories/      # Repository interfaces
 │   ├── presentation/
-│   │   └── viewmodels/        # State management
+│   │   ├── viewmodels/        # State management
+│   │   └── ui/                # UI layer
+│   │       ├── UiRenderer.kt       # UI backend interface
+│   │       ├── LaunchContext.kt    # UI mode detection
+│   │       └── tui/                # Mosaic Terminal UI
+│   │           ├── MosaicApp.kt         # Root composable
+│   │           ├── ExtractionTui.kt     # Extraction UI
+│   │           └── SettingsTui.kt       # Settings UI
 │   └── main.kt               # Application entry point
 ├── commonTest/kotlin/gunzip/  # Shared unit tests
 ├── mingwX64Main/kotlin/gunzip/
 │   ├── platform/              # Windows repository implementations
+│   ├── presentation/ui/       # Windows GUI
+│   │   ├── Win32Gui.kt        # Win32 renderer (planned)
+│   │   └── LaunchContext.kt   # Terminal detection
 │   └── WindowsPlatform.kt     # DI and platform utilities
 ├── linuxX64Main/kotlin/gunzip/
 │   ├── platform/              # Linux repository implementations
+│   ├── presentation/ui/       # Linux GUI
+│   │   ├── GtkGui.kt          # GTK renderer (planned)
+│   │   └── LaunchContext.kt   # Terminal detection
 │   └── LinuxPlatform.kt       # DI and platform utilities
 ├── linuxArm64Main/kotlin/gunzip/
 │   ├── platform/              # Linux ARM64 repository implementations
 │   └── LinuxPlatform.kt
 ├── macosX64Main/kotlin/gunzip/
 │   ├── platform/              # macOS Intel repository implementations
+│   ├── presentation/ui/       # macOS GUI
+│   │   ├── CocoaGui.kt        # Cocoa renderer (planned)
+│   │   └── LaunchContext.kt   # Terminal detection
 │   └── MacosPlatform.kt       # DI and platform utilities
 └── macosArm64Main/kotlin/gunzip/
     ├── platform/              # macOS ARM64 repository implementations

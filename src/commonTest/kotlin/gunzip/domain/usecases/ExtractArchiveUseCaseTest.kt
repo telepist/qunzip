@@ -58,8 +58,62 @@ class ExtractArchiveUseCaseTest {
 
         assertTrue(mockArchiveRepository.extractCalled)
         assertEquals("/test", mockArchiveRepository.extractionPath)
-        assertTrue(mockFileSystemRepository.moveToTrashCalled)
+        assertFalse(mockFileSystemRepository.moveToTrashCalled) // Default: don't move to trash
         assertTrue(mockNotificationRepository.successNotificationShown)
+    }
+
+    @Test
+    fun `moves archive to trash when option enabled`() = runTest {
+        // Arrange
+        val archivePath = "/test/document.zip"
+        val archive = Archive(archivePath, "document.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(
+                ArchiveEntry("document.pdf", "document.pdf", false, 1024L)
+            ),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.availableSpace = 2048L
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        val options = ExtractionOptions(moveToTrashAfterExtraction = true)
+
+        // Act
+        val progressList = useCase(archivePath, options).toList()
+
+        // Assert
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        assertTrue(mockFileSystemRepository.moveToTrashCalled)
+    }
+
+    @Test
+    fun `skips notification when showCompletionNotification is disabled`() = runTest {
+        // Arrange
+        val archivePath = "/test/document.zip"
+        val archive = Archive(archivePath, "document.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(
+                ArchiveEntry("document.pdf", "document.pdf", false, 1024L)
+            ),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.availableSpace = 2048L
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        val options = ExtractionOptions(showCompletionNotification = false)
+
+        // Act
+        val progressList = useCase(archivePath, options).toList()
+
+        // Assert
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        assertFalse(mockNotificationRepository.successNotificationShown)
     }
 
     @Test

@@ -1,6 +1,6 @@
 # User Manual
 
-> **⚠️ Note**: This manual describes the intended functionality of Gunzip. The project is currently under active development. Windows platform implementation is complete but not yet fully tested. Linux and macOS implementations are pending. See [development-progress.md](development-progress.md) for current status.
+> **⚠️ Note**: This manual describes the functionality of Gunzip. The project is currently under active development. **Terminal UI (TUI) is fully functional on Windows** with interactive progress display. Native GUI implementations are planned for all platforms. Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
 
 ## Overview
 
@@ -33,9 +33,53 @@
 
 ## Basic Usage
 
-### Extracting Archives
+### Two User Interface Modes
 
-**Simply double-click any supported archive file.** That's it!
+Gunzip provides two user interfaces:
+
+1. **Terminal UI (TUI)** - Interactive terminal interface with live progress updates
+2. **Native GUI** _(Planned)_ - Platform-specific graphical dialogs
+
+The application automatically chooses the appropriate interface:
+- **Double-clicking** an archive in File Explorer/Finder → GUI mode _(or TUI until GUI is implemented)_
+- **Running from terminal** → Terminal UI with interactive progress display
+
+You can also force a specific mode:
+- `gunzip --tui archive.zip` - Force terminal UI
+- `gunzip --gui archive.zip` - Force GUI mode
+
+### Extracting Archives (Terminal UI)
+
+Run from your terminal:
+```bash
+gunzip archive.zip
+```
+
+You'll see an interactive progress display:
+```
+┌─── Gunzip Archive Extractor ───┐
+│
+│ Archive: my-files.zip
+│
+│ [████████████████████░░░░░░░] 67.3%
+│ 45/67 files  •  128 MB
+│
+│ 📦 Extracting files...
+└────────────────────────────────┘
+```
+
+The Terminal UI shows:
+- Real-time progress bar with percentage
+- File count and data statistics
+- Current extraction stage with visual indicators:
+  - 🔍 Analyzing archive...
+  - 📦 Extracting files...
+  - ✨ Finalizing...
+  - ✅ Complete!
+
+### Extracting Archives (GUI Mode)
+
+**Simply double-click any supported archive file.** _(Once GUI is implemented)_
 
 The application will:
 1. Analyze the archive contents
@@ -98,14 +142,49 @@ If extracted files would overwrite existing files:
 
 ## Settings and Configuration
 
+### Viewing Settings (Terminal UI)
+
+Run without any archive file to view settings:
+```bash
+gunzip
+```
+
+You'll see the settings display:
+```
+┌─────── Gunzip Settings ───────┐
+│
+│ File Associations
+│
+│ Status: ⭕ Not Registered
+│
+│ Supported formats:
+│   · .zip
+│   · .7z
+│   · .rar
+│   · .tar
+│   · .tar.gz
+│   · .tar.bz2
+│   · .tar.xz
+│
+│ Commands:
+│   --register-associations
+│   --unregister-associations
+└───────────────────────────────┘
+```
+
 ### File Associations
 The application automatically registers itself for supported file types during installation. To manually manage associations:
 
-**Windows**: Right-click archive → "Open with" → "Choose another app" → Select Gunzip
+**Command Line**:
+```bash
+gunzip --register-associations    # Register all supported formats
+gunzip --unregister-associations  # Unregister all formats
+```
 
-**macOS**: Right-click archive → "Get Info" → "Open with" → Select Gunzip → "Change All"
-
-**Linux**: Depends on desktop environment (usually in file manager preferences)
+**Manual Configuration**:
+- **Windows**: Right-click archive → "Open with" → "Choose another app" → Select Gunzip
+- **macOS**: Right-click archive → "Get Info" → "Open with" → Select Gunzip → "Change All"
+- **Linux**: Depends on desktop environment (usually in file manager preferences)
 
 ### Notification Preferences
 Notifications follow your system preferences:

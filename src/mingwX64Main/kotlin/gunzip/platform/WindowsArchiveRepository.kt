@@ -216,14 +216,24 @@ class WindowsArchiveRepository(
 
     private fun execute7zipTest(archivePath: String): Int {
         val command = "$sevenZipPath t \"$archivePath\""
-        return system(command)
+        return executeCommandSilently(command)
     }
 
     private fun execute7zipExtract(archivePath: String, destinationPath: String): Int {
         // Use -o flag for output directory (no space between -o and path)
         val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y"
         logger.d { "Extraction command: $command" }
-        return system(command)
+        return executeCommandSilently(command)
+    }
+
+    /**
+     * Execute a command silently, capturing stdout/stderr so they don't pollute TUI
+     * Returns the exit code
+     */
+    private fun executeCommandSilently(command: String): Int {
+        // Redirect stdout and stderr to NUL to suppress output
+        val silentCommand = "$command >NUL 2>&1"
+        return system(silentCommand)
     }
 
     private fun parse7zipListOutput(output: String): List<ArchiveEntry> {

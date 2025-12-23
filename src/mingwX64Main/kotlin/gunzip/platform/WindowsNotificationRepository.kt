@@ -1,11 +1,13 @@
 package gunzip.platform
 
 import gunzip.domain.repositories.NotificationRepository
+import gunzip.presentation.ui.UiConfig
 import co.touchlab.kermit.Logger
 
 /**
  * Windows implementation of NotificationRepository
  * Uses console output for now (Windows Toast notifications would require more complex setup)
+ * Note: Output is suppressed when TUI mode is active (UiConfig.suppressConsoleOutput)
  */
 class WindowsNotificationRepository(
     private val logger: Logger = Logger.withTag("WindowsNotificationRepository")
@@ -17,6 +19,7 @@ class WindowsNotificationRepository(
         extractedPath: String?
     ) {
         logger.i { "SUCCESS: $title - $message" }
+        if (UiConfig.suppressConsoleOutput) return
         println("✓ $title")
         println("  $message")
         if (extractedPath != null) {
@@ -30,6 +33,7 @@ class WindowsNotificationRepository(
         details: String?
     ) {
         logger.e { "ERROR: $title - $message" }
+        if (UiConfig.suppressConsoleOutput) return
         println("✗ $title")
         println("  $message")
         if (details != null) {
@@ -45,6 +49,7 @@ class WindowsNotificationRepository(
         cancellable: Boolean
     ) {
         logger.d { "PROGRESS ($id): $title - $message (${(progress * 100).toInt()}%)" }
+        if (UiConfig.suppressConsoleOutput) return
         val percentage = (progress * 100).toInt()
         val bar = "=".repeat(percentage / 5) + " ".repeat(20 - percentage / 5)
         println("\r[$bar] $percentage% - $message")
@@ -60,11 +65,13 @@ class WindowsNotificationRepository(
 
     override suspend fun cancelProgressNotification(id: String) {
         logger.d { "Cancelling progress notification: $id" }
+        if (UiConfig.suppressConsoleOutput) return
         println() // New line after progress
     }
 
     override suspend fun showInfoNotification(title: String, message: String) {
         logger.i { "INFO: $title - $message" }
+        if (UiConfig.suppressConsoleOutput) return
         println("ℹ $title")
         println("  $message")
     }
@@ -84,6 +91,7 @@ class WindowsNotificationRepository(
         actionPath: String
     ) {
         showSuccessNotification(title, message, actionPath)
+        if (UiConfig.suppressConsoleOutput) return
         println("  Action: $actionLabel")
     }
 }

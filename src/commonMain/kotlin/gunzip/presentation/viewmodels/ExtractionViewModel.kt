@@ -1,6 +1,7 @@
 package gunzip.presentation.viewmodels
 
 import gunzip.domain.entities.*
+import gunzip.domain.repositories.PreferencesRepository
 import gunzip.domain.usecases.ExtractArchiveUseCase
 import gunzip.domain.usecases.ValidateArchiveUseCase
 import gunzip.domain.usecases.ValidationResult
@@ -13,6 +14,7 @@ import co.touchlab.kermit.Logger
 class ExtractionViewModel(
     private val extractArchiveUseCase: ExtractArchiveUseCase,
     private val validateArchiveUseCase: ValidateArchiveUseCase,
+    private val preferencesRepository: PreferencesRepository,
     private val scope: CoroutineScope,
     private val logger: Logger = Logger.withTag("ExtractionViewModel")
 ) {
@@ -57,8 +59,13 @@ class ExtractionViewModel(
                     }
                 }
 
+                // Load user preferences for extraction options
+                val preferences = preferencesRepository.loadPreferences()
+                val extractionOptions = preferences.toExtractionOptions()
+                logger.d { "Using extraction options: $extractionOptions" }
+
                 // Start extraction with progress tracking
-                extractArchiveUseCase(archivePath)
+                extractArchiveUseCase(archivePath, extractionOptions)
                     .onStart {
                         logger.i { "Extraction started" }
                         _events.tryEmit(ExtractionEvent.ExtractionStarted)

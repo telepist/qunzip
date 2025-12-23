@@ -22,8 +22,11 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 - `./gradlew <platform>Test` - Run platform-specific tests
 
 ### Running the Application
-- Build and run directly: `./build/bin/<platform>/debugExecutable/gunzip.kexe <archive-file>`
-- The application is designed to be invoked by double-clicking archive files
+- **GUI mode** (double-click or auto-detect): `./build/bin/<platform>/debugExecutable/gunzip.kexe <archive-file>`
+- **TUI mode** (terminal UI): `./build/bin/<platform>/debugExecutable/gunzip.kexe --tui <archive-file>`
+- **Force GUI mode**: `./build/bin/<platform>/debugExecutable/gunzip.kexe --gui <archive-file>`
+- **Settings mode**: `./build/bin/<platform>/debugExecutable/gunzip.kexe` (no file argument)
+- The application auto-detects launch context and chooses appropriate UI (native GUI or terminal TUI)
 
 ### Windows Installer Commands
 - `./gradlew prepareInstallerResources` - Prepare files for installer
@@ -61,6 +64,10 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 #### Presentation Layer (`src/commonMain/kotlin/gunzip/presentation/`)
 - **ViewModels**: `ExtractionViewModel`, `FileAssociationViewModel`, `ApplicationViewModel`
 - **State Management**: Kotlin Flow with StateFlow/SharedFlow patterns
+- **UI Layer**: Hybrid approach with Mosaic TUI and platform-native GUIs
+  - **Mosaic TUI**: Interactive terminal UI with progress bars, colors, and real-time updates (all platforms)
+  - **Native GUIs**: Platform-specific dialogs (Windows Win32 planned, macOS/Linux future)
+  - **Auto-detection**: Chooses GUI for double-click, TUI for terminal launch
 
 ### MVVM with Kotlin Flow
 - ViewModels expose `StateFlow` for UI state
@@ -83,10 +90,12 @@ Common interfaces in domain layer, platform-specific implementations:
 
 ### Dependencies
 - **Kotlin Multiplatform**: `2.2.20`
+- **Kotlin Compose Compiler Plugin**: `2.2.20` - Required for Mosaic composables
 - **Kotlinx Coroutines**: `1.8.0` - Async operations
 - **Kotlinx Serialization**: `1.6.3` - Data serialization
 - **Kotlinx DateTime**: `0.5.0` - Date/time handling
 - **Kermit**: `2.0.3` - Multiplatform logging
+- **Mosaic**: `0.18.0` - Terminal UI framework for Kotlin/Native
 - **Turbine**: `1.0.0` - Flow testing (test only)
 
 ### Build Configuration
@@ -105,15 +114,31 @@ src/
 │   │   ├── usecases/          # Business logic
 │   │   └── repositories/      # Abstract contracts
 │   ├── presentation/
-│   │   └── viewmodels/        # State management
+│   │   ├── viewmodels/        # State management
+│   │   └── ui/                # UI layer
+│   │       ├── UiRenderer.kt       # UI backend interface
+│   │       ├── LaunchContext.kt    # UI mode detection
+│   │       └── tui/                # Mosaic Terminal UI
+│   │           ├── MosaicApp.kt         # Root Mosaic composable
+│   │           ├── ExtractionTui.kt     # Extraction progress TUI
+│   │           └── SettingsTui.kt       # Settings display TUI
 │   └── main.kt               # Application entry point
 ├── commonTest/kotlin/gunzip/  # Shared tests
 ├── mingwX64Main/kotlin/gunzip/     # Windows x64 (MinGW) implementations
 │   ├── platform/                   # Windows repository implementations
+│   ├── presentation/ui/            # Windows GUI (stubs)
+│   │   ├── Win32Gui.kt             # Win32 GUI renderer (future)
+│   │   └── LaunchContext.kt        # Windows terminal detection
 │   └── WindowsPlatform.kt          # DI and platform utilities
 ├── linuxX64Main/kotlin/gunzip/     # Linux x64 implementations
+│   └── presentation/ui/            # Linux GUI (stubs)
+│       ├── GtkGui.kt               # GTK GUI renderer (future)
+│       └── LaunchContext.kt        # Linux terminal detection
 ├── linuxArm64Main/kotlin/gunzip/   # Linux ARM64 implementations
 ├── macosX64Main/kotlin/gunzip/     # macOS Intel implementations
+│   └── presentation/ui/            # macOS GUI (stubs)
+│       ├── CocoaGui.kt             # Cocoa GUI renderer (future)
+│       └── LaunchContext.kt        # macOS terminal detection
 └── macosArm64Main/kotlin/gunzip/   # macOS Apple Silicon implementations
 ```
 
@@ -168,8 +193,8 @@ src/
 
 ## Current Development Status
 
-**Phase**: Foundation Architecture
-**Progress**: Core architecture complete, Windows platform implemented, build errors preventing testing
+**Phase**: Hybrid UI Implementation
+**Progress**: Core architecture complete, Windows platform implemented, Mosaic TUI fully functional
 
 ### ✅ Completed
 - Clean Architecture with MVVM setup (100%)
@@ -184,20 +209,24 @@ src/
   - WindowsNotificationRepository (console notifications)
   - WindowsFileAssociationRepository (stub)
   - WindowsPlatform.kt (DI and platform utilities)
+- **Mosaic Terminal UI (100%)**
+  - Interactive TUI with real-time progress updates
+  - Progress bars, colors, emojis for visual feedback
+  - Extraction progress display (stages, files, bytes)
+  - Settings/file associations display
+  - Auto-detection of terminal launch vs GUI launch
+  - `--tui` and `--gui` flags for manual override
 - **Black Box E2E Test Scripts**
   - Windows, Linux, and macOS test scripts created
   - Test fixtures prepared
-  - Ready to run once build is fixed
-
-### 🔴 Blocking Issues
-- **BUILD FAILURE**: Linux/macOS platforms missing `getCurrentExecutablePath()` implementations
-- Cannot run tests or compile project until fixed
+  - TUI extraction tested and working
 
 ### ⏳ Pending
-- Fix build errors (immediate priority)
-- Linux platform full repository implementations
-- macOS platform full repository implementations
-- End-to-end integration testing (blocked by build)
+- Windows Win32 native GUI implementation
+- macOS Cocoa native GUI implementation
+- Linux GTK native GUI implementation
+- Linux/macOS platform full repository implementations
+- End-to-end integration testing on Linux/macOS
 - Windows Registry file associations (advanced feature)
 
 See `docs/development-progress.md` for detailed status and next steps.

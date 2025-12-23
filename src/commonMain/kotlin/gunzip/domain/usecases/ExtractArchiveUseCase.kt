@@ -13,7 +13,10 @@ open class ExtractArchiveUseCase(
     private val fileSystemRepository: FileSystemRepository,
     private val notificationRepository: NotificationRepository
 ) {
-    open suspend operator fun invoke(archivePath: String): Flow<ExtractionProgress> = flow {
+    open suspend operator fun invoke(
+        archivePath: String,
+        options: ExtractionOptions = ExtractionOptions()
+    ): Flow<ExtractionProgress> = flow {
         try {
             emit(ExtractionProgress(archivePath, stage = ExtractionStage.STARTING))
 
@@ -67,8 +70,10 @@ open class ExtractArchiveUseCase(
                 stage = ExtractionStage.FINALIZING
             ))
 
-            // Move original archive to trash
-            fileSystemRepository.moveToTrash(archivePath)
+            // Optionally move original archive to trash
+            if (options.moveToTrashAfterExtraction) {
+                fileSystemRepository.moveToTrash(archivePath)
+            }
 
             // Get list of extracted files for result
             val extractedFiles = when (strategy) {
@@ -93,12 +98,14 @@ open class ExtractArchiveUseCase(
                 }
             }
 
-            // Show success notification
-            notificationRepository.showSuccessNotification(
-                title = "Extraction Complete",
-                message = "${archive.name} extracted successfully",
-                extractedPath = extractionPath
-            )
+            // Show success notification if enabled
+            if (options.showCompletionNotification) {
+                notificationRepository.showSuccessNotification(
+                    title = "Extraction Complete",
+                    message = "${archive.name} extracted successfully",
+                    extractedPath = extractionPath
+                )
+            }
 
             emit(ExtractionProgress(
                 archivePath = archivePath,
