@@ -4,6 +4,7 @@ import gunzip.domain.entities.*
 import gunzip.domain.repositories.ArchiveRepository
 import gunzip.domain.usecases.FileInfo
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.cinterop.*
 import platform.posix.*
@@ -94,33 +95,51 @@ class WindowsArchiveRepository(
     override suspend fun extractArchive(
         archivePath: String,
         destinationPath: String
-    ): Flow<ExtractionProgress> = flow {
+    ): Flow<ExtractionProgress> = channelFlow {
         logger.i { "Extracting archive: $archivePath to $destinationPath" }
 
-        emit(ExtractionProgress(archivePath, stage = ExtractionStage.STARTING))
+        trySend(ExtractionProgress(archivePath, stage = ExtractionStage.STARTING))
 
         try {
             // Get archive info for progress tracking
             val contents = getArchiveContents(archivePath)
+            val totalFiles = contents.fileCount
 
-            emit(ExtractionProgress(
+            trySend(ExtractionProgress(
                 archivePath = archivePath,
-                totalFiles = contents.fileCount,
+                totalFiles = totalFiles,
                 totalBytes = contents.totalSize,
                 stage = ExtractionStage.EXTRACTING
             ))
 
-            // Execute 7zip extraction: 7z x archive.zip -o"destination"
-            val exitCode = execute7zipExtract(archivePath, destinationPath)
+            // Execute 7zip extraction with real-time byte-level progress tracking
+            val exitCode = execute7zipExtractWithProgress(
+                archivePath,
+                destinationPath,
+                contents.totalSize
+            ) { bytesExtracted, currentFile ->
+                // Send progress update with actual bytes extracted
+                trySend(ExtractionProgress(
+                    archivePath = archivePath,
+                    filesProcessed = if (totalFiles > 0 && contents.totalSize > 0)
+                        ((bytesExtracted.toDouble() / contents.totalSize) * totalFiles).toInt().coerceAtMost(totalFiles)
+                        else 0,
+                    totalFiles = totalFiles,
+                    totalBytes = contents.totalSize,
+                    bytesProcessed = bytesExtracted,
+                    currentFile = currentFile,
+                    stage = ExtractionStage.EXTRACTING
+                ))
+            }
 
             if (exitCode != 0) {
                 throw ExtractionError.SevenZipError(exitCode, "7zip extraction failed")
             }
 
-            emit(ExtractionProgress(
+            trySend(ExtractionProgress(
                 archivePath = archivePath,
-                filesProcessed = contents.fileCount,
-                totalFiles = contents.fileCount,
+                filesProcessed = totalFiles,
+                totalFiles = totalFiles,
                 bytesProcessed = contents.totalSize,
                 totalBytes = contents.totalSize,
                 stage = ExtractionStage.COMPLETED
@@ -130,11 +149,11 @@ class WindowsArchiveRepository(
 
         } catch (e: ExtractionError) {
             logger.e { "Extraction failed: ${e.message}" }
-            emit(ExtractionProgress(archivePath, stage = ExtractionStage.FAILED))
+            trySend(ExtractionProgress(archivePath, stage = ExtractionStage.FAILED))
             throw e
         } catch (e: Exception) {
             logger.e(e) { "Unexpected error during extraction" }
-            emit(ExtractionProgress(archivePath, stage = ExtractionStage.FAILED))
+            trySend(ExtractionProgress(archivePath, stage = ExtractionStage.FAILED))
             throw ExtractionError.UnknownError(e.message ?: "Unknown error", e)
         }
     }
@@ -279,6 +298,145 @@ class WindowsArchiveRepository(
         val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y"
         logger.d { "Extraction command: $command" }
         return executeCommandSilently(command)
+    }
+
+    /**
+     * Execute 7zip extraction with real-time progress tracking
+     * Parses 7zip's progress output (-bsp1) to get percentage updates
+     * Calls the callback with percentage progress (0-100)
+     */
+    private fun execute7zipExtractWithProgress(
+        archivePath: String,
+        destinationPath: String,
+        totalBytes: Long,
+        onProgress: (bytesExtracted: Long, currentFile: String?) -> Unit
+    ): Int = memScoped {
+        // Use -bsp1 to output progress to stdout, -bb1 for file names
+        val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y -bsp1 -bb1"
+        logger.d { "Extraction command with progress: $command" }
+
+        // Create pipe for stdout
+        val securityAttrs = alloc<SECURITY_ATTRIBUTES>()
+        securityAttrs.nLength = sizeOf<SECURITY_ATTRIBUTES>().toUInt()
+        securityAttrs.bInheritHandle = TRUE
+        securityAttrs.lpSecurityDescriptor = null
+
+        val stdoutReadHandle = alloc<HANDLEVar>()
+        val stdoutWriteHandle = alloc<HANDLEVar>()
+
+        if (CreatePipe(stdoutReadHandle.ptr, stdoutWriteHandle.ptr, securityAttrs.ptr, 0u) == 0) {
+            logger.e { "Failed to create pipe for progress tracking" }
+            return@memScoped executeCommandSilently("$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y")
+        }
+
+        // Ensure the read handle is not inherited
+        SetHandleInformation(stdoutReadHandle.value, HANDLE_FLAG_INHERIT.toUInt(), 0u)
+
+        val startupInfo = alloc<STARTUPINFOW>()
+        val processInfo = alloc<PROCESS_INFORMATION>()
+
+        startupInfo.cb = sizeOf<STARTUPINFOW>().toUInt()
+        startupInfo.dwFlags = (STARTF_USESHOWWINDOW or STARTF_USESTDHANDLES).toUInt()
+        startupInfo.wShowWindow = SW_HIDE.toUShort()
+        startupInfo.hStdOutput = stdoutWriteHandle.value
+        startupInfo.hStdError = stdoutWriteHandle.value
+        startupInfo.hStdInput = null
+
+        val success = CreateProcessW(
+            lpApplicationName = null,
+            lpCommandLine = command.wcstr.ptr,
+            lpProcessAttributes = null,
+            lpThreadAttributes = null,
+            bInheritHandles = TRUE,
+            dwCreationFlags = CREATE_NO_WINDOW.toUInt(),
+            lpEnvironment = null,
+            lpCurrentDirectory = null,
+            lpStartupInfo = startupInfo.ptr,
+            lpProcessInformation = processInfo.ptr
+        )
+
+        // Close write end of pipe in parent process
+        CloseHandle(stdoutWriteHandle.value)
+
+        if (success == 0) {
+            CloseHandle(stdoutReadHandle.value)
+            logger.e { "Failed to create process for extraction: ${GetLastError()}" }
+            return@memScoped -1
+        }
+
+        // Read output and parse progress
+        val buffer = allocArray<ByteVar>(4096)
+        val bytesRead = alloc<UIntVar>()
+        val lineBuffer = StringBuilder()
+        var lastPercentage = -1
+        var currentFile: String? = null
+
+        // Regex to match percentage like "  45%" or " 100%"
+        val percentRegex = Regex("""^\s*(\d+)%""")
+
+        while (true) {
+            val readSuccess = ReadFile(
+                stdoutReadHandle.value,
+                buffer,
+                4095u,
+                bytesRead.ptr,
+                null
+            )
+            if (readSuccess == 0 || bytesRead.value == 0u) break
+
+            buffer[bytesRead.value.toInt()] = 0
+            val chunk = buffer.toKString()
+
+            // Process character by character, treating \r and \n as line endings
+            for (char in chunk) {
+                if (char == '\r' || char == '\n') {
+                    val line = lineBuffer.toString().trim()
+                    if (line.isNotEmpty()) {
+                        // Check for percentage progress
+                        val percentMatch = percentRegex.find(line)
+                        if (percentMatch != null) {
+                            val percent = percentMatch.groupValues[1].toIntOrNull() ?: 0
+                            if (percent != lastPercentage && percent in 0..100) {
+                                lastPercentage = percent
+                                val bytesExtracted = (totalBytes * percent / 100)
+                                onProgress(bytesExtracted, currentFile)
+                            }
+                        }
+                        // Check for file being extracted: "- filename"
+                        if (line.startsWith("- ")) {
+                            currentFile = line.substring(2).trim()
+                        }
+                    }
+                    lineBuffer.clear()
+                } else {
+                    lineBuffer.append(char)
+                }
+            }
+        }
+
+        // Process remaining buffer
+        val remaining = lineBuffer.toString().trim()
+        if (remaining.isNotEmpty()) {
+            val percentMatch = percentRegex.find(remaining)
+            if (percentMatch != null) {
+                val percent = percentMatch.groupValues[1].toIntOrNull() ?: 0
+                if (percent != lastPercentage && percent in 0..100) {
+                    onProgress((totalBytes * percent / 100), currentFile)
+                }
+            }
+        }
+
+        // Wait for process and get exit code
+        WaitForSingleObject(processInfo.hProcess, INFINITE)
+        val exitCode = alloc<UIntVar>()
+        GetExitCodeProcess(processInfo.hProcess, exitCode.ptr)
+
+        // Cleanup
+        CloseHandle(processInfo.hProcess)
+        CloseHandle(processInfo.hThread)
+        CloseHandle(stdoutReadHandle.value)
+
+        return@memScoped exitCode.value.toInt()
     }
 
     /**
