@@ -32,12 +32,15 @@ class Win32GuiRenderer : UiRenderer {
 
     private var hwnd: HWND? = null
     private var okButtonHwnd: HWND? = null
+    private var cancelButtonHwnd: HWND? = null
     private var progressBarHwnd: HWND? = null
     private var fileLabelHwnd: HWND? = null
     private var hFont: HFONT? = null
     private var statusText: String = "Initializing..."
     private var completionHandled = false
     private var showNotification = true
+    private var extractionCancelled = false
+    private var currentViewModel: ApplicationViewModel? = null
 
     companion object {
         private const val WINDOW_CLASS_NAME = "GunzipProgressWindow"
@@ -47,6 +50,7 @@ class Win32GuiRenderer : UiRenderer {
         private const val IDC_OK_BUTTON = 1002
         private const val IDC_PROGRESS_BAR = 1003
         private const val IDC_FILE_LABEL = 1004
+        private const val IDC_CANCEL_BUTTON = 1005
 
         // Layout constants
         private const val PADDING = 20
@@ -83,6 +87,10 @@ class Win32GuiRenderer : UiRenderer {
 
         // For extraction mode, use native GUI
         logger.i { "Starting Win32 GUI for extraction" }
+
+        // Store viewModel reference for cancel handling
+        currentViewModel = viewModel
+        activeGuiRenderer = this
 
         // Get notification preference
         showNotification = viewModel.settingsViewModel.uiState.value.preferences.showCompletionNotification
@@ -249,15 +257,35 @@ class Win32GuiRenderer : UiRenderer {
         applyFont(fileLabelHwnd)
         yPos += 18 + CONTROL_SPACING + 4  // Extra space before button
 
-        // Create OK button (initially hidden)
+        // Create buttons
         val buttonWidth = 88
         val buttonHeight = 26
+        val buttonSpacing = 12
+
+        // Cancel button (visible during extraction)
+        cancelButtonHwnd = CreateWindowExW(
+            dwExStyle = 0u,
+            lpClassName = "BUTTON",
+            lpWindowName = "Cancel",
+            dwStyle = (WS_CHILD or WS_VISIBLE or BS_PUSHBUTTON.toInt()).toUInt(),
+            X = (WINDOW_WIDTH - buttonWidth - 16) / 2,
+            Y = yPos,
+            nWidth = buttonWidth,
+            nHeight = buttonHeight,
+            hWndParent = hwnd,
+            hMenu = IDC_CANCEL_BUTTON.toLong().toCPointer(),
+            hInstance = hInstance,
+            lpParam = null
+        )
+        applyFont(cancelButtonHwnd)
+
+        // OK button (initially hidden, shown after completion)
         okButtonHwnd = CreateWindowExW(
             dwExStyle = 0u,
             lpClassName = "BUTTON",
             lpWindowName = "OK",
             dwStyle = (WS_CHILD or BS_DEFPUSHBUTTON.toInt()).toUInt(),
-            X = (WINDOW_WIDTH - buttonWidth - 16) / 2,  // Center accounting for borders
+            X = (WINDOW_WIDTH - buttonWidth - 16) / 2,
             Y = yPos,
             nWidth = buttonWidth,
             nHeight = buttonHeight,
@@ -394,7 +422,8 @@ class Win32GuiRenderer : UiRenderer {
         // Update window title
         SetWindowTextW(window, "Gunzip - Complete")
 
-        // Show OK button
+        // Hide cancel, show OK button
+        cancelButtonHwnd?.let { ShowWindow(it, SW_HIDE) }
         okButtonHwnd?.let {
             ShowWindow(it, SW_SHOW)
             SetFocus(it)
@@ -403,11 +432,11 @@ class Win32GuiRenderer : UiRenderer {
 
     private fun showErrorInWindow(state: ExtractionUiState) {
         val window = hwnd ?: return
-        val errorMsg = state.error ?: "Unknown error occurred"
+        val errorMsg = if (extractionCancelled) "Extraction cancelled" else (state.error ?: "Unknown error occurred")
 
         // Update status label
         val labelHwnd = GetDlgItem(window, IDC_STATUS_LABEL)
-        labelHwnd?.let { SetWindowTextW(it, "Extraction Failed") }
+        labelHwnd?.let { SetWindowTextW(it, if (extractionCancelled) "Cancelled" else "Extraction Failed") }
 
         // Hide progress bar on error
         progressBarHwnd?.let { ShowWindow(it, SW_HIDE) }
@@ -416,13 +445,23 @@ class Win32GuiRenderer : UiRenderer {
         fileLabelHwnd?.let { SetWindowTextW(it, errorMsg) }
 
         // Update window title
-        SetWindowTextW(window, "Gunzip - Error")
+        SetWindowTextW(window, if (extractionCancelled) "Gunzip - Cancelled" else "Gunzip - Error")
 
-        // Show OK button
+        // Hide cancel, show OK button
+        cancelButtonHwnd?.let { ShowWindow(it, SW_HIDE) }
         okButtonHwnd?.let {
             ShowWindow(it, SW_SHOW)
             SetFocus(it)
         }
+    }
+
+    fun handleCancelClicked() {
+        logger.i { "Cancel button clicked" }
+        extractionCancelled = true
+        currentViewModel?.extractionViewModel?.cancelExtraction()
+
+        // Close the dialog immediately
+        PostQuitMessage(0)
     }
 
     private fun cleanup() {
@@ -430,11 +469,17 @@ class Win32GuiRenderer : UiRenderer {
         hwnd = null
         hFont?.let { DeleteObject(it) }
         hFont = null
+        activeGuiRenderer = null
+        currentViewModel = null
     }
 }
 
-// Button control ID for window procedure
+// Button control IDs for window procedure
 private const val WM_COMMAND_OK_BUTTON_ID = 1002
+private const val WM_COMMAND_CANCEL_BUTTON_ID = 1005
+
+// Global reference for cancel handling
+private var activeGuiRenderer: Win32GuiRenderer? = null
 
 /**
  * Window procedure for handling messages
@@ -446,9 +491,15 @@ private fun windowProc(hwnd: HWND?, msg: UINT, wParam: WPARAM, lParam: LPARAM): 
             val controlId = (wParam.toLong() and 0xFFFF).toInt()
             val notifyCode = ((wParam.toLong() shr 16) and 0xFFFF).toInt()
             // BN_CLICKED = 0
-            if (controlId == WM_COMMAND_OK_BUTTON_ID && notifyCode == 0) {
-                // Post quit message to exit the message loop
-                PostQuitMessage(0)
+            if (notifyCode == 0) {
+                when (controlId) {
+                    WM_COMMAND_OK_BUTTON_ID -> {
+                        PostQuitMessage(0)
+                    }
+                    WM_COMMAND_CANCEL_BUTTON_ID -> {
+                        activeGuiRenderer?.handleCancelClicked()
+                    }
+                }
             }
             0
         }
