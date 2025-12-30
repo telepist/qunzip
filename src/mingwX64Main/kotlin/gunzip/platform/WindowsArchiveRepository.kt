@@ -6,6 +6,7 @@ import gunzip.domain.usecases.FileInfo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
+import kotlin.time.TimeSource
 import kotlinx.cinterop.*
 import platform.posix.*
 import platform.windows.*
@@ -53,17 +54,23 @@ class WindowsArchiveRepository(
     }
 
     override suspend fun getArchiveContents(archivePath: String): ArchiveContents {
-        logger.d { "Analyzing archive contents: $archivePath" }
+        val startMark = TimeSource.Monotonic.markNow()
+        logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Analyzing archive contents: $archivePath" }
 
         // Execute 7zip list command: 7z l -slt archive.zip
+        logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Running 7z l -slt..." }
         val output = execute7zipCommand(listOf("l", "-slt", archivePath))
+        logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] 7z command completed, output size: ${output.length} chars" }
 
         // Parse 7zip output to extract file entries
+        logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Parsing output (${output.length} chars)..." }
         val entries = parse7zipListOutput(output)
+        logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Parsing completed: ${entries.size} entries" }
 
         val totalSize = entries.sumOf { it.size }
         val totalCompressedSize = entries.mapNotNull { it.compressedSize }.sum()
 
+        logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] getArchiveContents done" }
         return ArchiveContents(
             entries = entries,
             totalSize = totalSize,
@@ -96,13 +103,16 @@ class WindowsArchiveRepository(
         archivePath: String,
         destinationPath: String
     ): Flow<ExtractionProgress> = channelFlow {
-        logger.i { "Extracting archive: $archivePath to $destinationPath" }
+        val startMark = TimeSource.Monotonic.markNow()
+        logger.i { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Extracting archive: $archivePath to $destinationPath" }
 
         trySend(ExtractionProgress(archivePath, stage = ExtractionStage.STARTING))
 
         try {
             // Get archive info for progress tracking
+            logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Starting getArchiveContents..." }
             val contents = getArchiveContents(archivePath)
+            logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] getArchiveContents completed: ${contents.fileCount} files, ${contents.totalSize} bytes" }
             val totalFiles = contents.fileCount
 
             trySend(ExtractionProgress(
@@ -113,6 +123,7 @@ class WindowsArchiveRepository(
             ))
 
             // Execute 7zip extraction with real-time byte-level progress tracking
+            logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Starting extraction..." }
             val exitCode = execute7zipExtractWithProgress(
                 archivePath,
                 destinationPath,
@@ -210,9 +221,13 @@ class WindowsArchiveRepository(
      * Uses CreateProcessW with CREATE_NO_WINDOW and pipes for stdout
      */
     private fun execute7zipCommand(args: List<String>): String = memScoped {
-        logger.d { "Executing 7zip command: $sevenZipPath ${args.joinToString(" ")}" }
+        // Quote arguments that contain spaces
+        val quotedArgs = args.map { arg ->
+            if (arg.contains(' ') || arg.contains('(') || arg.contains(')')) "\"$arg\"" else arg
+        }
+        logger.d { "Executing 7zip command: $sevenZipPath ${quotedArgs.joinToString(" ")}" }
 
-        val command = "$sevenZipPath ${args.joinToString(" ")}"
+        val command = "$sevenZipPath ${quotedArgs.joinToString(" ")}"
 
         // Create pipe for stdout
         val securityAttrs = alloc<SECURITY_ATTRIBUTES>()
@@ -275,8 +290,13 @@ class WindowsArchiveRepository(
                 null
             )
             if (readSuccess == 0 || bytesRead.value == 0u) break
-            buffer[bytesRead.value.toInt()] = 0
-            output.append(buffer.toKString())
+            // Convert bytes to string, handling potential null bytes in output
+            for (i in 0 until bytesRead.value.toInt()) {
+                val byte = buffer[i]
+                if (byte != 0.toByte()) {
+                    output.append(byte.toInt().toChar())
+                }
+            }
         }
 
         // Wait for process and cleanup
