@@ -18,9 +18,8 @@ class FileAssociationViewModel(
     private val _events = MutableSharedFlow<FileAssociationEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<FileAssociationEvent> = _events.asSharedFlow()
 
-    init {
-        checkCurrentAssociations()
-    }
+    // Note: checkCurrentAssociations() is NOT called on init for faster startup
+    // Call refreshAssociations() when the associations need to be displayed
 
     fun registerAssociations(applicationPath: String) {
         scope.launch {

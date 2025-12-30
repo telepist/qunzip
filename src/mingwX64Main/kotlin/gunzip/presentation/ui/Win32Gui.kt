@@ -54,12 +54,12 @@ class Win32GuiRenderer : UiRenderer {
     }
 
     override suspend fun render(viewModel: ApplicationViewModel, scope: CoroutineScope) {
-        // Wait for the state to be ready (handleApplicationStart runs async)
-        // Give it up to 2 seconds to switch to EXTRACTION mode
+        // Wait briefly for handleApplicationStart to complete (runs async)
+        // Only wait if we're still in the initial starting state
         var uiState = viewModel.uiState.value
         var waitCount = 0
-        while (uiState.mode == ApplicationMode.SETUP && uiState.targetFile == null && waitCount < 20) {
-            delay(100)
+        while (uiState.isStarting && waitCount < 10) {
+            delay(50)
             uiState = viewModel.uiState.value
             waitCount++
         }
