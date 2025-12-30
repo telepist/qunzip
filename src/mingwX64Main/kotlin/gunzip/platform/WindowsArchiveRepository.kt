@@ -186,32 +186,87 @@ class WindowsArchiveRepository(
         )
     }
 
-    private fun execute7zipCommand(args: List<String>): String {
+    /**
+     * Execute 7zip command and capture output without showing a console window
+     * Uses CreateProcessW with CREATE_NO_WINDOW and pipes for stdout
+     */
+    private fun execute7zipCommand(args: List<String>): String = memScoped {
         logger.d { "Executing 7zip command: $sevenZipPath ${args.joinToString(" ")}" }
 
-        // Build command
         val command = "$sevenZipPath ${args.joinToString(" ")}"
 
-        // Execute and capture output
+        // Create pipe for stdout
+        val securityAttrs = alloc<SECURITY_ATTRIBUTES>()
+        securityAttrs.nLength = sizeOf<SECURITY_ATTRIBUTES>().toUInt()
+        securityAttrs.bInheritHandle = TRUE
+        securityAttrs.lpSecurityDescriptor = null
+
+        val stdoutReadHandle = alloc<HANDLEVar>()
+        val stdoutWriteHandle = alloc<HANDLEVar>()
+
+        if (CreatePipe(stdoutReadHandle.ptr, stdoutWriteHandle.ptr, securityAttrs.ptr, 0u) == 0) {
+            throw ExtractionError.IOError("Failed to create pipe for 7zip output")
+        }
+
+        // Ensure the read handle is not inherited
+        SetHandleInformation(stdoutReadHandle.value, HANDLE_FLAG_INHERIT.toUInt(), 0u)
+
+        val startupInfo = alloc<STARTUPINFOW>()
+        val processInfo = alloc<PROCESS_INFORMATION>()
+
+        startupInfo.cb = sizeOf<STARTUPINFOW>().toUInt()
+        startupInfo.dwFlags = (STARTF_USESHOWWINDOW or STARTF_USESTDHANDLES).toUInt()
+        startupInfo.wShowWindow = SW_HIDE.toUShort()
+        startupInfo.hStdOutput = stdoutWriteHandle.value
+        startupInfo.hStdError = stdoutWriteHandle.value
+        startupInfo.hStdInput = null
+
+        val success = CreateProcessW(
+            lpApplicationName = null,
+            lpCommandLine = command.wcstr.ptr,
+            lpProcessAttributes = null,
+            lpThreadAttributes = null,
+            bInheritHandles = TRUE,
+            dwCreationFlags = CREATE_NO_WINDOW.toUInt(),
+            lpEnvironment = null,
+            lpCurrentDirectory = null,
+            lpStartupInfo = startupInfo.ptr,
+            lpProcessInformation = processInfo.ptr
+        )
+
+        // Close write end of pipe in parent process
+        CloseHandle(stdoutWriteHandle.value)
+
+        if (success == 0) {
+            CloseHandle(stdoutReadHandle.value)
+            throw ExtractionError.IOError("Failed to execute 7zip command: ${GetLastError()}")
+        }
+
+        // Read output from pipe
         val output = StringBuilder()
-        val pipe = _popen(command, "r")
+        val buffer = allocArray<ByteVar>(4096)
+        val bytesRead = alloc<UIntVar>()
 
-        if (pipe == null) {
-            throw ExtractionError.IOError("Failed to execute 7zip command")
+        while (true) {
+            val readSuccess = ReadFile(
+                stdoutReadHandle.value,
+                buffer,
+                4095u,
+                bytesRead.ptr,
+                null
+            )
+            if (readSuccess == 0 || bytesRead.value == 0u) break
+            buffer[bytesRead.value.toInt()] = 0
+            output.append(buffer.toKString())
         }
 
-        try {
-            memScoped {
-                val buffer = allocArray<ByteVar>(4096)
-                while (fgets(buffer, 4096, pipe) != null) {
-                    output.append(buffer.toKString())
-                }
-            }
-        } finally {
-            _pclose(pipe)
-        }
+        // Wait for process and cleanup
+        WaitForSingleObject(processInfo.hProcess, INFINITE)
+        CloseHandle(processInfo.hProcess)
+        CloseHandle(processInfo.hThread)
+        CloseHandle(stdoutReadHandle.value)
 
-        return output.toString()
+        return@memScoped output.toString()
     }
 
     private fun execute7zipTest(archivePath: String): Int {
@@ -227,13 +282,50 @@ class WindowsArchiveRepository(
     }
 
     /**
-     * Execute a command silently, capturing stdout/stderr so they don't pollute TUI
+     * Execute a command silently without showing a console window
+     * Uses CreateProcessW with CREATE_NO_WINDOW flag
      * Returns the exit code
      */
-    private fun executeCommandSilently(command: String): Int {
-        // Redirect stdout and stderr to NUL to suppress output
-        val silentCommand = "$command >NUL 2>&1"
-        return system(silentCommand)
+    private fun executeCommandSilently(command: String): Int = memScoped {
+        val startupInfo = alloc<STARTUPINFOW>()
+        val processInfo = alloc<PROCESS_INFORMATION>()
+
+        // Initialize startup info
+        startupInfo.cb = sizeOf<STARTUPINFOW>().toUInt()
+        startupInfo.dwFlags = STARTF_USESHOWWINDOW.toUInt()
+        startupInfo.wShowWindow = SW_HIDE.toUShort()
+
+        // Create process with no window
+        val success = CreateProcessW(
+            lpApplicationName = null,
+            lpCommandLine = command.wcstr.ptr,
+            lpProcessAttributes = null,
+            lpThreadAttributes = null,
+            bInheritHandles = FALSE,
+            dwCreationFlags = CREATE_NO_WINDOW.toUInt(),
+            lpEnvironment = null,
+            lpCurrentDirectory = null,
+            lpStartupInfo = startupInfo.ptr,
+            lpProcessInformation = processInfo.ptr
+        )
+
+        if (success == 0) {
+            logger.e { "Failed to create process: ${GetLastError()}" }
+            return@memScoped -1
+        }
+
+        // Wait for process to complete
+        WaitForSingleObject(processInfo.hProcess, INFINITE)
+
+        // Get exit code
+        val exitCode = alloc<UIntVar>()
+        GetExitCodeProcess(processInfo.hProcess, exitCode.ptr)
+
+        // Close handles
+        CloseHandle(processInfo.hProcess)
+        CloseHandle(processInfo.hThread)
+
+        return@memScoped exitCode.value.toInt()
     }
 
     private fun parse7zipListOutput(output: String): List<ArchiveEntry> {

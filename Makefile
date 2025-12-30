@@ -67,8 +67,12 @@ INSTALLER_STAGE_DIR := build/installer-staging/windows
 INSTALLER_OUTPUT_DIR := build/installer-output
 PORTABLE_ZIP_DIR := build/dist
 
-# Gradle wrapper
-GRADLEW := ./gradlew
+# Gradle wrapper - use bash explicitly on Windows for cmd.exe compatibility
+ifeq ($(PLATFORM),MingwX64)
+    GRADLEW := bash ./gradlew
+else
+    GRADLEW := ./gradlew
+endif
 
 # Default target - show help
 help:

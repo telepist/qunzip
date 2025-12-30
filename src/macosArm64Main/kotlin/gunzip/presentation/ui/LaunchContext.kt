@@ -19,3 +19,10 @@ actual fun isTerminal(): Boolean {
 actual fun isGuiAvailable(): Boolean {
     return false // TODO: Will be true when Cocoa GUI is implemented
 }
+
+/**
+ * macOS uses terminal detection to decide UI mode
+ */
+actual fun preferGuiByDefault(): Boolean {
+    return false
+}

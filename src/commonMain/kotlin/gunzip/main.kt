@@ -18,9 +18,9 @@ fun main(args: Array<String>) {
     val uiMode = selectUiMode(args.toList())
 
     // Suppress logging and console output in TUI mode to keep the display clean
-    // Also suppress if we're in a terminal, as we'll likely fall back to TUI
-    val shouldSuppressForTui = uiMode == UiMode.TUI ||
-            (uiMode == UiMode.GUI && isTerminal()) // Will likely fall back to TUI
+    // Don't suppress if --gui was explicitly requested
+    val forceGui = args.contains("--gui")
+    val shouldSuppressForTui = uiMode == UiMode.TUI && !forceGui
     if (shouldSuppressForTui) {
         Logger.setMinSeverity(Severity.Assert) // Effectively disables logging
         UiConfig.enableTuiMode() // Suppress println notifications
@@ -137,6 +137,46 @@ fun main(args: Array<String>) {
             }
         }
 
+        args.contains("--set-notification-on") -> {
+            runBlocking {
+                try {
+                    val dependencies = initializeDependencies()
+                    val currentPrefs = dependencies.preferencesRepository.loadPreferences()
+                    val newPrefs = currentPrefs.copy(showCompletionNotification = true)
+                    if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
+                        println("Setting updated: Show completion notification = ON")
+                        exitProcess(0)
+                    } else {
+                        println("Error: Failed to save preferences")
+                        exitProcess(1)
+                    }
+                } catch (e: Exception) {
+                    println("Error: ${e.message}")
+                    exitProcess(1)
+                }
+            }
+        }
+
+        args.contains("--set-notification-off") -> {
+            runBlocking {
+                try {
+                    val dependencies = initializeDependencies()
+                    val currentPrefs = dependencies.preferencesRepository.loadPreferences()
+                    val newPrefs = currentPrefs.copy(showCompletionNotification = false)
+                    if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
+                        println("Setting updated: Show completion notification = OFF")
+                        exitProcess(0)
+                    } else {
+                        println("Error: Failed to save preferences")
+                        exitProcess(1)
+                    }
+                } catch (e: Exception) {
+                    println("Error: ${e.message}")
+                    exitProcess(1)
+                }
+            }
+        }
+
         args.contains("--help") || args.contains("-h") -> {
             printHelp()
             exitProcess(0)
@@ -227,6 +267,8 @@ fun printHelp() {
           --tui                       Force TUI mode (terminal UI)
           --set-trash-on              Enable moving archive to trash after extraction
           --set-trash-off             Disable moving archive to trash (default)
+          --set-notification-on       Enable completion notification dialog
+          --set-notification-off      Disable completion notification (silent exit)
           --register-associations     Register file associations for supported formats
           --unregister-associations   Remove file associations
           --help, -h                  Show this help message

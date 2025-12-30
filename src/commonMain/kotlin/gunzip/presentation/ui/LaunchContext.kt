@@ -32,12 +32,19 @@ expect fun isTerminal(): Boolean
 expect fun isGuiAvailable(): Boolean
 
 /**
+ * Check if this platform prefers GUI mode by default
+ * Windows prefers GUI, other platforms use terminal detection
+ */
+expect fun preferGuiByDefault(): Boolean
+
+/**
  * Determine which UI mode to use based on launch context and arguments
  */
 fun selectUiMode(args: List<String>): UiMode {
     return when {
         args.contains("--tui") -> UiMode.TUI
         args.contains("--gui") -> UiMode.GUI
+        preferGuiByDefault() -> UiMode.GUI
         isGuiAvailable() && !isTerminal() -> UiMode.GUI
         else -> UiMode.TUI
     }

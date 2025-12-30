@@ -19,3 +19,10 @@ actual fun isTerminal(): Boolean {
 actual fun isGuiAvailable(): Boolean {
     return false // TODO: Will be true when GTK GUI is implemented
 }
+
+/**
+ * Linux uses terminal detection to decide UI mode
+ */
+actual fun preferGuiByDefault(): Boolean {
+    return false
+}

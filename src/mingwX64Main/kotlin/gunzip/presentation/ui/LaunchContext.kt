@@ -43,3 +43,11 @@ actual fun isTerminal(): Boolean {
 actual fun isGuiAvailable(): Boolean {
     return true
 }
+
+/**
+ * Windows prefers GUI mode by default
+ * Users can still use --tui to force terminal mode
+ */
+actual fun preferGuiByDefault(): Boolean {
+    return true
+}

@@ -46,6 +46,10 @@ kotlin {
             executable {
                 baseName = "gunzip"
                 entryPoint = "gunzip.main"
+                // Use Windows subsystem for release builds (no console window)
+                if (buildType == org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE) {
+                    linkerOpts("-Wl,--subsystem,windows")
+                }
             }
         }
     }
@@ -122,10 +126,13 @@ tasks.register("buildAllRelease") {
     description = "Build release executables for all platforms"
 }
 
-// Copy 7-Zip dependencies to Windows build directories
+// Copy 7-Zip dependencies and manifest to Windows build directories
 tasks.register<Copy>("copy7zipToDebugMingwX64") {
     from("bin/7zip") {
         include("7z.exe", "7z.dll")
+    }
+    from("src/mingwX64Main/resources") {
+        include("gunzip.exe.manifest")
     }
     into("build/bin/mingwX64/debugExecutable")
     dependsOn("linkDebugExecutableMingwX64")
@@ -134,6 +141,9 @@ tasks.register<Copy>("copy7zipToDebugMingwX64") {
 tasks.register<Copy>("copy7zipToReleaseMingwX64") {
     from("bin/7zip") {
         include("7z.exe", "7z.dll")
+    }
+    from("src/mingwX64Main/resources") {
+        include("gunzip.exe.manifest")
     }
     into("build/bin/mingwX64/releaseExecutable")
     dependsOn("linkReleaseExecutableMingwX64")
@@ -157,7 +167,7 @@ tasks.register<Copy>("prepareInstallerResources") {
     dependsOn("copy7zipToReleaseMingwX64")
 
     from("build/bin/mingwX64/releaseExecutable") {
-        include("gunzip.exe", "7z.exe", "7z.dll")
+        include("gunzip.exe", "gunzip.exe.manifest", "7z.exe", "7z.dll")
     }
     from("bin/7zip") {
         include("License.txt")
