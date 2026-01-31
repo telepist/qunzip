@@ -28,6 +28,20 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 - **Settings mode**: `./build/bin/<platform>/debugExecutable/gunzip.kexe` (no file argument)
 - The application auto-detects launch context and chooses appropriate UI (native GUI or terminal TUI)
 
+### CLI Arguments
+| Argument | Description |
+|----------|-------------|
+| `--gui` | Force GUI mode |
+| `--tui` | Force TUI (terminal UI) mode |
+| `--help`, `-h` | Display help information |
+| `--version`, `-v` | Display version information |
+| `--register-associations` | Register file associations (installer integration) |
+| `--unregister-associations` | Unregister file associations |
+| `--set-trash-on` | Enable moving archives to trash after extraction |
+| `--set-trash-off` | Disable moving archives to trash after extraction |
+| `--set-notification-on` | Enable completion notifications |
+| `--set-notification-off` | Disable completion notifications |
+
 ### Windows Installer Commands
 - `./gradlew prepareInstallerResources` - Prepare files for installer
 - `./gradlew buildWindowsInstaller` - Build Windows installer (requires Inno Setup 6)
@@ -52,9 +66,9 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 ### Clean Architecture Layers
 
 #### Domain Layer (`src/commonMain/kotlin/gunzip/domain/`)
-- **Entities**: `Archive`, `ArchiveEntry`, `ExtractionResult`, `FileAssociation`
+- **Entities**: `Archive`, `ArchiveEntry`, `ExtractionResult`, `FileAssociation`, `UserPreferences`
 - **Use Cases**: `ExtractArchiveUseCase`, `ValidateArchiveUseCase`, `ManageFileAssociationsUseCase`
-- **Repository Interfaces**: Abstract contracts for platform-specific implementations
+- **Repository Interfaces**: Abstract contracts for platform-specific implementations (`ArchiveRepository`, `FileSystemRepository`, `NotificationRepository`, `FileAssociationRepository`, `PreferencesRepository`)
 
 #### Data Layer (Platform-specific `src/<platform>Main/kotlin/`)
 - **Repository Implementations**: Platform-specific data access
@@ -62,11 +76,11 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 - **OS Services**: File system operations, notifications, file associations
 
 #### Presentation Layer (`src/commonMain/kotlin/gunzip/presentation/`)
-- **ViewModels**: `ExtractionViewModel`, `FileAssociationViewModel`, `ApplicationViewModel`
+- **ViewModels**: `ExtractionViewModel`, `FileAssociationViewModel`, `ApplicationViewModel`, `SettingsViewModel`
 - **State Management**: Kotlin Flow with StateFlow/SharedFlow patterns
 - **UI Layer**: Hybrid approach with Mosaic TUI and platform-native GUIs
   - **Mosaic TUI**: Interactive terminal UI with progress bars, colors, and real-time updates (all platforms)
-  - **Native GUIs**: Platform-specific dialogs (Windows Win32 planned, macOS/Linux future)
+  - **Native GUIs**: Platform-specific dialogs (Windows Win32 complete, macOS/Linux stubs)
   - **Auto-detection**: Chooses GUI for double-click, TUI for terminal launch
 
 ### MVVM with Kotlin Flow
@@ -126,9 +140,17 @@ src/
 ├── commonTest/kotlin/gunzip/  # Shared tests
 ├── mingwX64Main/kotlin/gunzip/     # Windows x64 (MinGW) implementations
 │   ├── platform/                   # Windows repository implementations
+│   │   ├── WindowsArchiveRepository.kt
+│   │   ├── WindowsFileSystemRepository.kt
+│   │   ├── WindowsNotificationRepository.kt
+│   │   ├── WindowsFileAssociationRepository.kt
+│   │   └── WindowsPreferencesRepository.kt
 │   ├── presentation/ui/            # Windows native GUI
-│   │   ├── Win32Gui.kt             # Win32 GUI renderer with progress window
+│   │   ├── Win32Gui.kt             # Win32 GUI renderer with progress window + settings window
 │   │   └── LaunchContext.kt        # Windows terminal detection
+│   ├── resources/                  # Windows resources
+│   │   ├── gunzip.rc               # Resource file (icon, version info)
+│   │   └── gunzip.exe.manifest     # Windows manifest
 │   └── WindowsPlatform.kt          # DI and platform utilities
 ├── linuxX64Main/kotlin/gunzip/     # Linux x64 implementations
 │   └── presentation/ui/            # Linux GUI (stubs)
@@ -162,6 +184,12 @@ src/
 - Handles double-click events through OS integration
 - Platform-specific registry/launch services management
 
+### User Preferences
+Stored in JSON format at `~/.gunzip/preferences.json`:
+- `moveToTrashAfterExtraction` - Move archive to trash after successful extraction
+- `showCompletionNotification` - Show notification when extraction completes
+- `autoCloseAfterExtraction` - Auto-close the application after extraction
+
 ## Development Notes
 
 ### Testing Strategy
@@ -193,22 +221,24 @@ src/
 
 ## Current Development Status
 
-**Phase**: Hybrid UI Implementation
-**Progress**: Core architecture complete, Windows platform implemented, Mosaic TUI fully functional
+**Phase**: Windows Feature-Complete
+**Progress**: Core architecture complete, Windows platform feature-complete with GUI and settings, Mosaic TUI fully functional
 
 ### ✅ Completed
 - Clean Architecture with MVVM setup (100%)
 - Domain layer entities and use cases (100%)
 - Repository interfaces defined (100%)
 - ViewModels with Kotlin Flow (100%)
-- TDD framework with 40 passing tests (100%)
+- TDD framework with unit tests (100%)
 - Build configuration for all platforms (100%)
 - **Windows Platform Implementation (100%)**
-  - WindowsArchiveRepository (7zip integration)
-  - WindowsFileSystemRepository (file ops, Recycle Bin)
+  - WindowsArchiveRepository (7zip integration with real-time progress)
+  - WindowsFileSystemRepository (file ops, Recycle Bin via SHFileOperation)
   - WindowsNotificationRepository (console notifications)
   - WindowsFileAssociationRepository (stub)
+  - WindowsPreferencesRepository (JSON file-based settings storage)
   - WindowsPlatform.kt (DI and platform utilities)
+  - Embedded application icon in executable
 - **Mosaic Terminal UI (100%)**
   - Interactive TUI with real-time progress updates
   - Progress bars, colors, emojis for visual feedback
@@ -218,18 +248,25 @@ src/
   - `--tui` and `--gui` flags for manual override
 - **Black Box E2E Test Scripts**
   - Windows, Linux, and macOS test scripts created
-  - Test fixtures prepared
+  - Test fixtures prepared (single-file.zip, multiple-files.zip, nested-folder.zip)
   - TUI extraction tested and working
 - **Windows Win32 Native GUI (100%)**
-  - Native progress window during extraction
+  - Native progress window during extraction (420x180px, modern Segoe UI styling)
+  - Native settings window with preferences checkboxes
   - MessageBox dialogs for completion/error notifications
+  - Cancel button for extraction operations
+  - Embedded icon loading from executable resources
   - Auto-detects GUI vs TUI mode based on launch context
   - Seamless integration with MVVM architecture
+- **Windows Installer (100%)**
+  - Inno Setup script for Windows installer
+  - Portable ZIP distribution support
+  - Icon and resource compilation
 
 ### ⏳ Pending
-- macOS Cocoa native GUI implementation
-- Linux GTK native GUI implementation
-- Linux/macOS platform full repository implementations
+- macOS Cocoa native GUI implementation (stubs exist)
+- Linux GTK native GUI implementation (stubs exist)
+- Linux/macOS platform full repository implementations (stubs with NotImplementedError)
 - End-to-end integration testing on Linux/macOS
 - Windows Registry file associations (advanced feature)
 
@@ -243,3 +280,4 @@ Comprehensive documentation available in `/docs/`:
 - `user-manual.md` - End-user documentation
 - `project-management.md` - Agile development process
 - `development-progress.md` - Current development status and progress tracking
+- `windows-installer.md` - Windows installer build process and configuration
