@@ -1,6 +1,6 @@
 # User Manual
 
-> **⚠️ Note**: This manual describes the functionality of Qunzip. The project is currently under active development. **Terminal UI (TUI) is fully functional on Windows** with interactive progress display. Native GUI implementations are planned for all platforms. Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
+> **⚠️ Note**: This manual describes the functionality of Qunzip. The project is currently under active development. **Windows is feature-complete** with both native Win32 GUI and Terminal UI (TUI). Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
 
 ## Overview
 
@@ -38,10 +38,10 @@
 Qunzip provides two user interfaces:
 
 1. **Terminal UI (TUI)** - Interactive terminal interface with live progress updates
-2. **Native GUI** _(Planned)_ - Platform-specific graphical dialogs
+2. **Native GUI** - Platform-specific graphical dialogs (Windows implemented, macOS/Linux planned)
 
 The application automatically chooses the appropriate interface:
-- **Double-clicking** an archive in File Explorer/Finder → GUI mode _(or TUI until GUI is implemented)_
+- **Double-clicking** an archive in File Explorer → Native GUI mode (Windows)
 - **Running from terminal** → Terminal UI with interactive progress display
 
 You can also force a specific mode:
@@ -79,15 +79,15 @@ The Terminal UI shows:
 
 ### Extracting Archives (GUI Mode)
 
-**Simply double-click any supported archive file.** _(Once GUI is implemented)_
+**Simply double-click any supported archive file.**
 
 The application will:
 1. Analyze the archive contents
 2. Extract files intelligently:
    - **Single file**: Extracts directly to the same folder
    - **Multiple files**: Creates a new folder named after the archive
-3. Move the original archive to trash
-4. Show a success notification
+3. Optionally move the original archive to trash (if enabled in settings)
+4. Optionally show a completion dialog (if enabled in settings)
 
 ### Example Scenarios
 
@@ -95,7 +95,7 @@ The application will:
 ```
 Before: /Documents/report.zip (contains report.pdf)
 After:  /Documents/report.pdf
-        /Trash/report.zip
+        (archive moved to Trash if "move to trash" setting enabled)
 ```
 
 #### Multiple File Archive
@@ -104,7 +104,7 @@ Before: /Downloads/project.zip (contains src/, docs/, README.md)
 After:  /Downloads/project/src/
         /Downloads/project/docs/
         /Downloads/project/README.md
-        /Trash/project.zip
+        (archive moved to Trash if "move to trash" setting enabled)
 ```
 
 ## Supported Formats
@@ -136,20 +136,23 @@ If extraction fails:
 - No partial files are left behind
 
 ### Smart Conflict Resolution
-If extracted files would overwrite existing files:
-- Existing files are automatically renamed with a number suffix
-- Example: `document.pdf` becomes `document (1).pdf`
+If extracted files would overwrite existing files or folders:
+- Files are automatically renamed with a number suffix
+- Example: `document.pdf` becomes `document-1.pdf`, then `document-2.pdf`, etc.
+- Folders follow the same pattern: `project` becomes `project-1`, `project-2`, etc.
 
 ## Settings and Configuration
 
-### Viewing Settings (Terminal UI)
+### Viewing and Configuring Settings
 
-Run without any archive file to view settings:
+Run without any archive file to open the settings window:
 ```bash
 qunzip
 ```
 
-You'll see the settings display:
+**Windows**: Opens native settings window with checkboxes for preferences.
+
+**Terminal**: Shows settings in TUI format:
 ```
 ┌─────── Qunzip Settings ───────┐
 │
@@ -171,6 +174,24 @@ You'll see the settings display:
 │   --unregister-associations
 └───────────────────────────────┘
 ```
+
+### Configuring Preferences via Command Line
+
+```bash
+# Enable moving archives to trash after extraction
+qunzip --set-trash-on
+
+# Disable moving archives to trash (default)
+qunzip --set-trash-off
+
+# Enable completion dialog after extraction
+qunzip --set-dialog-on
+
+# Disable completion dialog - silent exit (default)
+qunzip --set-dialog-off
+```
+
+Preferences are stored in `~/.qunzip/preferences.json`.
 
 ### File Associations
 The application automatically registers itself for supported file types during installation. To manually manage associations:
@@ -218,6 +239,7 @@ Notifications follow your system preferences:
 
 #### Original Archive Not Moved to Trash
 This happens when:
+- The "move to trash" setting is disabled (default behavior)
 - Extraction failed (archive remains for retry)
 - Insufficient permissions to delete
 - Archive is on read-only media (CD/DVD)

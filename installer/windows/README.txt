@@ -31,7 +31,7 @@ HOW TO USE
    Simply double-click any archive file in Windows Explorer. Qunzip will:
    - Extract single files to the same directory as the archive
    - Extract multiple files to a new folder with the archive's name
-   - Automatically move the original archive to the Recycle Bin after extraction
+   - Optionally move the original archive to the Recycle Bin (if enabled)
 
 2. COMMAND-LINE USAGE
    You can also use Qunzip from the command line:
@@ -41,6 +41,10 @@ HOW TO USE
    Examples:
      qunzip C:\Downloads\example.zip
      qunzip "D:\My Files\archive.7z"
+
+   Force GUI or TUI mode:
+     qunzip --gui archive.zip
+     qunzip --tui archive.zip
 
 
 FILE ASSOCIATIONS
@@ -61,7 +65,19 @@ Qunzip follows these smart extraction rules:
   • Single file archive → Extracted to same directory as archive
   • Multiple files → New folder created with archive name
   • Single root folder → Contents extracted directly (no nested folder)
-  • After extraction → Original archive moved to Recycle Bin
+  • After extraction → Original archive moved to Recycle Bin (if enabled)
+
+
+SETTINGS
+--------
+Configure Qunzip preferences via command line:
+
+  qunzip --set-trash-on       Enable moving archives to Recycle Bin
+  qunzip --set-trash-off      Keep archives after extraction (default)
+  qunzip --set-dialog-on      Show completion dialog
+  qunzip --set-dialog-off     Silent exit after extraction (default)
+
+Run "qunzip" without arguments to open the settings window.
 
 
 GETTING HELP

@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Phase**: Core Architecture Complete, Windows Platform Implemented, Build Issues Preventing Testing
+**Phase**: Windows Platform Feature-Complete, Testing & Validation In Progress
 
 ## Completed Work
 
@@ -93,7 +93,7 @@
 
 ## In Progress
 
-### 🔄 Core Extraction Engine (85% Complete)
+### 🔄 Windows Platform Testing (95% Complete)
 
 #### Completed
 - ✅ Archive analysis logic (in use cases)
@@ -101,14 +101,27 @@
 - ✅ Error handling framework
 - ✅ Progress tracking infrastructure
 - ✅ **Windows Platform Repositories**
-  - ✅ `WindowsArchiveRepository` - 7zip integration
-  - ✅ `WindowsFileSystemRepository` - File operations, Recycle Bin
+  - ✅ `WindowsArchiveRepository` - 7zip integration with real-time progress
+  - ✅ `WindowsFileSystemRepository` - File operations, Recycle Bin via SHFileOperation
   - ✅ `WindowsNotificationRepository` - Console-based notifications
   - ✅ `WindowsFileAssociationRepository` - Stub for registry access
+  - ✅ `WindowsPreferencesRepository` - JSON file-based settings storage
+- ✅ **Windows Native GUI**
+  - ✅ Win32 progress window (420x180px, Segoe UI styling)
+  - ✅ Win32 settings window with checkboxes
+  - ✅ MessageBox dialogs for completion/error
+  - ✅ Cancel button support
+  - ✅ Embedded icon loading
+- ✅ **User Preferences System**
+  - ✅ Move to trash after extraction (optional, default: off)
+  - ✅ Show completion dialog (optional, default: off)
+  - ✅ CLI flags for preference configuration
+- ✅ **Smart Duplicate Handling**
+  - ✅ Manual file/folder conflict detection
+  - ✅ Unique naming with numeric suffixes (file-1, file-2, etc.)
 - ✅ **Platform-specific DI and main.kt integration**
-  - ✅ Expect/actual pattern for dependency injection (Windows complete)
-  - ✅ Platform-specific exitProcess() (Windows complete)
-  - ✅ Windows repositories wired to main.kt
+  - ✅ Expect/actual pattern for dependency injection
+  - ✅ Windows repositories fully wired
 - ✅ **Black Box End-to-End Tests**
   - ✅ Windows E2E test script (run-tests.bat)
   - ✅ Linux E2E test script (run-tests.sh)
@@ -117,10 +130,8 @@
   - ✅ Test fixtures shared across platforms
 
 #### In Progress
-- 🔄 Fix build errors preventing compilation
-  - ⚠️ Linux platforms missing `getCurrentExecutablePath()` implementation
-  - ⚠️ macOS platforms missing `getCurrentExecutablePath()` implementation
-  - Build fails on all platforms due to missing actual declarations
+- 🔄 Comprehensive Windows testing and validation
+- 🔄 Bug fixes and edge case handling
 
 #### Pending
 - ⏳ Linux platform repositories (full implementation)
@@ -191,14 +202,11 @@
 - ✅ Windows platform repositories implemented
 
 ### Current
-- 🔴 **CRITICAL**: Build fails - Linux/macOS missing `getCurrentExecutablePath()` implementations
-- ⚠️ Windows 7zip integration is functional but lacks progress parsing
 - ⚠️ Windows disk space check is stubbed (returns MAX_VALUE)
-- ⚠️ Windows notifications use console output instead of Toast
 - ⚠️ Windows file associations are stubbed (no Registry access yet)
 - ⚠️ Linux platform has only stub implementations (not functional)
 - ⚠️ macOS platform has only stub implementations (not functional)
-- ⚠️ E2E tests created but not yet run successfully (build blocks execution)
+- ⚠️ E2E tests need validation on clean systems
 
 ### Future Considerations
 - Consider dependency injection framework (Koin)
@@ -219,13 +227,14 @@
 - **Code Review**: Architectural foundation + Windows platform + comprehensive E2E test suite reviewed
 
 ### Quality Gates
-- 🔴 Build FAILING on all platforms (missing platform implementations)
-- 🔴 Unit tests cannot run (build failure)
+- ✅ Windows build working successfully
+- ✅ Unit tests passing
 - ✅ Clean Architecture principles followed
 - ✅ Windows platform repositories implemented
+- ✅ Windows native GUI implemented
 - ✅ Windows integration complete (DI + main.kt wired)
-- 🔴 Linux/macOS platforms incomplete (missing crucial implementations)
-- ⏳ E2E tests untested (blocked by build failure)
+- ⚠️ Linux/macOS platforms have stubs (not functional)
+- ⏳ E2E tests need validation
 
 ## Risk Assessment
 
@@ -305,11 +314,14 @@
 - 7zip progress tracking needs output parsing (deferred)
 - File associations require Registry access (complex, deferred)
 
-### Current Blockers
+### Current Focus
 
-**Build Failure:**
-- Build fails because Linux and macOS platform files are missing `getCurrentExecutablePath()` actual implementations
-- Quick fix required but blocks all testing and development
+**Windows Validation:**
+- Comprehensive testing on Windows 10/11
+- Edge case handling for various archive types
+- User experience polish
 
-**Next Action Required:**
-Fix build errors by adding `getCurrentExecutablePath()` implementations to Linux and macOS platform files, then verify tests pass and run Windows E2E black box tests.
+**Next Steps:**
+1. Complete Windows testing and validation
+2. Begin Linux platform implementation
+3. Begin macOS platform implementation

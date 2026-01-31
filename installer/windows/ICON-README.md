@@ -51,7 +51,7 @@ magick convert icon-temp.png -define icon:auto-resize=256,48,32,16 icon.ico
 - **Color depth**: 32-bit (RGBA)
 - **Design**:
   - Background: Blue gradient (#4682C8 to #1E508C)
-  - Text: White "GZ" in bold sans-serif font
+  - Text: White "QZ" in bold sans-serif font (for "Quick unZip")
   - Optional: Subtle border or zipper visual element
 
 ## Temporary Workaround

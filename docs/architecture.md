@@ -67,11 +67,11 @@ interface UiRenderer {
 - `ExtractionTui`: Extraction progress display
 - `SettingsTui`: File associations and settings display
 
-#### 2. Native GUI (Planned)
-- **Windows**: Win32 API dialogs (progress dialog, settings window)
-- **macOS**: Cocoa/AppKit dialogs (NSProgressIndicator, NSWindow)
-- **Linux**: GTK dialogs (GtkProgressBar, GtkWindow)
-- **Implementation**: Platform-specific using C/Objective-C interop
+#### 2. Native GUI
+- **Windows**: Win32 API dialogs (implemented - progress window, settings window, MessageBox notifications)
+- **macOS**: Cocoa/AppKit dialogs (planned - stubs exist)
+- **Linux**: GTK dialogs (planned - stubs exist)
+- **Implementation**: Platform-specific using C interop (Windows complete, others pending)
 
 ### Launch Context Detection
 
@@ -234,13 +234,13 @@ src/
 ├── mingwX64Main/kotlin/qunzip/
 │   ├── platform/              # Windows repository implementations
 │   ├── presentation/ui/       # Windows GUI
-│   │   ├── Win32Gui.kt        # Win32 renderer (planned)
+│   │   ├── Win32Gui.kt        # Win32 renderer (implemented)
 │   │   └── LaunchContext.kt   # Terminal detection
 │   └── WindowsPlatform.kt     # DI and platform utilities
 ├── linuxX64Main/kotlin/qunzip/
 │   ├── platform/              # Linux repository implementations
 │   ├── presentation/ui/       # Linux GUI
-│   │   ├── GtkGui.kt          # GTK renderer (planned)
+│   │   ├── GtkGui.kt          # GTK renderer (stub)
 │   │   └── LaunchContext.kt   # Terminal detection
 │   └── LinuxPlatform.kt       # DI and platform utilities
 ├── linuxArm64Main/kotlin/qunzip/
@@ -249,7 +249,7 @@ src/
 ├── macosX64Main/kotlin/qunzip/
 │   ├── platform/              # macOS Intel repository implementations
 │   ├── presentation/ui/       # macOS GUI
-│   │   ├── CocoaGui.kt        # Cocoa renderer (planned)
+│   │   ├── CocoaGui.kt        # Cocoa renderer (stub)
 │   │   └── LaunchContext.kt   # Terminal detection
 │   └── MacosPlatform.kt       # DI and platform utilities
 └── macosArm64Main/kotlin/qunzip/

@@ -14,7 +14,7 @@ This application follows macOS-inspired design principles while maintaining cros
 ### 2. Intelligent Behavior
 - **Single file archives**: Extract directly to same directory
 - **Multi-file archives**: Create directory named after archive
-- **Automatic cleanup**: Move source archive to trash after successful extraction
+- **Optional cleanup**: Move source archive to trash after extraction (user preference)
 
 ### 3. Seamless Integration
 - **Native file associations**: Registers as default handler for supported formats
@@ -38,9 +38,9 @@ Extracts all files to archive/
         ↓
 Shows progress notification (if large)
         ↓
-Moves archive.zip to trash
+Moves archive.zip to trash (if enabled)
         ↓
-Shows success notification
+Shows success notification (if enabled)
         ↓
 Application exits
 ```
@@ -56,9 +56,9 @@ Analysis: document.zip contains single file
         ↓
 Extracts document.pdf to same directory
         ↓
-Moves document.zip to trash
+Moves document.zip to trash (if enabled)
         ↓
-Shows success notification
+Shows success notification (if enabled)
         ↓
 Application exits
 ```
@@ -112,16 +112,14 @@ Actions: [Cancel]
 
 ## Success Feedback
 
-### Completion Notification
+### Completion Notification (when enabled)
 ```
 Title: "Extraction Complete"
 Message: "[filename] extracted successfully"
-Actions: [Show Files] [OK]
+Actions: [OK]
 ```
 
-### "Show Files" Action
-- Opens file manager to extracted location
-- Highlights extracted files/folder
+When completion dialog is disabled (default), the application exits silently after successful extraction.
 
 ## Accessibility
 

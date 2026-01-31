@@ -20,7 +20,7 @@ A fast, simple archive extraction utility inspired by macOS simplicity but built
 - Single file → Extracts to same directory
 - Multiple files → Creates new folder with archive name
 - Single root folder → Extracts contents directly (no nested folders)
-- Auto-cleanup → Moves archive to Recycle Bin/Trash after extraction
+- Optional cleanup → Move archive to Recycle Bin/Trash after extraction
 
 📦 **Wide Format Support**
 - ZIP, 7-Zip, RAR, TAR (+ .gz, .bz2, .xz variants)
@@ -28,8 +28,8 @@ A fast, simple archive extraction utility inspired by macOS simplicity but built
 
 🖱️ **Simple to Use**
 - Double-click any archive file
-- File associations automatically configured
-- No complex options or settings
+- File associations via installer or CLI registration
+- Minimal configuration - just works
 
 ⚡ **Fast & Lightweight**
 - Native executables (no JVM required)
@@ -65,14 +65,26 @@ Coming soon! Implementation pending.
 
 Simply **double-click** any supported archive file. Qunzip will:
 1. Extract the contents intelligently
-2. Open the extraction folder (optional)
-3. Move the original archive to trash
+2. Optionally move the original archive to trash (if enabled in settings)
 
 ### Command Line
 
 ```bash
-# Extract an archive
+# Extract an archive (auto-detects GUI or TUI mode)
 qunzip path/to/archive.zip
+
+# Force GUI or TUI mode
+qunzip --gui path/to/archive.zip
+qunzip --tui path/to/archive.zip
+
+# Open settings (run without arguments)
+qunzip
+
+# Configure preferences
+qunzip --set-trash-on       # Move archives to trash after extraction
+qunzip --set-trash-off      # Keep archives after extraction (default)
+qunzip --set-dialog-on      # Show completion dialog
+qunzip --set-dialog-off     # Silent exit after extraction (default)
 
 # Register file associations (Windows, requires admin)
 qunzip --register-associations
@@ -214,21 +226,22 @@ Contributions are welcome! Please:
 
 ## Roadmap
 
-### Current Phase (In Progress)
+### Completed
 - [x] Core architecture with Clean Architecture + MVVM
-- [x] Windows platform repository implementations
+- [x] Windows platform implementation (feature-complete)
+- [x] Native Win32 GUI with progress window
+- [x] Mosaic TUI for terminal usage
+- [x] Windows installer with Inno Setup
+- [x] User preferences (trash, completion dialog)
+- [x] Smart duplicate file/folder handling
 - [x] Black box E2E test framework
-- [ ] Fix build errors (missing platform implementations)
-- [ ] Windows E2E testing and validation
-- [x] Windows installer with file associations
 
-### Next Phase
+### In Progress
+- [ ] Comprehensive Windows testing and validation
 - [ ] Linux platform implementation
 - [ ] macOS platform implementation
-- [ ] Cross-platform testing
 
 ### Future Enhancements
-- [ ] Real-time progress notifications during extraction
 - [ ] Advanced file association management (Windows Registry)
 - [ ] Drag-and-drop support
 - [ ] Multi-archive batch extraction
