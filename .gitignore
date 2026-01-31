@@ -34,7 +34,6 @@ out/
 .classpath
 .project
 .settings/
-bin/
 
 ### Kotlin Native ###
 .konan/

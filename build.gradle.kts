@@ -166,8 +166,67 @@ tasks.named("compileKotlinMingwX64") {
     dependsOn("compileWindowsResources")
 }
 
+// ============================================================================
+// 7-Zip Download Task
+// ============================================================================
+
+val sevenZipVersion = "2501"
+val sevenZipDir = file("bin/7zip")
+
+// Task to download 7-Zip binaries from official source
+tasks.register("download7zip") {
+    group = "setup"
+    description = "Download 7-Zip command-line tools from official source"
+
+    val sevenZipExe = file("$sevenZipDir/7z.exe")
+    val sevenZipDll = file("$sevenZipDir/7z.dll")
+
+    outputs.files(sevenZipExe, sevenZipDll)
+
+    onlyIf {
+        !sevenZipExe.exists() || !sevenZipDll.exists()
+    }
+
+    doLast {
+        val tempDir = file("build/tmp/7zip-download")
+        tempDir.mkdirs()
+        sevenZipDir.mkdirs()
+
+        val sevenZrExe = file("$tempDir/7zr.exe")
+        val installerExe = file("$tempDir/7z${sevenZipVersion}-x64.exe")
+
+        // Download 7zr.exe (standalone console version that can extract archives)
+        println("Downloading 7zr.exe...")
+        val sevenZrUrl = "https://www.7-zip.org/a/7zr.exe"
+        ant.withGroovyBuilder {
+            "get"("src" to sevenZrUrl, "dest" to sevenZrExe, "skipexisting" to "false")
+        }
+
+        // Download main 7-Zip installer (can be extracted as an archive)
+        println("Downloading 7z${sevenZipVersion}-x64.exe...")
+        val installerUrl = "https://www.7-zip.org/a/7z${sevenZipVersion}-x64.exe"
+        ant.withGroovyBuilder {
+            "get"("src" to installerUrl, "dest" to installerExe, "skipexisting" to "false")
+        }
+
+        // Extract 7z.exe and 7z.dll from the installer using 7zr.exe
+        println("Extracting 7z.exe and 7z.dll...")
+        exec {
+            workingDir = tempDir
+            commandLine(sevenZrExe.absolutePath, "e", installerExe.absolutePath, "7z.exe", "7z.dll", "-o${sevenZipDir.absolutePath}", "-y")
+        }
+
+        // Clean up temp files
+        println("Cleaning up...")
+        tempDir.deleteRecursively()
+
+        println("7-Zip ${sevenZipVersion} downloaded to ${sevenZipDir.absolutePath}")
+    }
+}
+
 // Copy 7-Zip dependencies and manifest to Windows build directories
 tasks.register<Copy>("copy7zipToDebugMingwX64") {
+    dependsOn("download7zip")
     from("bin/7zip") {
         include("7z.exe", "7z.dll")
     }
@@ -179,6 +238,7 @@ tasks.register<Copy>("copy7zipToDebugMingwX64") {
 }
 
 tasks.register<Copy>("copy7zipToReleaseMingwX64") {
+    dependsOn("download7zip")
     from("bin/7zip") {
         include("7z.exe", "7z.dll")
     }

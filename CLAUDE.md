@@ -15,6 +15,7 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 - `./gradlew buildAllRelease` - Build optimized release executables for all platforms
 - `./gradlew linkDebugExecutable<Platform>` - Build for specific platform (e.g., MacosArm64, LinuxX64, MingwX64)
 - `./gradlew linkReleaseExecutable<Platform>` - Build release version for specific platform
+- `./gradlew download7zip` - Download 7-Zip binaries (automatic during Windows build)
 
 ### Testing Commands
 - `./gradlew testAll` - Run tests on all platforms
