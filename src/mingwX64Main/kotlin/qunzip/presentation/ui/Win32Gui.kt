@@ -12,6 +12,7 @@ import kotlinx.cinterop.*
 import platform.windows.*
 import co.touchlab.kermit.Logger
 import kotlin.system.exitProcess
+import qunzip.getCurrentExecutablePath
 
 // Progress bar messages
 private const val PBM_SETRANGE32 = 0x406
@@ -571,6 +572,9 @@ private const val IDC_SETTINGS_MOVE_TO_TRASH = 2001
 private const val IDC_SETTINGS_SHOW_COMPLETION_DIALOG = 2002
 private const val IDC_SETTINGS_CLOSE_BUTTON = 2004
 private const val IDC_SETTINGS_RESET_BUTTON = 2005
+private const val IDC_SETTINGS_FILE_ASSOC_STATUS = 2006
+private const val IDC_SETTINGS_REGISTER_BUTTON = 2007
+private const val IDC_SETTINGS_UNREGISTER_BUTTON = 2008
 
 // Global reference for settings window procedure callbacks
 private var settingsGuiInstance: Win32SettingsGui? = null
@@ -587,11 +591,14 @@ class Win32SettingsGui(
 
     private var hwnd: HWND? = null
     private var hFont: HFONT? = null
+    private var fileAssocStatusHwnd: HWND? = null
+    private var registerButtonHwnd: HWND? = null
+    private var unregisterButtonHwnd: HWND? = null
 
     companion object {
         private const val WINDOW_CLASS_NAME = "QunzipSettingsWindow"
         private const val WINDOW_WIDTH = 400
-        private const val WINDOW_HEIGHT = 320
+        private const val WINDOW_HEIGHT = 380
         private const val PADDING = 20
         private const val CONTROL_SPACING = 12
         private const val CHECKBOX_HEIGHT = 24
@@ -678,6 +685,9 @@ class Win32SettingsGui(
 
         ShowWindow(hwnd, SW_SHOW)
         UpdateWindow(hwnd)
+
+        // Start observing file association state
+        startStateObservation()
 
         logger.i { "Settings window created successfully" }
         return true
@@ -767,8 +777,99 @@ class Win32SettingsGui(
         )
         yPos += 16
 
-        // Buttons at bottom - use yPos to position below content
-        yPos += CONTROL_SPACING + 8
+        // File Associations section title
+        val fileAssocTitle = CreateWindowExW(
+            dwExStyle = 0u,
+            lpClassName = "STATIC",
+            lpWindowName = "File Associations",
+            dwStyle = (WS_CHILD or WS_VISIBLE or SS_LEFT.toInt()).toUInt(),
+            X = PADDING,
+            Y = yPos,
+            nWidth = contentWidth,
+            nHeight = 20,
+            hWndParent = window,
+            hMenu = null,
+            hInstance = hInstance,
+            lpParam = null
+        )
+        applyBoldFont(fileAssocTitle)
+        yPos += 28
+
+        // File association status label
+        fileAssocStatusHwnd = CreateWindowExW(
+            dwExStyle = 0u,
+            lpClassName = "STATIC",
+            lpWindowName = "Checking status...",
+            dwStyle = (WS_CHILD or WS_VISIBLE or SS_LEFT.toInt()).toUInt(),
+            X = PADDING,
+            Y = yPos,
+            nWidth = contentWidth,
+            nHeight = 20,
+            hWndParent = window,
+            hMenu = IDC_SETTINGS_FILE_ASSOC_STATUS.toLong().toCPointer(),
+            hInstance = hInstance,
+            lpParam = null
+        )
+        applyFont(fileAssocStatusHwnd)
+        yPos += 24 + CONTROL_SPACING
+
+        // Register/Unregister buttons
+        val assocButtonWidth = 120
+        val assocButtonHeight = 28
+        val buttonSpacing = 12
+
+        registerButtonHwnd = CreateWindowExW(
+            dwExStyle = 0u,
+            lpClassName = "BUTTON",
+            lpWindowName = "Register All",
+            dwStyle = (WS_CHILD or WS_VISIBLE or BS_PUSHBUTTON.toInt()).toUInt(),
+            X = PADDING,
+            Y = yPos,
+            nWidth = assocButtonWidth,
+            nHeight = assocButtonHeight,
+            hWndParent = window,
+            hMenu = IDC_SETTINGS_REGISTER_BUTTON.toLong().toCPointer(),
+            hInstance = hInstance,
+            lpParam = null
+        )
+        applyFont(registerButtonHwnd)
+
+        unregisterButtonHwnd = CreateWindowExW(
+            dwExStyle = 0u,
+            lpClassName = "BUTTON",
+            lpWindowName = "Unregister All",
+            dwStyle = (WS_CHILD or WS_VISIBLE or BS_PUSHBUTTON.toInt()).toUInt(),
+            X = PADDING + assocButtonWidth + buttonSpacing,
+            Y = yPos,
+            nWidth = assocButtonWidth,
+            nHeight = assocButtonHeight,
+            hWndParent = window,
+            hMenu = IDC_SETTINGS_UNREGISTER_BUTTON.toLong().toCPointer(),
+            hInstance = hInstance,
+            lpParam = null
+        )
+        applyFont(unregisterButtonHwnd)
+        yPos += assocButtonHeight + CONTROL_SPACING + 8
+
+        // Second separator line
+        CreateWindowExW(
+            dwExStyle = 0u,
+            lpClassName = "STATIC",
+            lpWindowName = null,
+            dwStyle = (WS_CHILD or WS_VISIBLE or SS_ETCHEDHORZ.toInt()).toUInt(),
+            X = PADDING,
+            Y = yPos,
+            nWidth = contentWidth,
+            nHeight = 2,
+            hWndParent = window,
+            hMenu = null,
+            hInstance = hInstance,
+            lpParam = null
+        )
+        yPos += 16
+
+        // Buttons at bottom
+        yPos += CONTROL_SPACING
         val buttonWidth = 100
         val buttonHeight = 28
 
@@ -875,6 +976,15 @@ class Win32SettingsGui(
             IDC_SETTINGS_CLOSE_BUTTON -> {
                 PostQuitMessage(0)
             }
+            IDC_SETTINGS_REGISTER_BUTTON -> {
+                val appPath = getCurrentExecutablePath()
+                logger.i { "Registering file associations with path: $appPath" }
+                viewModel.fileAssociationViewModel.registerAssociations(appPath)
+            }
+            IDC_SETTINGS_UNREGISTER_BUTTON -> {
+                logger.i { "Unregistering file associations" }
+                viewModel.fileAssociationViewModel.unregisterAssociations()
+            }
         }
     }
 
@@ -894,6 +1004,44 @@ class Win32SettingsGui(
             if (prefs.showCompletionDialog) BST_CHECKED.toULong() else BST_UNCHECKED.toULong(),
             0
         )
+    }
+
+    private fun updateFileAssociationStatus() {
+        val state = viewModel.fileAssociationViewModel.uiState.value
+
+        // Update status label
+        val statusText = when {
+            state.isLoading -> "Checking..."
+            state.error != null -> "Error: ${state.error}"
+            state.qunzipAssociations.isEmpty() -> "Not registered"
+            else -> {
+                val total = state.supportedExtensions.size
+                val registered = state.registeredExtensions.size
+                if (registered == total) {
+                    "Registered: All $total formats"
+                } else {
+                    "Registered: $registered of $total formats"
+                }
+            }
+        }
+        fileAssocStatusHwnd?.let { SetWindowTextW(it, statusText) }
+
+        // Enable/disable buttons based on loading state
+        val enableState = if (state.isLoading) 0 else 1
+        registerButtonHwnd?.let { EnableWindow(it, enableState) }
+        unregisterButtonHwnd?.let { EnableWindow(it, enableState) }
+    }
+
+    private fun startStateObservation() {
+        // Observe file association state changes
+        scope.launch {
+            viewModel.fileAssociationViewModel.uiState.collectLatest { _ ->
+                updateFileAssociationStatus()
+            }
+        }
+
+        // Initial refresh of associations
+        viewModel.fileAssociationViewModel.refreshAssociations()
     }
 
     suspend fun runMessageLoop(): Nothing = memScoped {
