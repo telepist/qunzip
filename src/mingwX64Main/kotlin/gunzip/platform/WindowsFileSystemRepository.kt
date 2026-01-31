@@ -195,6 +195,12 @@ class WindowsFileSystemRepository(
         return result != 0
     }
 
+    override suspend fun deleteDirectory(path: String): Boolean {
+        logger.d { "Deleting directory: $path" }
+        val result = RemoveDirectoryA(path)
+        return result != 0
+    }
+
     override suspend fun getFileSize(path: String): Long {
         return getFileInfo(path).size
     }

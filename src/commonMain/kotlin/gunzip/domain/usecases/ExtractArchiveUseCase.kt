@@ -6,7 +6,7 @@ import gunzip.domain.repositories.FileSystemRepository
 import gunzip.domain.repositories.NotificationRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.datetime.Clock
+import kotlin.random.Random
 
 open class ExtractArchiveUseCase(
     private val archiveRepository: ArchiveRepository,
@@ -20,22 +20,18 @@ open class ExtractArchiveUseCase(
         try {
             emit(ExtractionProgress(archivePath, stage = ExtractionStage.STARTING))
 
-            // Validate archive exists and is readable
             val archive = archiveRepository.getArchiveInfo(archivePath)
                 ?: throw ExtractionError.FileNotFound(archivePath)
 
             emit(ExtractionProgress(archivePath, stage = ExtractionStage.ANALYZING))
 
-            // Analyze archive contents
             val contents = archiveRepository.getArchiveContents(archivePath)
             val strategy = determineExtractionStrategy(contents)
+            val parentDir = fileSystemRepository.getParentDirectory(archivePath)
 
-            // Check available disk space
+            // Check disk space
             val requiredSpace = contents.totalSize
-            val availableSpace = fileSystemRepository.getAvailableSpace(
-                fileSystemRepository.getParentDirectory(archivePath)
-            )
-
+            val availableSpace = fileSystemRepository.getAvailableSpace(parentDir)
             if (availableSpace < requiredSpace) {
                 throw ExtractionError.InsufficientSpace(requiredSpace, availableSpace)
             }
@@ -47,19 +43,47 @@ open class ExtractArchiveUseCase(
                 stage = ExtractionStage.EXTRACTING
             ))
 
-            // Determine extraction destination
-            val extractionPath = determineExtractionPath(archive, contents, strategy)
-
-            // Create destination directory if needed
-            if (strategy == ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER) {
-                fileSystemRepository.createDirectory(extractionPath)
+            // Determine target path and check for conflicts
+            val targetName = when (strategy) {
+                ExtractionStrategy.SINGLE_FILE_TO_DIRECTORY -> contents.topLevelEntries.first().name
+                ExtractionStrategy.SINGLE_FOLDER_TO_DIRECTORY -> contents.topLevelEntries.first().name
+                ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER -> archive.nameWithoutExtension
             }
+            val targetPath = fileSystemRepository.joinPath(parentDir, targetName)
+            val hasConflict = fileSystemRepository.exists(targetPath)
 
-            // Extract archive with progress tracking
-            archiveRepository.extractArchive(archivePath, extractionPath)
-                .collect { progress ->
-                    emit(progress.copy(stage = ExtractionStage.EXTRACTING))
+            // For multi-file, always create unique folder upfront (no temp needed)
+            val finalPath: String
+            if (strategy == ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER) {
+                finalPath = generateUniquePath(targetPath)
+                fileSystemRepository.createDirectory(finalPath)
+
+                archiveRepository.extractArchive(archivePath, finalPath)
+                    .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
+            } else if (hasConflict) {
+                // Single file or folder with conflict: use temp folder
+                val tempFolder = createTempFolder(parentDir)
+                fileSystemRepository.createDirectory(tempFolder)
+
+                archiveRepository.extractArchive(archivePath, tempFolder)
+                    .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
+
+                // Move to final location
+                val extractedItem = fileSystemRepository.joinPath(tempFolder, targetName)
+                finalPath = if (strategy == ExtractionStrategy.SINGLE_FILE_TO_DIRECTORY) {
+                    generateUniqueFilePath(targetPath)
+                } else {
+                    generateUniquePath(targetPath)
                 }
+
+                fileSystemRepository.moveFile(extractedItem, finalPath)
+                fileSystemRepository.deleteDirectory(tempFolder)
+            } else {
+                // No conflict: extract directly
+                finalPath = targetPath
+                archiveRepository.extractArchive(archivePath, parentDir)
+                    .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
+            }
 
             emit(ExtractionProgress(
                 archivePath = archivePath,
@@ -70,40 +94,15 @@ open class ExtractArchiveUseCase(
                 stage = ExtractionStage.FINALIZING
             ))
 
-            // Optionally move original archive to trash
             if (options.moveToTrashAfterExtraction) {
                 fileSystemRepository.moveToTrash(archivePath)
             }
 
-            // Get list of extracted files for result
-            val extractedFiles = when (strategy) {
-                ExtractionStrategy.SINGLE_FILE_TO_DIRECTORY -> {
-                    listOf(fileSystemRepository.joinPath(
-                        fileSystemRepository.getParentDirectory(archivePath),
-                        contents.topLevelEntries.first().name
-                    ))
-                }
-                ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER -> {
-                    contents.topLevelEntries.map { entry ->
-                        fileSystemRepository.joinPath(extractionPath, entry.name)
-                    }
-                }
-                ExtractionStrategy.SINGLE_FOLDER_TO_DIRECTORY -> {
-                    contents.entries.filter { it.depth == 1 }.map { entry ->
-                        fileSystemRepository.joinPath(
-                            fileSystemRepository.getParentDirectory(archivePath),
-                            entry.name
-                        )
-                    }
-                }
-            }
-
-            // Show success notification if enabled
             if (options.showCompletionNotification) {
                 notificationRepository.showSuccessNotification(
                     title = "Extraction Complete",
                     message = "${archive.name} extracted successfully",
-                    extractedPath = extractionPath
+                    extractedPath = finalPath
                 )
             }
 
@@ -117,79 +116,78 @@ open class ExtractArchiveUseCase(
             ))
 
         } catch (error: ExtractionError) {
-            // Show error notification
             notificationRepository.showErrorNotification(
                 title = "Extraction Failed",
                 message = error.message
             )
-
-            emit(ExtractionProgress(
-                archivePath = archivePath,
-                stage = ExtractionStage.FAILED
-            ))
-
+            emit(ExtractionProgress(archivePath = archivePath, stage = ExtractionStage.FAILED))
             throw error
         } catch (throwable: Throwable) {
             val error = ExtractionError.UnknownError(
                 message = throwable.message ?: "Unknown error occurred",
                 cause = throwable
             )
-
             notificationRepository.showErrorNotification(
                 title = "Extraction Failed",
                 message = error.message
             )
-
-            emit(ExtractionProgress(
-                archivePath = archivePath,
-                stage = ExtractionStage.FAILED
-            ))
-
+            emit(ExtractionProgress(archivePath = archivePath, stage = ExtractionStage.FAILED))
             throw error
         }
     }
 
     private fun determineExtractionStrategy(contents: ArchiveContents): ExtractionStrategy {
         return when {
-            // Single file archive -> extract to same directory
             contents.topLevelEntries.size == 1 && contents.topLevelEntries.first().isFile -> {
                 ExtractionStrategy.SINGLE_FILE_TO_DIRECTORY
             }
-            // Single directory with everything inside -> extract contents to same directory
             contents.topLevelEntries.size == 1 && contents.topLevelEntries.first().isDirectory -> {
                 ExtractionStrategy.SINGLE_FOLDER_TO_DIRECTORY
             }
-            // Multiple items at root level -> create folder
             else -> {
                 ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER
             }
         }
     }
 
-    private suspend fun determineExtractionPath(
-        archive: Archive,
-        contents: ArchiveContents,
-        strategy: ExtractionStrategy
-    ): String {
-        val parentDir = fileSystemRepository.getParentDirectory(archive.path)
+    private fun createTempFolder(parentDir: String): String {
+        val hash = Random.nextInt(0x100000, 0xFFFFFF).toString(16)
+        return fileSystemRepository.joinPath(parentDir, "gunzip_$hash")
+    }
 
-        return when (strategy) {
-            ExtractionStrategy.SINGLE_FILE_TO_DIRECTORY,
-            ExtractionStrategy.SINGLE_FOLDER_TO_DIRECTORY -> parentDir
-
-            ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER -> {
-                val folderName = archive.nameWithoutExtension
-                var extractionPath = fileSystemRepository.joinPath(parentDir, folderName)
-
-                // Handle name conflicts by adding number suffix
-                var counter = 1
-                while (fileSystemRepository.exists(extractionPath)) {
-                    extractionPath = fileSystemRepository.joinPath(parentDir, "$folderName ($counter)")
-                    counter++
-                }
-
-                extractionPath
-            }
+    private suspend fun generateUniquePath(basePath: String): String {
+        if (!fileSystemRepository.exists(basePath)) {
+            return basePath
         }
+        var counter = 1
+        var uniquePath: String
+        do {
+            uniquePath = "$basePath-$counter"
+            counter++
+        } while (fileSystemRepository.exists(uniquePath))
+        return uniquePath
+    }
+
+    private suspend fun generateUniqueFilePath(basePath: String): String {
+        if (!fileSystemRepository.exists(basePath)) {
+            return basePath
+        }
+        val fileName = fileSystemRepository.getFilename(basePath)
+        val parentDir = fileSystemRepository.getParentDirectory(basePath)
+        val extension = fileSystemRepository.getFileExtension(basePath)
+        val nameWithoutExtension = fileSystemRepository.getFilenameWithoutExtension(fileName)
+
+        var counter = 1
+        var uniquePath: String
+        do {
+            val newName = if (extension.isNotEmpty()) {
+                "$nameWithoutExtension-$counter.$extension"
+            } else {
+                "$nameWithoutExtension-$counter"
+            }
+            uniquePath = fileSystemRepository.joinPath(parentDir, newName)
+            counter++
+        } while (fileSystemRepository.exists(uniquePath))
+        return uniquePath
     }
 }

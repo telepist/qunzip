@@ -215,6 +215,7 @@ class ExtractionViewModelTest {
             override suspend fun copyFile(sourcePath: String, destinationPath: String) = true
             override suspend fun moveFile(sourcePath: String, destinationPath: String) = true
             override suspend fun deleteFile(path: String) = true
+            override suspend fun deleteDirectory(path: String) = true
             override suspend fun getFileSize(path: String) = 1024L
             override fun normalizePath(path: String) = path
             override fun getAbsolutePath(path: String) = path
@@ -269,6 +270,7 @@ class ExtractionViewModelTest {
             override suspend fun copyFile(sourcePath: String, destinationPath: String) = true
             override suspend fun moveFile(sourcePath: String, destinationPath: String) = true
             override suspend fun deleteFile(path: String) = true
+            override suspend fun deleteDirectory(path: String) = true
             override suspend fun getFileSize(path: String) = 1024L
             override fun normalizePath(path: String) = path
             override fun getAbsolutePath(path: String) = path

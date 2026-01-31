@@ -315,6 +315,7 @@ class WindowsArchiveRepository(
 
     private fun execute7zipExtract(archivePath: String, destinationPath: String): Int {
         // Use -o flag for output directory (no space between -o and path)
+        // Note: Conflict handling is done at application level, not by 7zip's -aou flag
         val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y"
         logger.d { "Extraction command: $command" }
         return executeCommandSilently(command)
@@ -332,6 +333,7 @@ class WindowsArchiveRepository(
         onProgress: (bytesExtracted: Long, currentFile: String?) -> Unit
     ): Int = memScoped {
         // Use -bsp1 to output progress to stdout, -bb1 for file names
+        // Note: Conflict handling is done at application level, not by 7zip's -aou flag
         val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y -bsp1 -bb1"
         logger.d { "Extraction command with progress: $command" }
 

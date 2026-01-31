@@ -7,7 +7,6 @@ import gunzip.domain.repositories.NotificationRepository
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import kotlinx.datetime.Clock
 import kotlin.test.*
 
 class ExtractArchiveUseCaseTest {
@@ -30,95 +29,225 @@ class ExtractArchiveUseCaseTest {
         )
     }
 
+    // ========== Single File Tests ==========
+
     @Test
-    fun `single file archive extraction follows correct strategy`() = runTest {
-        // Arrange
-        val archivePath = "/test/document.zip"
-        val archive = Archive(archivePath, "document.zip", ArchiveFormat.ZIP, 1024L)
+    fun `single file extraction without conflict extracts to parent directory`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
         val contents = ArchiveContents(
-            entries = listOf(
-                ArchiveEntry("document.pdf", "document.pdf", false, 1024L)
-            ),
+            entries = listOf(ArchiveEntry("document.pdf", "document.pdf", false, 1024L)),
             totalSize = 1024L
         )
 
         mockArchiveRepository.archiveInfo = archive
         mockArchiveRepository.archiveContents = contents
-        mockFileSystemRepository.availableSpace = 2048L
         mockFileSystemRepository.parentDirectory = "/test"
 
-        // Act
         val progressList = useCase(archivePath).toList()
 
-        // Assert
-        assertTrue(progressList.first().stage == ExtractionStage.STARTING)
-        assertTrue(progressList.any { it.stage == ExtractionStage.ANALYZING })
-        assertTrue(progressList.any { it.stage == ExtractionStage.EXTRACTING })
-        assertTrue(progressList.last().stage == ExtractionStage.COMPLETED)
-
-        assertTrue(mockArchiveRepository.extractCalled)
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
         assertEquals("/test", mockArchiveRepository.extractionPath)
-        assertFalse(mockFileSystemRepository.moveToTrashCalled) // Default: don't move to trash
+        assertFalse(mockFileSystemRepository.createDirectoryCalled)
+        assertFalse(mockFileSystemRepository.moveFileCalled)
+    }
+
+    @Test
+    fun `single file extraction with conflict uses temp folder and renames`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("document.pdf", "document.pdf", false, 1024L)),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+        mockFileSystemRepository.existingPaths = setOf("/test/document.pdf")
+
+        val progressList = useCase(archivePath).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        // Should create temp folder
+        assertTrue(mockFileSystemRepository.createDirectoryCalled)
+        assertTrue(mockFileSystemRepository.createdDirectory!!.startsWith("/test/gunzip_"))
+        // Should move file to unique name
+        assertTrue(mockFileSystemRepository.moveFileCalled)
+        assertEquals("/test/document-1.pdf", mockFileSystemRepository.moveFileDestination)
+        // Should delete temp folder
+        assertTrue(mockFileSystemRepository.deleteDirectoryCalled)
+    }
+
+    @Test
+    fun `single file extraction with multiple conflicts finds next available name`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("report.pdf", "report.pdf", false, 1024L)),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+        mockFileSystemRepository.existingPaths = setOf(
+            "/test/report.pdf",
+            "/test/report-1.pdf",
+            "/test/report-2.pdf"
+        )
+
+        val progressList = useCase(archivePath).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        assertEquals("/test/report-3.pdf", mockFileSystemRepository.moveFileDestination)
+    }
+
+    @Test
+    fun `single file without extension handles conflict correctly`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("README", "README", false, 1024L)),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+        mockFileSystemRepository.existingPaths = setOf("/test/README")
+
+        val progressList = useCase(archivePath).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        assertEquals("/test/README-1", mockFileSystemRepository.moveFileDestination)
+    }
+
+    @Test
+    fun `single file conflict notification shows renamed path`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("data.csv", "data.csv", false, 1024L)),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+        mockFileSystemRepository.existingPaths = setOf("/test/data.csv")
+
+        useCase(archivePath).toList()
+
         assertTrue(mockNotificationRepository.successNotificationShown)
+        assertEquals("/test/data-1.csv", mockNotificationRepository.lastExtractedPath)
     }
 
+    // ========== Single Folder Tests ==========
+
     @Test
-    fun `moves archive to trash when option enabled`() = runTest {
-        // Arrange
-        val archivePath = "/test/document.zip"
-        val archive = Archive(archivePath, "document.zip", ArchiveFormat.ZIP, 1024L)
+    fun `single folder extraction without conflict extracts to parent directory`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
         val contents = ArchiveContents(
             entries = listOf(
-                ArchiveEntry("document.pdf", "document.pdf", false, 1024L)
+                ArchiveEntry("myproject", "myproject", true, 0L),
+                ArchiveEntry("myproject/file.txt", "file.txt", false, 1024L)
             ),
             totalSize = 1024L
         )
 
         mockArchiveRepository.archiveInfo = archive
         mockArchiveRepository.archiveContents = contents
-        mockFileSystemRepository.availableSpace = 2048L
         mockFileSystemRepository.parentDirectory = "/test"
 
-        val options = ExtractionOptions(moveToTrashAfterExtraction = true)
+        val progressList = useCase(archivePath).toList()
 
-        // Act
-        val progressList = useCase(archivePath, options).toList()
-
-        // Assert
         assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
-        assertTrue(mockFileSystemRepository.moveToTrashCalled)
+        assertEquals("/test", mockArchiveRepository.extractionPath)
+        assertFalse(mockFileSystemRepository.moveFileCalled)
     }
 
     @Test
-    fun `skips notification when showCompletionNotification is disabled`() = runTest {
-        // Arrange
-        val archivePath = "/test/document.zip"
-        val archive = Archive(archivePath, "document.zip", ArchiveFormat.ZIP, 1024L)
+    fun `single folder extraction with conflict uses temp folder and renames`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
         val contents = ArchiveContents(
             entries = listOf(
-                ArchiveEntry("document.pdf", "document.pdf", false, 1024L)
+                ArchiveEntry("myproject", "myproject", true, 0L),
+                ArchiveEntry("myproject/file.txt", "file.txt", false, 1024L)
             ),
             totalSize = 1024L
         )
 
         mockArchiveRepository.archiveInfo = archive
         mockArchiveRepository.archiveContents = contents
-        mockFileSystemRepository.availableSpace = 2048L
         mockFileSystemRepository.parentDirectory = "/test"
+        mockFileSystemRepository.existingPaths = setOf("/test/myproject")
 
-        val options = ExtractionOptions(showCompletionNotification = false)
+        val progressList = useCase(archivePath).toList()
 
-        // Act
-        val progressList = useCase(archivePath, options).toList()
-
-        // Assert
         assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
-        assertFalse(mockNotificationRepository.successNotificationShown)
+        // Should create temp folder
+        assertTrue(mockFileSystemRepository.createDirectoryCalled)
+        assertTrue(mockFileSystemRepository.createdDirectory!!.startsWith("/test/gunzip_"))
+        // Should move folder to unique name
+        assertTrue(mockFileSystemRepository.moveFileCalled)
+        assertEquals("/test/myproject-1", mockFileSystemRepository.moveFileDestination)
+        // Should delete temp folder
+        assertTrue(mockFileSystemRepository.deleteDirectoryCalled)
     }
 
     @Test
-    fun `multiple files archive creates directory`() = runTest {
-        // Arrange
+    fun `single folder extraction with multiple conflicts finds next name`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(
+                ArchiveEntry("data", "data", true, 0L),
+                ArchiveEntry("data/file.txt", "file.txt", false, 1024L)
+            ),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+        mockFileSystemRepository.existingPaths = setOf("/test/data", "/test/data-1", "/test/data-2")
+
+        val progressList = useCase(archivePath).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        assertEquals("/test/data-3", mockFileSystemRepository.moveFileDestination)
+    }
+
+    @Test
+    fun `single folder conflict notification shows renamed path`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(
+                ArchiveEntry("project", "project", true, 0L),
+                ArchiveEntry("project/main.kt", "main.kt", false, 1024L)
+            ),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+        mockFileSystemRepository.existingPaths = setOf("/test/project")
+
+        useCase(archivePath).toList()
+
+        assertTrue(mockNotificationRepository.successNotificationShown)
+        assertEquals("/test/project-1", mockNotificationRepository.lastExtractedPath)
+    }
+
+    // ========== Multi-file Tests ==========
+
+    @Test
+    fun `multi-file archive creates folder without conflict`() = runTest {
         val archivePath = "/test/project.zip"
         val archive = Archive(archivePath, "project.zip", ArchiveFormat.ZIP, 2048L)
         val contents = ArchiveContents(
@@ -132,13 +261,10 @@ class ExtractArchiveUseCaseTest {
 
         mockArchiveRepository.archiveInfo = archive
         mockArchiveRepository.archiveContents = contents
-        mockFileSystemRepository.availableSpace = 4096L
         mockFileSystemRepository.parentDirectory = "/test"
 
-        // Act
         val progressList = useCase(archivePath).toList()
 
-        // Assert
         assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
         assertTrue(mockFileSystemRepository.createDirectoryCalled)
         assertEquals("/test/project", mockFileSystemRepository.createdDirectory)
@@ -146,46 +272,7 @@ class ExtractArchiveUseCaseTest {
     }
 
     @Test
-    fun `insufficient disk space throws error`() = runTest {
-        // Arrange
-        val archivePath = "/test/large.zip"
-        val archive = Archive(archivePath, "large.zip", ArchiveFormat.ZIP, 2048L)
-        val contents = ArchiveContents(
-            entries = listOf(ArchiveEntry("large.bin", "large.bin", false, 2048L)),
-            totalSize = 2048L
-        )
-
-        mockArchiveRepository.archiveInfo = archive
-        mockArchiveRepository.archiveContents = contents
-        mockFileSystemRepository.availableSpace = 1024L // Less than required
-
-        // Act & Assert
-        assertFailsWith<ExtractionError.InsufficientSpace> {
-            useCase(archivePath).toList()
-        }
-
-        assertTrue(mockNotificationRepository.errorNotificationShown)
-        assertFalse(mockArchiveRepository.extractCalled)
-    }
-
-    @Test
-    fun `archive not found throws error`() = runTest {
-        // Arrange
-        val archivePath = "/test/nonexistent.zip"
-        mockArchiveRepository.archiveInfo = null
-
-        // Act & Assert
-        assertFailsWith<ExtractionError.FileNotFound> {
-            useCase(archivePath).toList()
-        }
-
-        assertTrue(mockNotificationRepository.errorNotificationShown)
-        assertFalse(mockArchiveRepository.extractCalled)
-    }
-
-    @Test
-    fun `handles conflicting directory names`() = runTest {
-        // Arrange
+    fun `multi-file archive creates unique folder on conflict`() = runTest {
         val archivePath = "/test/project.zip"
         val archive = Archive(archivePath, "project.zip", ArchiveFormat.ZIP, 1024L)
         val contents = ArchiveContents(
@@ -198,21 +285,135 @@ class ExtractArchiveUseCaseTest {
 
         mockArchiveRepository.archiveInfo = archive
         mockArchiveRepository.archiveContents = contents
-        mockFileSystemRepository.availableSpace = 2048L
         mockFileSystemRepository.parentDirectory = "/test"
-
-        // Simulate existing directory
         mockFileSystemRepository.existingPaths = setOf("/test/project")
 
-        // Act
         val progressList = useCase(archivePath).toList()
 
-        // Assert
         assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
-        assertEquals("/test/project (1)", mockFileSystemRepository.createdDirectory)
+        assertEquals("/test/project-1", mockFileSystemRepository.createdDirectory)
     }
 
-    // Mock implementations
+    @Test
+    fun `multi-file archive finds next available folder name`() = runTest {
+        val archivePath = "/test/project.zip"
+        val archive = Archive(archivePath, "project.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(
+                ArchiveEntry("file1.txt", "file1.txt", false, 512L),
+                ArchiveEntry("file2.txt", "file2.txt", false, 512L)
+            ),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+        mockFileSystemRepository.existingPaths = setOf("/test/project", "/test/project-1", "/test/project-2")
+
+        val progressList = useCase(archivePath).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        assertEquals("/test/project-3", mockFileSystemRepository.createdDirectory)
+    }
+
+    // ========== Options Tests ==========
+
+    @Test
+    fun `moves archive to trash when option enabled`() = runTest {
+        val archivePath = "/test/document.zip"
+        val archive = Archive(archivePath, "document.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("document.pdf", "document.pdf", false, 1024L)),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        val options = ExtractionOptions(moveToTrashAfterExtraction = true)
+        val progressList = useCase(archivePath, options).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        assertTrue(mockFileSystemRepository.moveToTrashCalled)
+    }
+
+    @Test
+    fun `skips notification when disabled`() = runTest {
+        val archivePath = "/test/document.zip"
+        val archive = Archive(archivePath, "document.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("document.pdf", "document.pdf", false, 1024L)),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        val options = ExtractionOptions(showCompletionNotification = false)
+        useCase(archivePath, options).toList()
+
+        assertFalse(mockNotificationRepository.successNotificationShown)
+    }
+
+    // ========== Error Tests ==========
+
+    @Test
+    fun `throws error when archive not found`() = runTest {
+        mockArchiveRepository.archiveInfo = null
+
+        assertFailsWith<ExtractionError.FileNotFound> {
+            useCase("/test/nonexistent.zip").toList()
+        }
+        assertTrue(mockNotificationRepository.errorNotificationShown)
+    }
+
+    @Test
+    fun `throws error when insufficient disk space`() = runTest {
+        val archivePath = "/test/large.zip"
+        val archive = Archive(archivePath, "large.zip", ArchiveFormat.ZIP, 2048L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("large.bin", "large.bin", false, 2048L)),
+            totalSize = 2048L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.availableSpace = 1024L // Less than required
+
+        assertFailsWith<ExtractionError.InsufficientSpace> {
+            useCase(archivePath).toList()
+        }
+        assertTrue(mockNotificationRepository.errorNotificationShown)
+    }
+
+    // ========== Progress Tests ==========
+
+    @Test
+    fun `emits progress stages in correct order`() = runTest {
+        val archivePath = "/test/document.zip"
+        val archive = Archive(archivePath, "document.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("document.pdf", "document.pdf", false, 1024L)),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        val stages = useCase(archivePath).toList().map { it.stage }
+
+        assertTrue(stages.indexOf(ExtractionStage.STARTING) < stages.indexOf(ExtractionStage.ANALYZING))
+        assertTrue(stages.indexOf(ExtractionStage.ANALYZING) < stages.indexOfFirst { it == ExtractionStage.EXTRACTING })
+        assertTrue(stages.indexOfLast { it == ExtractionStage.EXTRACTING } < stages.indexOf(ExtractionStage.FINALIZING))
+        assertTrue(stages.indexOf(ExtractionStage.FINALIZING) < stages.indexOf(ExtractionStage.COMPLETED))
+    }
+
+    // ========== Mock Implementations ==========
+
     private class MockArchiveRepository : ArchiveRepository {
         var archiveInfo: Archive? = null
         var archiveContents: ArchiveContents = ArchiveContents(emptyList(), 0L)
@@ -220,9 +421,7 @@ class ExtractArchiveUseCaseTest {
         var extractionPath: String? = null
 
         override suspend fun getArchiveInfo(archivePath: String) = archiveInfo
-
         override suspend fun getArchiveContents(archivePath: String) = archiveContents
-
         override suspend fun testArchive(archivePath: String) = true
 
         override suspend fun extractArchive(archivePath: String, destinationPath: String) = flowOf(
@@ -254,6 +453,9 @@ class ExtractArchiveUseCaseTest {
         var createDirectoryCalled = false
         var createdDirectory: String? = null
         var moveToTrashCalled = false
+        var moveFileCalled = false
+        var moveFileDestination: String? = null
+        var deleteDirectoryCalled = false
 
         override suspend fun exists(path: String) = path in existingPaths
         override suspend fun isReadable(path: String) = true
@@ -278,8 +480,20 @@ class ExtractArchiveUseCaseTest {
         override suspend fun getTrashPath() = "/trash"
         override suspend fun listFiles(directoryPath: String) = emptyList<FileInfo>()
         override suspend fun copyFile(sourcePath: String, destinationPath: String) = true
-        override suspend fun moveFile(sourcePath: String, destinationPath: String) = true
+
+        override suspend fun moveFile(sourcePath: String, destinationPath: String): Boolean {
+            moveFileCalled = true
+            moveFileDestination = destinationPath
+            return true
+        }
+
         override suspend fun deleteFile(path: String) = true
+
+        override suspend fun deleteDirectory(path: String): Boolean {
+            deleteDirectoryCalled = true
+            return true
+        }
+
         override suspend fun getFileSize(path: String) = 1024L
         override fun normalizePath(path: String) = path
         override fun getAbsolutePath(path: String) = path
@@ -292,9 +506,11 @@ class ExtractArchiveUseCaseTest {
     private class MockNotificationRepository : NotificationRepository {
         var successNotificationShown = false
         var errorNotificationShown = false
+        var lastExtractedPath: String? = null
 
         override suspend fun showSuccessNotification(title: String, message: String, extractedPath: String?) {
             successNotificationShown = true
+            lastExtractedPath = extractedPath
         }
 
         override suspend fun showErrorNotification(title: String, message: String, details: String?) {

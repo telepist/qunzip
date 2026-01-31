@@ -75,6 +75,11 @@ interface FileSystemRepository {
     suspend fun deleteFile(path: String): Boolean
 
     /**
+     * Delete directory (must be empty)
+     */
+    suspend fun deleteDirectory(path: String): Boolean
+
+    /**
      * Get file size in bytes
      */
     suspend fun getFileSize(path: String): Long
