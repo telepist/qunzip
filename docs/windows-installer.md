@@ -30,11 +30,6 @@ Qunzip provides two distribution formats for Windows:
    - Automatically downloaded by Gradle
    - MinGW-w64 for Windows compilation
 
-### Optional
-
-- **PowerShell 5.0+** - For icon generation script
-- **ImageMagick** - For icon conversion (if creating custom icon)
-
 ## Building the Installer
 
 ### Quick Start
@@ -92,39 +87,9 @@ Output: `build/installer-output/qunzip-setup-{version}.exe`
 
 Output: `build/dist/qunzip-{version}-windows-portable.zip`
 
-## Icon Creation
+## Icon
 
-The installer uses `installer/windows/icon.ico` for branding.
-
-### Option 1: Generate with PowerShell Script
-
-```powershell
-cd installer/windows
-.\create-icon.ps1
-```
-
-This creates `icon-temp.png`. Convert to `.ico` using:
-
-- **Online**: https://convertio.co/png-ico/
-- **ImageMagick**: `magick convert icon-temp.png -define icon:auto-resize=256,48,32,16 icon.ico`
-- **GIMP**: Open PNG, Export As → `icon.ico`
-
-### Option 2: Provide Custom Icon
-
-1. Create `icon.ico` with sizes: 16x16, 32x32, 48x48, 256x256
-2. Save to `installer/windows/icon.ico`
-
-### Option 3: Skip Icon (Temporary)
-
-Edit `installer/windows/qunzip.iss`:
-```ini
-;SetupIconFile=icon.ico
-;UninstallDisplayIcon={app}\{#MyAppExeName}
-```
-
-The installer will use Windows default icon.
-
-See `installer/windows/ICON-README.md` for detailed icon creation instructions.
+The installer uses `installer/windows/icon.ico` for branding. This icon is included in the repository.
 
 ## Installer Configuration
 
@@ -187,9 +152,7 @@ To add/remove formats, edit the `[Registry]` section in `qunzip.iss`.
 
 **Problem:** `icon.ico` doesn't exist.
 
-**Solutions:**
-1. Create icon using `create-icon.ps1` script
-2. Or comment out `SetupIconFile` line in `qunzip.iss`
+**Solution:** Ensure `installer/windows/icon.ico` exists. The icon should be included in the repository.
 
 ### Build Fails with "Access Denied"
 

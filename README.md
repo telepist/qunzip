@@ -168,8 +168,7 @@ src/
 installer/windows/           # Windows installer configuration
 ├── qunzip.iss              # Inno Setup script
 ├── LICENSE.txt             # Combined license
-├── README.txt              # Post-install readme
-└── create-icon.ps1         # Icon generation script
+└── README.txt              # Post-install readme
 
 docs/                       # Documentation
 └── windows-installer.md    # Installer build guide

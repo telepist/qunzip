@@ -52,7 +52,6 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 **Prerequisites for installer build:**
 - Inno Setup 6.x installed at `C:\Program Files (x86)\Inno Setup 6\` (or set `ISCC_PATH` environment variable)
 - Run on Windows OS
-- Icon file at `installer/windows/icon.ico` (optional, see `installer/windows/ICON-README.md`)
 
 **Installer outputs:**
 - `build/installer-output/qunzip-setup-{version}.exe` - Windows installer
