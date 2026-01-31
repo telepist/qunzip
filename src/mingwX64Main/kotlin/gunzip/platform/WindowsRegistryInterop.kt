@@ -240,10 +240,11 @@ fun createProgId(
     }
     helper.closeKey(progIdKey)
 
-    // Create DefaultIcon subkey
+    // Create DefaultIcon subkey - use the application's embedded icon
     val iconKey = helper.createKey(rootKey, "${prefix}${progId}\\DefaultIcon")
     if (iconKey != null) {
-        helper.setStringValue(iconKey, null, "$executablePath,0")
+        // Use the executable's embedded icon (index 0)
+        helper.setStringValue(iconKey, null, "\"$executablePath\",0")
         helper.closeKey(iconKey)
     }
 

@@ -50,6 +50,9 @@ kotlin {
                 if (buildType == org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE) {
                     linkerOpts("-Wl,--subsystem,windows")
                 }
+                // Link the compiled Windows resource file (contains icon and version info)
+                // The resource file is compiled by the compileWindowsResources task
+                linkerOpts(file("build/resources/gunzip.res").absolutePath)
             }
         }
     }
@@ -124,6 +127,43 @@ tasks.register("buildAllRelease") {
     )
     group = "build"
     description = "Build release executables for all platforms"
+}
+
+// Compile Windows resource file (icon and version info)
+tasks.register<Exec>("compileWindowsResources") {
+    val rcFile = file("src/mingwX64Main/resources/gunzip.rc")
+    val resFile = file("build/resources/gunzip.res")
+    val iconFile = file("installer/windows/icon.ico")
+
+    inputs.file(rcFile)
+    inputs.file(iconFile).optional()
+    outputs.file(resFile)
+
+    doFirst {
+        resFile.parentFile.mkdirs()
+    }
+
+    // Only compile if icon exists
+    onlyIf {
+        iconFile.exists()
+    }
+
+    // Use windres from MinGW to compile the resource file
+    // Set working directory to project root so relative paths work
+    workingDir = projectDir
+    commandLine("windres",
+        "--include-dir=${iconFile.parentFile.absolutePath}",
+        rcFile.absolutePath,
+        "-O", "coff",
+        "-o", resFile.absolutePath)
+
+    group = "build"
+    description = "Compile Windows resource file (icon and version info)"
+}
+
+// Make link tasks depend on resource compilation
+tasks.named("compileKotlinMingwX64") {
+    dependsOn("compileWindowsResources")
 }
 
 // Copy 7-Zip dependencies and manifest to Windows build directories

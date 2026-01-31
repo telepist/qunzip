@@ -44,33 +44,57 @@ class Win32GuiRenderer : UiRenderer {
 
     companion object {
         private const val WINDOW_CLASS_NAME = "GunzipProgressWindow"
-        private const val WINDOW_WIDTH = 450
-        private const val WINDOW_HEIGHT = 200
+        private const val WINDOW_WIDTH = 420
+        private const val WINDOW_HEIGHT = 180
         private const val IDC_STATUS_LABEL = 1001
         private const val IDC_OK_BUTTON = 1002
         private const val IDC_PROGRESS_BAR = 1003
         private const val IDC_FILE_LABEL = 1004
         private const val IDC_CANCEL_BUTTON = 1005
 
-        // Layout constants
-        private const val PADDING = 20
-        private const val CONTROL_SPACING = 8
+        // Layout constants - following Windows UX guidelines
+        private const val PADDING = 24
+        private const val ELEMENT_SPACING = 12
+        private const val PROGRESS_BAR_HEIGHT = 8
+        private const val BUTTON_WIDTH = 88
+        private const val BUTTON_HEIGHT = 26
     }
 
     override suspend fun render(viewModel: ApplicationViewModel, scope: CoroutineScope) {
-        // Wait briefly for handleApplicationStart to complete (runs async)
-        // Only wait if we're still in the initial starting state
+        // Wait for handleApplicationStart to complete (runs async)
+        // Wait until either:
+        // - mode changes to EXTRACTION (file argument provided), OR
+        // - targetFile is set, OR
+        // - error is set, OR
+        // - timeout expires (settings mode with no file)
         var uiState = viewModel.uiState.value
         var waitCount = 0
-        while (uiState.isStarting && waitCount < 10) {
+        while (uiState.mode == ApplicationMode.SETUP &&
+               uiState.targetFile == null &&
+               uiState.error == null &&
+               waitCount < 40) {  // Up to 2 seconds
             delay(50)
             uiState = viewModel.uiState.value
             waitCount++
         }
 
-        logger.d { "Win32GuiRenderer: mode=${uiState.mode}, targetFile=${uiState.targetFile}" }
+        logger.d { "Win32GuiRenderer: mode=${uiState.mode}, targetFile=${uiState.targetFile}, error=${uiState.error}" }
 
-        // For settings mode, use native settings GUI
+        // Handle startup error - show error message box
+        if (uiState.error != null) {
+            logger.e { "Startup error: ${uiState.error}" }
+            memScoped {
+                MessageBoxW(
+                    null,
+                    "Error: ${uiState.error}",
+                    "Gunzip - Error",
+                    (MB_OK or MB_ICONERROR).toUInt()
+                )
+            }
+            exitProcess(1)
+        }
+
+        // For settings mode (no file argument), use native settings GUI
         if (uiState.mode == ApplicationMode.SETUP) {
             logger.i { "Settings mode - using Win32 settings GUI" }
             val settingsGui = Win32SettingsGui(viewModel, scope)
@@ -130,9 +154,9 @@ class Win32GuiRenderer : UiRenderer {
         icc.dwICC = ICC_PROGRESS_CLASS.toUInt()
         InitCommonControlsEx(icc.ptr)
 
-        // Create modern font (Segoe UI, 10pt)
+        // Create modern font (Segoe UI, 9pt - matches Windows system dialogs)
         hFont = CreateFontW(
-            -16, 0, 0, 0,
+            -14, 0, 0, 0,
             FW_NORMAL,
             0u, 0u, 0u,
             DEFAULT_CHARSET.toUInt(),
@@ -143,6 +167,12 @@ class Win32GuiRenderer : UiRenderer {
             "Segoe UI"
         )
 
+        // Load the embedded icon from the executable's resources (ID 1)
+        // Falls back to default application icon if not found
+        val iconResource = 1.toLong().toCPointer<UShortVar>()
+        val windowIcon = LoadIconW(hInstance, iconResource?.reinterpret())
+            ?: LoadIconW(null, IDI_APPLICATION)
+
         // Register window class
         val wc = alloc<WNDCLASSEXW>()
         wc.cbSize = sizeOf<WNDCLASSEXW>().toUInt()
@@ -151,13 +181,13 @@ class Win32GuiRenderer : UiRenderer {
         wc.cbClsExtra = 0
         wc.cbWndExtra = 0
         wc.hInstance = hInstance
-        wc.hIcon = LoadIconW(null, IDI_APPLICATION)
+        wc.hIcon = windowIcon
         wc.hCursor = LoadCursorW(null, IDC_ARROW)
         // Use a light gray background for modern look
         wc.hbrBackground = GetSysColorBrush(COLOR_BTNFACE)
         wc.lpszMenuName = null
         wc.lpszClassName = WINDOW_CLASS_NAME.wcstr.ptr
-        wc.hIconSm = LoadIconW(null, IDI_APPLICATION)
+        wc.hIconSm = windowIcon
 
         if (RegisterClassExW(wc.ptr) == 0.toUShort()) {
             val error = GetLastError()
@@ -196,11 +226,13 @@ class Win32GuiRenderer : UiRenderer {
             return false
         }
 
-        // Layout calculations
-        val contentWidth = WINDOW_WIDTH - (PADDING * 2) - 16  // Account for window borders
-        var yPos = PADDING
+        // Layout calculations - account for window borders (~16px total)
+        val borderWidth = 16
+        val contentWidth = WINDOW_WIDTH - (PADDING * 2) - borderWidth
+        var yPos = PADDING - 4  // Start slightly higher for balanced look
 
-        // Create status label (shows stage)
+        // Create status label (shows stage) - semibold for emphasis
+        // Height 20px to avoid clipping descenders (g, y, p, etc.)
         val statusLabel = CreateWindowExW(
             dwExStyle = 0u,
             lpClassName = "STATIC",
@@ -215,10 +247,10 @@ class Win32GuiRenderer : UiRenderer {
             hInstance = hInstance,
             lpParam = null
         )
-        applyFont(statusLabel)
-        yPos += 20 + CONTROL_SPACING
+        applySemiboldFont(statusLabel)
+        yPos += 20 + ELEMENT_SPACING
 
-        // Create progress bar
+        // Create progress bar - thin modern style
         progressBarHwnd = CreateWindowExW(
             dwExStyle = 0u,
             lpClassName = "msctls_progress32",
@@ -227,7 +259,7 @@ class Win32GuiRenderer : UiRenderer {
             X = PADDING,
             Y = yPos,
             nWidth = contentWidth,
-            nHeight = 20,
+            nHeight = PROGRESS_BAR_HEIGHT,
             hWndParent = hwnd,
             hMenu = IDC_PROGRESS_BAR.toLong().toCPointer(),
             hInstance = hInstance,
@@ -237,9 +269,10 @@ class Win32GuiRenderer : UiRenderer {
         progressBarHwnd?.let {
             SendMessageW(it, PBM_SETRANGE32.toUInt(), 0u, 100)
         }
-        yPos += 20 + CONTROL_SPACING
+        yPos += PROGRESS_BAR_HEIGHT + ELEMENT_SPACING - 2
 
         // Create file label (shows current file being extracted)
+        // Height 20px to avoid clipping descenders (g, y, p, etc.)
         fileLabelHwnd = CreateWindowExW(
             dwExStyle = 0u,
             lpClassName = "STATIC",
@@ -248,19 +281,17 @@ class Win32GuiRenderer : UiRenderer {
             X = PADDING,
             Y = yPos,
             nWidth = contentWidth,
-            nHeight = 18,
+            nHeight = 20,
             hWndParent = hwnd,
             hMenu = IDC_FILE_LABEL.toLong().toCPointer(),
             hInstance = hInstance,
             lpParam = null
         )
         applyFont(fileLabelHwnd)
-        yPos += 18 + CONTROL_SPACING + 4  // Extra space before button
+        yPos += 20 + ELEMENT_SPACING + 4  // Extra space before button
 
-        // Create buttons
-        val buttonWidth = 88
-        val buttonHeight = 26
-        val buttonSpacing = 12
+        // Calculate button X position for centering
+        val buttonX = (WINDOW_WIDTH - BUTTON_WIDTH - borderWidth) / 2
 
         // Cancel button (visible during extraction)
         cancelButtonHwnd = CreateWindowExW(
@@ -268,10 +299,10 @@ class Win32GuiRenderer : UiRenderer {
             lpClassName = "BUTTON",
             lpWindowName = "Cancel",
             dwStyle = (WS_CHILD or WS_VISIBLE or BS_PUSHBUTTON.toInt()).toUInt(),
-            X = (WINDOW_WIDTH - buttonWidth - 16) / 2,
+            X = buttonX,
             Y = yPos,
-            nWidth = buttonWidth,
-            nHeight = buttonHeight,
+            nWidth = BUTTON_WIDTH,
+            nHeight = BUTTON_HEIGHT,
             hWndParent = hwnd,
             hMenu = IDC_CANCEL_BUTTON.toLong().toCPointer(),
             hInstance = hInstance,
@@ -285,10 +316,10 @@ class Win32GuiRenderer : UiRenderer {
             lpClassName = "BUTTON",
             lpWindowName = "OK",
             dwStyle = (WS_CHILD or BS_DEFPUSHBUTTON.toInt()).toUInt(),
-            X = (WINDOW_WIDTH - buttonWidth - 16) / 2,
+            X = buttonX,
             Y = yPos,
-            nWidth = buttonWidth,
-            nHeight = buttonHeight,
+            nWidth = BUTTON_WIDTH,
+            nHeight = BUTTON_HEIGHT,
             hWndParent = hwnd,
             hMenu = IDC_OK_BUTTON.toLong().toCPointer(),
             hInstance = hInstance,
@@ -308,6 +339,23 @@ class Win32GuiRenderer : UiRenderer {
             hwnd?.let { window ->
                 SendMessageW(window, WM_SETFONT.toUInt(), font.toLong().toULong(), 1)
             }
+        }
+    }
+
+    private fun applySemiboldFont(hwnd: HWND?) {
+        val semiboldFont = CreateFontW(
+            -14, 0, 0, 0,
+            FW_SEMIBOLD,
+            0u, 0u, 0u,
+            DEFAULT_CHARSET.toUInt(),
+            OUT_DEFAULT_PRECIS.toUInt(),
+            CLIP_DEFAULT_PRECIS.toUInt(),
+            CLEARTYPE_QUALITY.toUInt(),
+            (DEFAULT_PITCH or FF_DONTCARE).toUInt(),
+            "Segoe UI"
+        )
+        hwnd?.let { window ->
+            SendMessageW(window, WM_SETFONT.toUInt(), semiboldFont.toLong().toULong(), 1)
         }
     }
 
@@ -405,19 +453,18 @@ class Win32GuiRenderer : UiRenderer {
 
     private fun showCompletionInWindow(state: ExtractionUiState) {
         val window = hwnd ?: return
-        val archiveName = state.archive?.name ?: "Archive"
 
         // Update status label
         val labelHwnd = GetDlgItem(window, IDC_STATUS_LABEL)
-        labelHwnd?.let { SetWindowTextW(it, "Extraction Complete!") }
+        labelHwnd?.let { SetWindowTextW(it, "Extraction complete!") }
 
         // Set progress to 100%
         progressBarHwnd?.let {
             SendMessageW(it, PBM_SETPOS.toUInt(), 100u, 0)
         }
 
-        // Update file label
-        fileLabelHwnd?.let { SetWindowTextW(it, "$archiveName extracted successfully") }
+        // Update file label with success message
+        fileLabelHwnd?.let { SetWindowTextW(it, "All files extracted successfully") }
 
         // Update window title
         SetWindowTextW(window, "Gunzip - Complete")
@@ -582,12 +629,16 @@ class Win32SettingsGui(
         wc.cbClsExtra = 0
         wc.cbWndExtra = 0
         wc.hInstance = hInstance
-        wc.hIcon = LoadIconW(null, IDI_APPLICATION)
+        // Load the embedded icon from the executable's resources (ID 1)
+        val iconResource = 1.toLong().toCPointer<UShortVar>()
+        val windowIcon = LoadIconW(hInstance, iconResource?.reinterpret())
+            ?: LoadIconW(null, IDI_APPLICATION)
+        wc.hIcon = windowIcon
         wc.hCursor = LoadCursorW(null, IDC_ARROW)
         wc.hbrBackground = GetSysColorBrush(COLOR_BTNFACE)
         wc.lpszMenuName = null
         wc.lpszClassName = WINDOW_CLASS_NAME.wcstr.ptr
-        wc.hIconSm = LoadIconW(null, IDI_APPLICATION)
+        wc.hIconSm = windowIcon
 
         if (RegisterClassExW(wc.ptr) == 0.toUShort()) {
             val error = GetLastError()
