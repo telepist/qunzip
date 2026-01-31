@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Gunzip** is a cross-platform archive extraction utility built with Kotlin Multiplatform. It provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives, inspired by macOS simplicity but targeting primarily Windows with Linux and macOS support.
 
-The application follows **Clean Architecture** principles with **MVVM pattern**, uses **Kotlin Flow** for reactive programming, and implements **TDD** practices.
+The application follows **Clean Architecture** principles with **MVVM pattern**, uses **Kotlin Flow** for reactive programming, and strictly implements **Test-Driven Development (TDD)** with a target of **close to 100% test coverage**.
 
 ## Key Development Commands
 
@@ -172,6 +172,12 @@ src/
 3. **Single root directory** → Extract contents to same directory
 4. **Post-extraction** → Move original archive to trash
 
+### File/Folder Conflict Handling
+When extracting would overwrite an existing file or folder, the application handles conflicts manually (not via 7zip flags):
+- **Single file archives**: Extract to temp folder (`gunzip_<hash>`), move file with unique name (`file-1.pdf`, `file-2.pdf`, etc.), delete temp folder
+- **Single folder archives**: Extract to temp folder, move folder with unique name (`folder-1`, `folder-2`, etc.), delete temp folder
+- **Multi-file archives**: Create uniquely named destination folder directly (`project-1`, `project-2`, etc.) - no temp folder needed
+
 ### Supported Archive Formats
 - ZIP (.zip)
 - 7-Zip (.7z)
@@ -192,12 +198,49 @@ Stored in JSON format at `~/.gunzip/preferences.json`:
 
 ## Development Notes
 
-### Testing Strategy
-- **TDD approach** with comprehensive test coverage
-- **Unit tests** for domain layer (entities, use cases)
-- **Integration tests** for repository implementations
-- **Mock implementations** for testing ViewModels
-- **Flow testing** using Turbine library
+### Testing Strategy (CRITICAL)
+
+**This project strictly follows Test-Driven Development (TDD) with a target of close to 100% test coverage.**
+
+#### TDD Workflow (MANDATORY)
+1. **Write tests FIRST** before implementing any new feature or bug fix
+2. **Red**: Write a failing test that defines the expected behavior
+3. **Green**: Write the minimum code to make the test pass
+4. **Refactor**: Clean up the code while keeping tests green
+5. **Repeat** for each new behavior or edge case
+
+#### Test Coverage Requirements
+- **Domain layer (entities, use cases)**: Must have 100% test coverage
+- **ViewModels**: Must have comprehensive state and event tests
+- **Repository implementations**: Must have integration tests
+- **Edge cases**: Every edge case and error condition must be tested
+- **Conflict handling**: All file/folder naming conflicts must be tested
+
+#### Test Organization
+- **Unit tests** for domain layer in `src/commonTest/kotlin/gunzip/domain/`
+- **ViewModel tests** in `src/commonTest/kotlin/gunzip/presentation/viewmodels/`
+- **Mock implementations** for isolating units under test
+- **Flow testing** using Turbine library for reactive streams
+
+#### When Adding New Features
+1. Identify all scenarios and edge cases
+2. Write tests for the happy path
+3. Write tests for each edge case (e.g., file conflicts, errors)
+4. Write tests for error handling
+5. Implement the feature to pass all tests
+6. Verify no existing tests are broken
+
+#### Example: File Conflict Handling Tests
+When a feature like "avoid overwriting files" is added, tests must cover:
+- No conflict (direct extraction)
+- Single conflict (-1 suffix)
+- Multiple conflicts (-1, -2, -3, etc.)
+- Files with extensions (name-1.ext)
+- Files without extensions (name-1)
+- Folders (folder-1)
+- Temp folder conflicts
+- Notification shows correct final path
+- Cleanup of temp resources
 
 ### Logging
 - Uses Kermit for structured, multiplatform logging

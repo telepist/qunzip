@@ -1,5 +1,5 @@
 GUNZIP LICENSE
-===============================================================================
+=============================================================
 
 Gunzip - Cross-Platform Archive Extraction Utility
 Copyright (C) 2025 Gunzip Project
@@ -24,7 +24,7 @@ SOFTWARE.
 
 
 7-ZIP LICENSE (BUNDLED COMPONENT)
-===============================================================================
+=============================================================
 
 This software includes 7-Zip command-line tools (7z.exe and 7z.dll) which are
 subject to the following license:
