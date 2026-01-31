@@ -1,27 +1,27 @@
 @echo off
 REM ============================================================================
-REM Gunzip End-to-End Black Box Tests for Windows
+REM Qunzip End-to-End Black Box Tests for Windows
 REM ============================================================================
-REM This script tests the actual gunzip.exe executable as a black box
+REM This script tests the actual qunzip.exe executable as a black box
 REM by running it with test fixtures and verifying the filesystem results.
 REM
 REM Requirements:
-REM   - gunzip.exe built and available
+REM   - qunzip.exe built and available
 REM   - Test fixtures in ../fixtures/
-REM   - 7-Zip installed (for gunzip to work)
+REM   - 7-Zip installed (for qunzip to work)
 REM
-REM Usage: run-tests.bat [path-to-gunzip.exe]
+REM Usage: run-tests.bat [path-to-qunzip.exe]
 REM ============================================================================
 
 setlocal enabledelayedexpansion
 
 REM Configuration
-set "GUNZIP_EXE=%~1"
-if "%GUNZIP_EXE%"=="" set "GUNZIP_EXE=..\..\..\build\bin\mingwX64\debugExecutable\gunzip.exe"
+set "QUNZIP_EXE=%~1"
+if "%QUNZIP_EXE%"=="" set "QUNZIP_EXE=..\..\..\build\bin\mingwX64\debugExecutable\qunzip.exe"
 
-REM Convert GUNZIP_EXE to absolute path
+REM Convert QUNZIP_EXE to absolute path
 pushd "%~dp0"
-for %%i in ("%GUNZIP_EXE%") do set "GUNZIP_EXE=%%~fi"
+for %%i in ("%QUNZIP_EXE%") do set "QUNZIP_EXE=%%~fi"
 popd
 
 set "FIXTURES_DIR=%~dp0..\fixtures"
@@ -42,18 +42,18 @@ set "RESET=[0m"
 
 echo.
 echo ============================================================================
-echo                    Gunzip E2E Black Box Tests
+echo                    Qunzip E2E Black Box Tests
 echo ============================================================================
 echo.
 
-REM Check if gunzip.exe exists
-if not exist "%GUNZIP_EXE%" (
-    echo %RED%ERROR: gunzip.exe not found at: %GUNZIP_EXE%%RESET%
+REM Check if qunzip.exe exists
+if not exist "%QUNZIP_EXE%" (
+    echo %RED%ERROR: qunzip.exe not found at: %QUNZIP_EXE%%RESET%
     echo Please build the project first: gradlew buildAll
     exit /b 1
 )
 
-echo Using gunzip.exe: %GUNZIP_EXE%
+echo Using qunzip.exe: %QUNZIP_EXE%
 echo Fixtures directory: %FIXTURES_DIR%
 echo Work directory: %WORK_DIR%
 echo.
@@ -72,7 +72,7 @@ mkdir "%TEST_DIR%" 2>nul
 call :prepare_fixture "%FIXTURES_DIR%\single-file.zip" "%TEST_DIR%\single-file.zip" || goto :test_single_end
 
 cd /d "%TEST_DIR%"
-"%GUNZIP_EXE%" single-file.zip
+"%QUNZIP_EXE%" single-file.zip
 
 REM Verify: file1.txt should exist
 if exist "file1.txt" (
@@ -99,7 +99,7 @@ mkdir "%TEST_DIR%" 2>nul
 call :prepare_fixture "%FIXTURES_DIR%\multiple-files.zip" "%TEST_DIR%\multiple-files.zip" || goto :test_multiple_end
 
 cd /d "%TEST_DIR%"
-"%GUNZIP_EXE%" multiple-files.zip
+"%QUNZIP_EXE%" multiple-files.zip
 
 REM Verify: folder should be created
 if exist "multiple-files" (
@@ -137,7 +137,7 @@ mkdir "%TEST_DIR%" 2>nul
 call :prepare_fixture "%FIXTURES_DIR%\nested-folder.zip" "%TEST_DIR%\nested-folder.zip" || goto :test_nested_end
 
 cd /d "%TEST_DIR%"
-"%GUNZIP_EXE%" nested-folder.zip
+"%QUNZIP_EXE%" nested-folder.zip
 
 REM Verify: nested directory structure should exist
 if exist "nested\nested-file.txt" (

@@ -1,6 +1,6 @@
 # End-to-End Black Box Tests
 
-This directory contains **true end-to-end black box tests** for Gunzip. These tests run the actual compiled executable and verify real filesystem operations.
+This directory contains **true end-to-end black box tests** for Qunzip. These tests run the actual compiled executable and verify real filesystem operations.
 
 ## Philosophy
 
@@ -55,19 +55,19 @@ All platforms share the same test fixtures in `fixtures/`:
 ### Prerequisites
 
 **Windows:**
-- Gunzip built: `./gradlew linkDebugExecutableMingwX64` (or `buildAll`)
+- Qunzip built: `./gradlew linkDebugExecutableMingwX64` (or `buildAll`)
 - 7-Zip installed and in PATH
-- Executable at: `build/bin/mingwX64/debugExecutable/gunzip.exe`
+- Executable at: `build/bin/mingwX64/debugExecutable/qunzip.exe`
 
 **Linux:**
-- Gunzip built: `./gradlew linkDebugExecutableLinuxX64` (or `buildAll`)
+- Qunzip built: `./gradlew linkDebugExecutableLinuxX64` (or `buildAll`)
 - p7zip-full package installed (`sudo apt-get install p7zip-full`)
-- Executable at: `build/bin/linuxX64/debugExecutable/gunzip.kexe`
+- Executable at: `build/bin/linuxX64/debugExecutable/qunzip.kexe`
 
 **macOS:**
-- Gunzip built: `./gradlew linkDebugExecutableMacosX64` or `MacosArm64`
+- Qunzip built: `./gradlew linkDebugExecutableMacosX64` or `MacosArm64`
 - p7zip installed (`brew install p7zip`)
-- Executable at: `build/bin/macosX64/debugExecutable/gunzip.kexe`
+- Executable at: `build/bin/macosX64/debugExecutable/qunzip.kexe`
 
 ### Execution
 
@@ -76,8 +76,8 @@ All platforms share the same test fixtures in `fixtures/`:
 cd test\e2e\windows
 run-tests.bat
 
-REM Or specify custom gunzip path:
-run-tests.bat C:\path\to\gunzip.exe
+REM Or specify custom qunzip path:
+run-tests.bat C:\path\to\qunzip.exe
 ```
 
 **Linux:**
@@ -86,8 +86,8 @@ cd test/e2e/linux
 chmod +x run-tests.sh
 ./run-tests.sh
 
-# Or specify custom gunzip path:
-./run-tests.sh /path/to/gunzip.kexe
+# Or specify custom qunzip path:
+./run-tests.sh /path/to/qunzip.kexe
 ```
 
 **macOS:**
@@ -96,8 +96,8 @@ cd test/e2e/macos
 chmod +x run-tests.sh
 ./run-tests.sh
 
-# Or specify custom gunzip path:
-./run-tests.sh /path/to/gunzip.kexe
+# Or specify custom qunzip path:
+./run-tests.sh /path/to/qunzip.kexe
 ```
 
 ## Test Output
@@ -106,10 +106,10 @@ Tests provide clear, color-coded output:
 
 ```
 ============================================================================
-                    Gunzip E2E Black Box Tests
+                    Qunzip E2E Black Box Tests
 ============================================================================
 
-Using gunzip.exe: ..\..\..\build\bin\mingwX64\debugExecutable\gunzip.exe
+Using qunzip.exe: ..\..\..\build\bin\mingwX64\debugExecutable\qunzip.exe
 Fixtures directory: ..\fixtures
 Work directory: ..\results
 
@@ -140,20 +140,20 @@ ALL TESTS PASSED!
 
 ### Test 1: Single File Extraction
 1. Copies `single-file.zip` to temp directory
-2. Runs: `gunzip single-file.zip`
+2. Runs: `qunzip single-file.zip`
 3. Verifies: `file1.txt` exists in same directory
 4. Verifies: `single-file.zip` no longer exists (moved to trash)
 
 ### Test 2: Multiple Files with Folder Creation
 1. Copies `multiple-files.zip` to temp directory
-2. Runs: `gunzip multiple-files.zip`
+2. Runs: `qunzip multiple-files.zip`
 3. Verifies: Folder `multiple-files/` was created
 4. Verifies: All files exist inside folder (`file1.txt`, `file2.txt`, `file3.txt`)
 5. Verifies: Original ZIP no longer exists
 
 ### Test 3: Nested Folder Extraction
 1. Copies `nested-folder.zip` to temp directory
-2. Runs: `gunzip nested-folder.zip`
+2. Runs: `qunzip nested-folder.zip`
 3. Verifies: Nested directory structure exists (`nested/nested-file.txt`, `nested/subfolder/deep-file.txt`)
 4. Verifies: Original ZIP no longer exists
 
@@ -185,7 +185,7 @@ To add a new test case:
    ```batch
    call :test_start "Test description"
    REM Setup
-   REM Execute gunzip
+   REM Execute qunzip
    REM Verify results
    call :test_pass "Success message"
    REM or
@@ -212,9 +212,9 @@ cd test/e2e/linux
 
 ## Troubleshooting
 
-**Tests fail with "gunzip not found":**
+**Tests fail with "qunzip not found":**
 - Build the project: `./gradlew buildAll`
-- Or specify path: `run-tests.bat path\to\gunzip.exe`
+- Or specify path: `run-tests.bat path\to\qunzip.exe`
 
 **Tests fail with "7z command not found":**
 - Install 7-Zip and add to PATH

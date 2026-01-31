@@ -1,4 +1,4 @@
-# PowerShell script to create a simple Gunzip icon
+# PowerShell script to create a simple Qunzip icon
 # Requires .NET/PowerShell 5.0+
 
 Add-Type -AssemblyName System.Drawing

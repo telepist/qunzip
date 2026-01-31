@@ -1,4 +1,4 @@
-# Gunzip Development Progress
+# Qunzip Development Progress
 
 ## Current Status
 

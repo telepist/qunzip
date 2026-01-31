@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Project Name**: Gunzip - Cross-Platform Archive Extractor
+**Project Name**: Qunzip - Cross-Platform Archive Extractor
 **Vision**: Create the most intuitive archive extraction experience across all major desktop platforms
 **Team Size**: 1-3 developers
 

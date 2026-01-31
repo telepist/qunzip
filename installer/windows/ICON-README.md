@@ -1,4 +1,4 @@
-# Gunzip Icon Creation Guide
+# Qunzip Icon Creation Guide
 
 This directory should contain `icon.ico` for the Windows installer.
 
@@ -15,7 +15,7 @@ This creates `icon-temp.png`. Then convert to .ico using one of the methods belo
 
 ### Option 2: Download Pre-made Icon
 
-If available, download the official Gunzip icon and save as `icon.ico` in this directory.
+If available, download the official Qunzip icon and save as `icon.ico` in this directory.
 
 ## Converting PNG to ICO
 
@@ -59,7 +59,7 @@ magick convert icon-temp.png -define icon:auto-resize=256,48,32,16 icon.ico
 If you don't have an icon yet, the installer will still work. Inno Setup will use the default Windows application icon. You can add the icon later and rebuild the installer.
 
 To skip icon for now:
-1. Comment out or remove the `SetupIconFile` line in `gunzip.iss`
+1. Comment out or remove the `SetupIconFile` line in `qunzip.iss`
 2. Comment out or remove the `UninstallDisplayIcon` line in the `[Setup]` section
 
 ## Testing the Icon

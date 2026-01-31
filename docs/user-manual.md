@@ -1,10 +1,10 @@
 # User Manual
 
-> **⚠️ Note**: This manual describes the functionality of Gunzip. The project is currently under active development. **Terminal UI (TUI) is fully functional on Windows** with interactive progress display. Native GUI implementations are planned for all platforms. Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
+> **⚠️ Note**: This manual describes the functionality of Qunzip. The project is currently under active development. **Terminal UI (TUI) is fully functional on Windows** with interactive progress display. Native GUI implementations are planned for all platforms. Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
 
 ## Overview
 
-**Gunzip** is a cross-platform archive extraction utility that provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives. Inspired by macOS simplicity, it works intelligently in the background to extract your files exactly where you expect them.
+**Qunzip** is a cross-platform archive extraction utility that provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives. Inspired by macOS simplicity, it works intelligently in the background to extract your files exactly where you expect them.
 
 ## Installation
 
@@ -16,7 +16,7 @@
    ```bash
    ./gradlew linkReleaseExecutableMingwX64
    ```
-2. Executable location: `build/bin/mingwX64/releaseExecutable/gunzip.exe`
+2. Executable location: `build/bin/mingwX64/releaseExecutable/qunzip.exe`
 3. (Optional) Build installer:
    ```bash
    ./gradlew packageWindows  # Requires Inno Setup 6
@@ -35,7 +35,7 @@
 
 ### Two User Interface Modes
 
-Gunzip provides two user interfaces:
+Qunzip provides two user interfaces:
 
 1. **Terminal UI (TUI)** - Interactive terminal interface with live progress updates
 2. **Native GUI** _(Planned)_ - Platform-specific graphical dialogs
@@ -45,19 +45,19 @@ The application automatically chooses the appropriate interface:
 - **Running from terminal** → Terminal UI with interactive progress display
 
 You can also force a specific mode:
-- `gunzip --tui archive.zip` - Force terminal UI
-- `gunzip --gui archive.zip` - Force GUI mode
+- `qunzip --tui archive.zip` - Force terminal UI
+- `qunzip --gui archive.zip` - Force GUI mode
 
 ### Extracting Archives (Terminal UI)
 
 Run from your terminal:
 ```bash
-gunzip archive.zip
+qunzip archive.zip
 ```
 
 You'll see an interactive progress display:
 ```
-┌─── Gunzip Archive Extractor ───┐
+┌─── Qunzip Archive Extractor ───┐
 │
 │ Archive: my-files.zip
 │
@@ -146,12 +146,12 @@ If extracted files would overwrite existing files:
 
 Run without any archive file to view settings:
 ```bash
-gunzip
+qunzip
 ```
 
 You'll see the settings display:
 ```
-┌─────── Gunzip Settings ───────┐
+┌─────── Qunzip Settings ───────┐
 │
 │ File Associations
 │
@@ -177,19 +177,19 @@ The application automatically registers itself for supported file types during i
 
 **Command Line**:
 ```bash
-gunzip --register-associations    # Register all supported formats
-gunzip --unregister-associations  # Unregister all formats
+qunzip --register-associations    # Register all supported formats
+qunzip --unregister-associations  # Unregister all formats
 ```
 
 **Manual Configuration**:
-- **Windows**: Right-click archive → "Open with" → "Choose another app" → Select Gunzip
-- **macOS**: Right-click archive → "Get Info" → "Open with" → Select Gunzip → "Change All"
+- **Windows**: Right-click archive → "Open with" → "Choose another app" → Select Qunzip
+- **macOS**: Right-click archive → "Get Info" → "Open with" → Select Qunzip → "Change All"
 - **Linux**: Depends on desktop environment (usually in file manager preferences)
 
 ### Notification Preferences
 Notifications follow your system preferences:
 - **Windows**: Control Panel → System → Notifications
-- **macOS**: System Preferences → Notifications → Gunzip
+- **macOS**: System Preferences → Notifications → Qunzip
 - **Linux**: Desktop environment notification settings
 
 ## Troubleshooting
@@ -228,9 +228,9 @@ This happens when:
 
 #### Log Files
 Application logs are stored at:
-- **Windows**: `%APPDATA%\Gunzip\logs/` _(planned)_
-- **macOS**: `~/Library/Logs/Gunzip/` _(pending implementation)_
-- **Linux**: `~/.local/share/gunzip/logs/` _(pending implementation)_
+- **Windows**: `%APPDATA%\Qunzip\logs/` _(planned)_
+- **macOS**: `~/Library/Logs/Qunzip/` _(pending implementation)_
+- **Linux**: `~/.local/share/qunzip/logs/` _(pending implementation)_
 
 #### Reporting Issues
 For development feedback and bug reports, see the project's documentation:

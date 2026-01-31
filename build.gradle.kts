@@ -6,53 +6,53 @@ plugins {
 
 // Application version
 version = "1.0.0"
-group = "com.gunzip"
+group = "com.qunzip"
 
 kotlin {
     macosArm64 {
         binaries {
             executable {
-                baseName = "gunzip"
-                entryPoint = "gunzip.main"
+                baseName = "qunzip"
+                entryPoint = "qunzip.main"
             }
         }
     }
     macosX64 {
         binaries {
             executable {
-                baseName = "gunzip"
-                entryPoint = "gunzip.main"
+                baseName = "qunzip"
+                entryPoint = "qunzip.main"
             }
         }
     }
     linuxX64 {
         binaries {
             executable {
-                baseName = "gunzip"
-                entryPoint = "gunzip.main"
+                baseName = "qunzip"
+                entryPoint = "qunzip.main"
             }
         }
     }
     linuxArm64 {
         binaries {
             executable {
-                baseName = "gunzip"
-                entryPoint = "gunzip.main"
+                baseName = "qunzip"
+                entryPoint = "qunzip.main"
             }
         }
     }
     mingwX64 {
         binaries {
             executable {
-                baseName = "gunzip"
-                entryPoint = "gunzip.main"
+                baseName = "qunzip"
+                entryPoint = "qunzip.main"
                 // Use Windows subsystem for release builds (no console window)
                 if (buildType == org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE) {
                     linkerOpts("-Wl,--subsystem,windows")
                 }
                 // Link the compiled Windows resource file (contains icon and version info)
                 // The resource file is compiled by the compileWindowsResources task
-                linkerOpts(file("build/resources/gunzip.res").absolutePath)
+                linkerOpts(file("build/resources/qunzip.res").absolutePath)
             }
         }
     }
@@ -131,8 +131,8 @@ tasks.register("buildAllRelease") {
 
 // Compile Windows resource file (icon and version info)
 tasks.register<Exec>("compileWindowsResources") {
-    val rcFile = file("src/mingwX64Main/resources/gunzip.rc")
-    val resFile = file("build/resources/gunzip.res")
+    val rcFile = file("src/mingwX64Main/resources/qunzip.rc")
+    val resFile = file("build/resources/qunzip.res")
     val iconFile = file("installer/windows/icon.ico")
 
     inputs.file(rcFile)
@@ -172,7 +172,7 @@ tasks.register<Copy>("copy7zipToDebugMingwX64") {
         include("7z.exe", "7z.dll")
     }
     from("src/mingwX64Main/resources") {
-        include("gunzip.exe.manifest")
+        include("qunzip.exe.manifest")
     }
     into("build/bin/mingwX64/debugExecutable")
     dependsOn("linkDebugExecutableMingwX64")
@@ -183,7 +183,7 @@ tasks.register<Copy>("copy7zipToReleaseMingwX64") {
         include("7z.exe", "7z.dll")
     }
     from("src/mingwX64Main/resources") {
-        include("gunzip.exe.manifest")
+        include("qunzip.exe.manifest")
     }
     into("build/bin/mingwX64/releaseExecutable")
     dependsOn("linkReleaseExecutableMingwX64")
@@ -207,7 +207,7 @@ tasks.register<Copy>("prepareInstallerResources") {
     dependsOn("copy7zipToReleaseMingwX64")
 
     from("build/bin/mingwX64/releaseExecutable") {
-        include("gunzip.exe", "gunzip.exe.manifest", "7z.exe", "7z.dll")
+        include("qunzip.exe", "qunzip.exe.manifest", "7z.exe", "7z.dll")
     }
     from("bin/7zip") {
         include("License.txt")
@@ -237,12 +237,12 @@ tasks.register<Exec>("buildWindowsInstaller") {
     commandLine(
         iscc,
         "/O" + file("build/installer-output").absolutePath,
-        "/F" + "gunzip-setup-${version}",
-        file("installer/windows/gunzip.iss").absolutePath
+        "/F" + "qunzip-setup-${version}",
+        file("installer/windows/qunzip.iss").absolutePath
     )
 
     // Pass version to Inno Setup via environment variable
-    environment("GUNZIP_VERSION", version.toString())
+    environment("QUNZIP_VERSION", version.toString())
 
     group = "installer"
     description = "Build Windows installer using Inno Setup (requires Inno Setup 6 installed)"
@@ -258,13 +258,13 @@ tasks.register<Zip>("createPortableZip") {
     dependsOn("prepareInstallerResources")
 
     from("build/installer-staging/windows") {
-        include("gunzip.exe", "7z.exe", "7z.dll", "License.txt")
+        include("qunzip.exe", "7z.exe", "7z.dll", "License.txt")
     }
     from("installer/windows") {
         include("README.txt")
     }
 
-    archiveFileName.set("gunzip-${version}-windows-portable.zip")
+    archiveFileName.set("qunzip-${version}-windows-portable.zip")
     destinationDirectory.set(file("build/dist"))
 
     group = "distribution"

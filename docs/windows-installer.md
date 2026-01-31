@@ -1,13 +1,13 @@
 # Windows Installer Build Guide
 
-This guide explains how to build the Windows installer for Gunzip.
+This guide explains how to build the Windows installer for Qunzip.
 
 ## Overview
 
-Gunzip provides two distribution formats for Windows:
+Qunzip provides two distribution formats for Windows:
 
-1. **Windows Installer** (`gunzip-setup-{version}.exe`) - Full installation with file associations
-2. **Portable ZIP** (`gunzip-{version}-windows-portable.zip`) - No installation required
+1. **Windows Installer** (`qunzip-setup-{version}.exe`) - Full installation with file associations
+2. **Portable ZIP** (`qunzip-{version}-windows-portable.zip`) - No installation required
 
 ## Prerequisites
 
@@ -59,7 +59,7 @@ This single command will:
 ./gradlew linkReleaseExecutableMingwX64
 ```
 
-Output: `build/bin/mingwX64/releaseExecutable/gunzip.exe`
+Output: `build/bin/mingwX64/releaseExecutable/qunzip.exe`
 
 #### 2. Prepare Installer Resources
 
@@ -68,7 +68,7 @@ Output: `build/bin/mingwX64/releaseExecutable/gunzip.exe`
 ```
 
 This copies:
-- `gunzip.exe` - Main executable
+- `qunzip.exe` - Main executable
 - `7z.exe` + `7z.dll` - 7-Zip tools
 - `License.txt` - Combined license
 
@@ -80,7 +80,7 @@ Output directory: `build/installer-staging/windows/`
 ./gradlew buildWindowsInstaller
 ```
 
-Output: `build/installer-output/gunzip-setup-{version}.exe`
+Output: `build/installer-output/qunzip-setup-{version}.exe`
 
 **Note:** This step requires Inno Setup 6 to be installed.
 
@@ -90,7 +90,7 @@ Output: `build/installer-output/gunzip-setup-{version}.exe`
 ./gradlew createPortableZip
 ```
 
-Output: `build/dist/gunzip-{version}-windows-portable.zip`
+Output: `build/dist/qunzip-{version}-windows-portable.zip`
 
 ## Icon Creation
 
@@ -116,7 +116,7 @@ This creates `icon-temp.png`. Convert to `.ico` using:
 
 ### Option 3: Skip Icon (Temporary)
 
-Edit `installer/windows/gunzip.iss`:
+Edit `installer/windows/qunzip.iss`:
 ```ini
 ;SetupIconFile=icon.ico
 ;UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -138,13 +138,13 @@ version = "1.0.0"
 
 This version is:
 - Embedded in the executable
-- Used in installer filename (`gunzip-setup-1.0.0.exe`)
+- Used in installer filename (`qunzip-setup-1.0.0.exe`)
 - Displayed in Add/Remove Programs
-- Passed to Inno Setup via `GUNZIP_VERSION` environment variable
+- Passed to Inno Setup via `QUNZIP_VERSION` environment variable
 
 ### Customizing Inno Setup Script
 
-Edit `installer/windows/gunzip.iss`:
+Edit `installer/windows/qunzip.iss`:
 
 ```ini
 #define MyAppPublisher "Your Company Name"
@@ -161,7 +161,7 @@ The installer registers these formats by default:
 - TAR: `.tar`, `.tar.gz`, `.tar.bz2`, `.tar.xz`, `.tgz`, `.tbz2`, `.txz`
 - Other: `.cab`, `.arj`, `.lzh`
 
-To add/remove formats, edit the `[Registry]` section in `gunzip.iss`.
+To add/remove formats, edit the `[Registry]` section in `qunzip.iss`.
 
 ## Troubleshooting
 
@@ -189,7 +189,7 @@ To add/remove formats, edit the `[Registry]` section in `gunzip.iss`.
 
 **Solutions:**
 1. Create icon using `create-icon.ps1` script
-2. Or comment out `SetupIconFile` line in `gunzip.iss`
+2. Or comment out `SetupIconFile` line in `qunzip.iss`
 
 ### Build Fails with "Access Denied"
 
@@ -205,11 +205,11 @@ To add/remove formats, edit the `[Registry]` section in `gunzip.iss`.
 ### Basic Installation Test
 
 1. Build installer: `./gradlew buildWindowsInstaller`
-2. Locate: `build/installer-output/gunzip-setup-{version}.exe`
+2. Locate: `build/installer-output/qunzip-setup-{version}.exe`
 3. Run installer on clean Windows VM (recommended) or local machine
 4. Follow installation wizard
 5. Check installation:
-   - Files at `C:\Program Files\Gunzip\`
+   - Files at `C:\Program Files\Qunzip\`
    - Start Menu shortcut
    - Add/Remove Programs entry
 
@@ -218,16 +218,16 @@ To add/remove formats, edit the `[Registry]` section in `gunzip.iss`.
 1. Download test archives (.zip, .7z, .rar)
 2. Double-click an archive
 3. Verify:
-   - Gunzip opens automatically
+   - Qunzip opens automatically
    - Archive is extracted
    - Original moved to Recycle Bin
-4. Check "Open With" context menu shows Gunzip
+4. Check "Open With" context menu shows Qunzip
 
 ### Uninstallation Test
 
 1. Uninstall via "Add or Remove Programs"
 2. Verify:
-   - All files removed from `C:\Program Files\Gunzip\`
+   - All files removed from `C:\Program Files\Qunzip\`
    - File associations removed
    - Start Menu shortcuts removed
    - Registry entries cleaned up
@@ -235,8 +235,8 @@ To add/remove formats, edit the `[Registry]` section in `gunzip.iss`.
 ### Portable ZIP Test
 
 1. Build: `./gradlew createPortableZip`
-2. Extract ZIP to test folder (e.g., `C:\Temp\gunzip-test\`)
-3. Run `gunzip.exe <archive-file>` from command line
+2. Extract ZIP to test folder (e.g., `C:\Temp\qunzip-test\`)
+3. Run `qunzip.exe <archive-file>` from command line
 4. Verify extraction works without installation
 
 ## Advanced Configuration
@@ -253,13 +253,13 @@ $env:ISCC_PATH = "D:\Tools\InnoSetup6\ISCC.exe"
 
 ```powershell
 # Install silently with all defaults
-gunzip-setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES
+qunzip-setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES
 
 # Install with file associations
-gunzip-setup-1.0.0.exe /VERYSILENT /TASKS="fileassoc"
+qunzip-setup-1.0.0.exe /VERYSILENT /TASKS="fileassoc"
 
 # Install without file associations
-gunzip-setup-1.0.0.exe /VERYSILENT /TASKS="!fileassoc"
+qunzip-setup-1.0.0.exe /VERYSILENT /TASKS="!fileassoc"
 ```
 
 ### Build for Distribution
@@ -275,8 +275,8 @@ gunzip-setup-1.0.0.exe /VERYSILENT /TASKS="!fileassoc"
 ./gradlew packageWindows
 
 # Outputs:
-# - build/installer-output/gunzip-setup-1.0.0.exe
-# - build/dist/gunzip-1.0.0-windows-portable.zip
+# - build/installer-output/qunzip-setup-1.0.0.exe
+# - build/dist/qunzip-1.0.0-windows-portable.zip
 ```
 
 ### Code Signing (Future)
@@ -285,10 +285,10 @@ For production releases, sign the installer:
 
 ```powershell
 # Using SignTool (Windows SDK)
-signtool sign /f certificate.pfx /p password /t http://timestamp.digicert.com gunzip-setup-1.0.0.exe
+signtool sign /f certificate.pfx /p password /t http://timestamp.digicert.com qunzip-setup-1.0.0.exe
 
 # Verify signature
-signtool verify /pa gunzip-setup-1.0.0.exe
+signtool verify /pa qunzip-setup-1.0.0.exe
 ```
 
 ## CI/CD Integration
@@ -366,7 +366,7 @@ Before releasing a new version:
 
 For issues or questions:
 
-- GitHub Issues: https://github.com/yourusername/gunzip/issues
+- GitHub Issues: https://github.com/yourusername/qunzip/issues
 - Documentation: `docs/`
 - Inno Setup Help: https://jrsoftware.org/ishelp/
 

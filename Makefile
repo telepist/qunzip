@@ -1,4 +1,4 @@
-# Makefile for Gunzip - Cross-platform Archive Extraction Utility
+# Makefile for Qunzip - Cross-platform Archive Extraction Utility
 # Automatically detects current platform and builds accordingly
 
 .PHONY: help build run clean build-all build-release run-release test \
@@ -15,44 +15,44 @@ ifeq ($(UNAME_S),Darwin)
     ifeq ($(UNAME_M),arm64)
         PLATFORM := MacosArm64
         PLATFORM_LOWER := macosArm64
-        EXECUTABLE := gunzip.kexe
+        EXECUTABLE := qunzip.kexe
     else
         PLATFORM := MacosX64
         PLATFORM_LOWER := macosX64
-        EXECUTABLE := gunzip.kexe
+        EXECUTABLE := qunzip.kexe
     endif
 else ifeq ($(UNAME_S),Linux)
     # Linux
     ifeq ($(UNAME_M),aarch64)
         PLATFORM := LinuxArm64
         PLATFORM_LOWER := linuxArm64
-        EXECUTABLE := gunzip.kexe
+        EXECUTABLE := qunzip.kexe
     else
         PLATFORM := LinuxX64
         PLATFORM_LOWER := linuxX64
-        EXECUTABLE := gunzip.kexe
+        EXECUTABLE := qunzip.kexe
     endif
 else ifneq (,$(findstring MINGW,$(UNAME_S)))
     # Windows (Git Bash/MINGW)
     PLATFORM := MingwX64
     PLATFORM_LOWER := mingwX64
-    EXECUTABLE := gunzip.exe
+    EXECUTABLE := qunzip.exe
 else ifneq (,$(findstring MSYS,$(UNAME_S)))
     # Windows (MSYS)
     PLATFORM := MingwX64
     PLATFORM_LOWER := mingwX64
-    EXECUTABLE := gunzip.exe
+    EXECUTABLE := qunzip.exe
 else ifneq (,$(findstring CYGWIN,$(UNAME_S)))
     # Windows (Cygwin)
     PLATFORM := MingwX64
     PLATFORM_LOWER := mingwX64
-    EXECUTABLE := gunzip.exe
+    EXECUTABLE := qunzip.exe
 else
     # Fallback for Windows when uname is not available
     ifeq ($(OS),Windows_NT)
         PLATFORM := MingwX64
         PLATFORM_LOWER := mingwX64
-        EXECUTABLE := gunzip.exe
+        EXECUTABLE := qunzip.exe
     else
         $(error Unsupported platform: $(UNAME_S))
     endif
@@ -77,7 +77,7 @@ endif
 # Default target - show help
 help:
 	@echo "=================================="
-	@echo "Gunzip Build System"
+	@echo "Qunzip Build System"
 	@echo "=================================="
 	@echo ""
 	@echo "Detected Platform: $(PLATFORM) ($(UNAME_S) $(UNAME_M))"
@@ -85,7 +85,7 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  make build         - Build debug executable for current platform"
-	@echo "  make run           - Build and run gunzip (debug)"
+	@echo "  make run           - Build and run qunzip (debug)"
 	@echo "  make test          - Run unit tests"
 	@echo "  make build-all     - Build debug executables for all platforms"
 	@echo "  make build-release - Build release executable for current platform"
@@ -108,7 +108,7 @@ help:
 
 # Build debug executable for current platform
 build:
-	@echo "Building Gunzip for $(PLATFORM)..."
+	@echo "Building Qunzip for $(PLATFORM)..."
 	$(GRADLEW) linkDebugExecutable$(PLATFORM)
 	@echo ""
 	@echo "Build complete: $(BUILD_PATH)"
@@ -116,7 +116,7 @@ build:
 
 # Build and run the application
 run: build
-	@echo "Running Gunzip..."
+	@echo "Running Qunzip..."
 	@echo ""
 	$(BUILD_PATH)
 
@@ -128,7 +128,7 @@ test:
 
 # Build debug executables for all platforms
 build-all:
-	@echo "Building Gunzip for all platforms..."
+	@echo "Building Qunzip for all platforms..."
 	$(GRADLEW) buildAll
 	@echo ""
 	@echo "All builds complete!"
@@ -136,7 +136,7 @@ build-all:
 
 # Build release executable for current platform
 build-release:
-	@echo "Building Gunzip RELEASE for $(PLATFORM)..."
+	@echo "Building Qunzip RELEASE for $(PLATFORM)..."
 	$(GRADLEW) linkReleaseExecutable$(PLATFORM)
 	@echo ""
 	@echo "Release build complete: $(RELEASE_BUILD_PATH)"
@@ -144,25 +144,25 @@ build-release:
 
 # Build and run release version
 run-release: build-release
-	@echo "Running Gunzip (RELEASE)..."
+	@echo "Running Qunzip (RELEASE)..."
 	@echo ""
 	$(RELEASE_BUILD_PATH)
 
 # Platform-specific build targets
 build-windows:
-	@echo "Building Gunzip for Windows x64..."
+	@echo "Building Qunzip for Windows x64..."
 	$(GRADLEW) linkDebugExecutableMingwX64
-	@echo "Build complete: build/bin/mingwX64/debugExecutable/gunzip.exe"
+	@echo "Build complete: build/bin/mingwX64/debugExecutable/qunzip.exe"
 
 build-linux:
-	@echo "Building Gunzip for Linux x64..."
+	@echo "Building Qunzip for Linux x64..."
 	$(GRADLEW) linkDebugExecutableLinuxX64
-	@echo "Build complete: build/bin/linuxX64/debugExecutable/gunzip.kexe"
+	@echo "Build complete: build/bin/linuxX64/debugExecutable/qunzip.kexe"
 
 build-macos:
-	@echo "Building Gunzip for macOS ARM64..."
+	@echo "Building Qunzip for macOS ARM64..."
 	$(GRADLEW) linkDebugExecutableMacosArm64
-	@echo "Build complete: build/bin/macosArm64/debugExecutable/gunzip.kexe"
+	@echo "Build complete: build/bin/macosArm64/debugExecutable/qunzip.kexe"
 
 # Clean build artifacts
 clean:

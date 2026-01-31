@@ -1,4 +1,4 @@
-# Gunzip - Cross-Platform Archive Extraction Utility
+# Quick Unzip (qunzip) - Cross-Platform Archive Extraction Utility
 
 <div align="center">
 
@@ -43,12 +43,12 @@ A fast, simple archive extraction utility inspired by macOS simplicity but built
 
 ## Installation
 
-> **Note**: Pre-built releases are not yet available. To use Gunzip, you must build from source (see "Building from Source" section below).
+> **Note**: Pre-built releases are not yet available. To use Qunzip, you must build from source (see "Building from Source" section below).
 
 ### Windows (Build from Source)
 
 1. Build the executable: `./gradlew linkReleaseExecutableMingwX64`
-2. Executable location: `build/bin/mingwX64/releaseExecutable/gunzip.exe`
+2. Executable location: `build/bin/mingwX64/releaseExecutable/qunzip.exe`
 3. (Optional) Build installer: `./gradlew packageWindows` (requires Inno Setup 6)
 
 ### macOS
@@ -63,7 +63,7 @@ Coming soon! Implementation pending.
 
 ### Automatic Extraction (Recommended)
 
-Simply **double-click** any supported archive file. Gunzip will:
+Simply **double-click** any supported archive file. Qunzip will:
 1. Extract the contents intelligently
 2. Open the extraction folder (optional)
 3. Move the original archive to trash
@@ -72,19 +72,19 @@ Simply **double-click** any supported archive file. Gunzip will:
 
 ```bash
 # Extract an archive
-gunzip path/to/archive.zip
+qunzip path/to/archive.zip
 
 # Register file associations (Windows, requires admin)
-gunzip --register-associations
+qunzip --register-associations
 
 # Unregister file associations
-gunzip --unregister-associations
+qunzip --unregister-associations
 
 # Show help
-gunzip --help
+qunzip --help
 
 # Show version
-gunzip --version
+qunzip --version
 ```
 
 ## Supported Archive Formats
@@ -132,8 +132,8 @@ gunzip --version
 
 **Output locations:**
 - Executables: `build/bin/{platform}/releaseExecutable/`
-- Windows installer: `build/installer-output/gunzip-setup-{version}.exe`
-- Portable ZIP: `build/dist/gunzip-{version}-windows-portable.zip`
+- Windows installer: `build/installer-output/qunzip-setup-{version}.exe`
+- Portable ZIP: `build/dist/qunzip-{version}-windows-portable.zip`
 
 See [docs/windows-installer.md](docs/windows-installer.md) for detailed build instructions.
 
@@ -141,7 +141,7 @@ See [docs/windows-installer.md](docs/windows-installer.md) for detailed build in
 
 ```
 src/
-├── commonMain/kotlin/gunzip/
+├── commonMain/kotlin/qunzip/
 │   ├── domain/              # Business logic (platform-agnostic)
 │   │   ├── entities/        # Core models
 │   │   ├── usecases/        # Business operations
@@ -154,7 +154,7 @@ src/
 └── macosX64Main/kotlin/     # macOS-specific implementations
 
 installer/windows/           # Windows installer configuration
-├── gunzip.iss              # Inno Setup script
+├── qunzip.iss              # Inno Setup script
 ├── LICENSE.txt             # Combined license
 ├── README.txt              # Post-install readme
 └── create-icon.ps1         # Icon generation script
@@ -165,7 +165,7 @@ docs/                       # Documentation
 
 ## Architecture
 
-Gunzip follows **Clean Architecture** principles:
+Qunzip follows **Clean Architecture** principles:
 
 - **Domain Layer**: Platform-agnostic business logic
 - **Data Layer**: Platform-specific repository implementations

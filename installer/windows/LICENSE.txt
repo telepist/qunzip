@@ -1,8 +1,8 @@
-GUNZIP LICENSE
+QUNZIP LICENSE
 =============================================================
 
-Gunzip - Cross-Platform Archive Extraction Utility
-Copyright (C) 2025 Gunzip Project
+Qunzip - Cross-Platform Archive Extraction Utility
+Copyright (C) 2025 Qunzip Project
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -215,7 +215,7 @@ File Double-Click → OS Handler → Application Entry Point
 
 ```
 src/
-├── commonMain/kotlin/gunzip/
+├── commonMain/kotlin/qunzip/
 │   ├── domain/
 │   │   ├── entities/          # Core business objects
 │   │   ├── usecases/          # Business logic
@@ -230,29 +230,29 @@ src/
 │   │           ├── ExtractionTui.kt     # Extraction UI
 │   │           └── SettingsTui.kt       # Settings UI
 │   └── main.kt               # Application entry point
-├── commonTest/kotlin/gunzip/  # Shared unit tests
-├── mingwX64Main/kotlin/gunzip/
+├── commonTest/kotlin/qunzip/  # Shared unit tests
+├── mingwX64Main/kotlin/qunzip/
 │   ├── platform/              # Windows repository implementations
 │   ├── presentation/ui/       # Windows GUI
 │   │   ├── Win32Gui.kt        # Win32 renderer (planned)
 │   │   └── LaunchContext.kt   # Terminal detection
 │   └── WindowsPlatform.kt     # DI and platform utilities
-├── linuxX64Main/kotlin/gunzip/
+├── linuxX64Main/kotlin/qunzip/
 │   ├── platform/              # Linux repository implementations
 │   ├── presentation/ui/       # Linux GUI
 │   │   ├── GtkGui.kt          # GTK renderer (planned)
 │   │   └── LaunchContext.kt   # Terminal detection
 │   └── LinuxPlatform.kt       # DI and platform utilities
-├── linuxArm64Main/kotlin/gunzip/
+├── linuxArm64Main/kotlin/qunzip/
 │   ├── platform/              # Linux ARM64 repository implementations
 │   └── LinuxPlatform.kt
-├── macosX64Main/kotlin/gunzip/
+├── macosX64Main/kotlin/qunzip/
 │   ├── platform/              # macOS Intel repository implementations
 │   ├── presentation/ui/       # macOS GUI
 │   │   ├── CocoaGui.kt        # Cocoa renderer (planned)
 │   │   └── LaunchContext.kt   # Terminal detection
 │   └── MacosPlatform.kt       # DI and platform utilities
-└── macosArm64Main/kotlin/gunzip/
+└── macosArm64Main/kotlin/qunzip/
     ├── platform/              # macOS ARM64 repository implementations
     └── MacosPlatform.kt
 ```

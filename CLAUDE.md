@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Gunzip** is a cross-platform archive extraction utility built with Kotlin Multiplatform. It provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives, inspired by macOS simplicity but targeting primarily Windows with Linux and macOS support.
+**Qunzip** (Quick Unzip) is a cross-platform archive extraction utility built with Kotlin Multiplatform. It provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives, inspired by macOS simplicity but targeting primarily Windows with Linux and macOS support.
 
 The application follows **Clean Architecture** principles with **MVVM pattern**, uses **Kotlin Flow** for reactive programming, and strictly implements **Test-Driven Development (TDD)** with a target of **close to 100% test coverage**.
 
@@ -22,10 +22,10 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 - `./gradlew <platform>Test` - Run platform-specific tests
 
 ### Running the Application
-- **GUI mode** (double-click or auto-detect): `./build/bin/<platform>/debugExecutable/gunzip.kexe <archive-file>`
-- **TUI mode** (terminal UI): `./build/bin/<platform>/debugExecutable/gunzip.kexe --tui <archive-file>`
-- **Force GUI mode**: `./build/bin/<platform>/debugExecutable/gunzip.kexe --gui <archive-file>`
-- **Settings mode**: `./build/bin/<platform>/debugExecutable/gunzip.kexe` (no file argument)
+- **GUI mode** (double-click or auto-detect): `./build/bin/<platform>/debugExecutable/qunzip.kexe <archive-file>`
+- **TUI mode** (terminal UI): `./build/bin/<platform>/debugExecutable/qunzip.kexe --tui <archive-file>`
+- **Force GUI mode**: `./build/bin/<platform>/debugExecutable/qunzip.kexe --gui <archive-file>`
+- **Settings mode**: `./build/bin/<platform>/debugExecutable/qunzip.kexe` (no file argument)
 - The application auto-detects launch context and chooses appropriate UI (native GUI or terminal TUI)
 
 ### CLI Arguments
@@ -55,8 +55,8 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 - Icon file at `installer/windows/icon.ico` (optional, see `installer/windows/ICON-README.md`)
 
 **Installer outputs:**
-- `build/installer-output/gunzip-setup-{version}.exe` - Windows installer
-- `build/dist/gunzip-{version}-windows-portable.zip` - Portable ZIP
+- `build/installer-output/qunzip-setup-{version}.exe` - Windows installer
+- `build/dist/qunzip-{version}-windows-portable.zip` - Portable ZIP
 
 ### Other Commands
 - `./gradlew clean` - Clean build artifacts
@@ -65,7 +65,7 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 
 ### Clean Architecture Layers
 
-#### Domain Layer (`src/commonMain/kotlin/gunzip/domain/`)
+#### Domain Layer (`src/commonMain/kotlin/qunzip/domain/`)
 - **Entities**: `Archive`, `ArchiveEntry`, `ExtractionResult`, `FileAssociation`, `UserPreferences`
 - **Use Cases**: `ExtractArchiveUseCase`, `ValidateArchiveUseCase`, `ManageFileAssociationsUseCase`
 - **Repository Interfaces**: Abstract contracts for platform-specific implementations (`ArchiveRepository`, `FileSystemRepository`, `NotificationRepository`, `FileAssociationRepository`, `PreferencesRepository`)
@@ -75,7 +75,7 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 - **7zip Integration**: Archive extraction via 7zip executable/library
 - **OS Services**: File system operations, notifications, file associations
 
-#### Presentation Layer (`src/commonMain/kotlin/gunzip/presentation/`)
+#### Presentation Layer (`src/commonMain/kotlin/qunzip/presentation/`)
 - **ViewModels**: `ExtractionViewModel`, `FileAssociationViewModel`, `ApplicationViewModel`, `SettingsViewModel`
 - **State Management**: Kotlin Flow with StateFlow/SharedFlow patterns
 - **UI Layer**: Hybrid approach with Mosaic TUI and platform-native GUIs
@@ -113,16 +113,16 @@ Common interfaces in domain layer, platform-specific implementations:
 - **Turbine**: `1.0.0` - Flow testing (test only)
 
 ### Build Configuration
-- Executables named `gunzip` across all platforms
+- Executables named `qunzip` across all platforms
 - Debug builds: `build/bin/<platform>/debugExecutable/`
 - Release builds: `build/bin/<platform>/releaseExecutable/`
-- Entry point: `gunzip.main`
+- Entry point: `qunzip.main`
 
 ## Project Structure
 
 ```
 src/
-├── commonMain/kotlin/gunzip/
+├── commonMain/kotlin/qunzip/
 │   ├── domain/
 │   │   ├── entities/          # Core business objects
 │   │   ├── usecases/          # Business logic
@@ -137,8 +137,8 @@ src/
 │   │           ├── ExtractionTui.kt     # Extraction progress TUI
 │   │           └── SettingsTui.kt       # Settings display TUI
 │   └── main.kt               # Application entry point
-├── commonTest/kotlin/gunzip/  # Shared tests
-├── mingwX64Main/kotlin/gunzip/     # Windows x64 (MinGW) implementations
+├── commonTest/kotlin/qunzip/  # Shared tests
+├── mingwX64Main/kotlin/qunzip/     # Windows x64 (MinGW) implementations
 │   ├── platform/                   # Windows repository implementations
 │   │   ├── WindowsArchiveRepository.kt
 │   │   ├── WindowsFileSystemRepository.kt
@@ -149,19 +149,19 @@ src/
 │   │   ├── Win32Gui.kt             # Win32 GUI renderer with progress window + settings window
 │   │   └── LaunchContext.kt        # Windows terminal detection
 │   ├── resources/                  # Windows resources
-│   │   ├── gunzip.rc               # Resource file (icon, version info)
-│   │   └── gunzip.exe.manifest     # Windows manifest
+│   │   ├── qunzip.rc               # Resource file (icon, version info)
+│   │   └── qunzip.exe.manifest     # Windows manifest
 │   └── WindowsPlatform.kt          # DI and platform utilities
-├── linuxX64Main/kotlin/gunzip/     # Linux x64 implementations
+├── linuxX64Main/kotlin/qunzip/     # Linux x64 implementations
 │   └── presentation/ui/            # Linux GUI (stubs)
 │       ├── GtkGui.kt               # GTK GUI renderer (future)
 │       └── LaunchContext.kt        # Linux terminal detection
-├── linuxArm64Main/kotlin/gunzip/   # Linux ARM64 implementations
-├── macosX64Main/kotlin/gunzip/     # macOS Intel implementations
+├── linuxArm64Main/kotlin/qunzip/   # Linux ARM64 implementations
+├── macosX64Main/kotlin/qunzip/     # macOS Intel implementations
 │   └── presentation/ui/            # macOS GUI (stubs)
 │       ├── CocoaGui.kt             # Cocoa GUI renderer (future)
 │       └── LaunchContext.kt        # macOS terminal detection
-└── macosArm64Main/kotlin/gunzip/   # macOS Apple Silicon implementations
+└── macosArm64Main/kotlin/qunzip/   # macOS Apple Silicon implementations
 ```
 
 ## Core Functionality
@@ -174,7 +174,7 @@ src/
 
 ### File/Folder Conflict Handling
 When extracting would overwrite an existing file or folder, the application handles conflicts manually (not via 7zip flags):
-- **Single file archives**: Extract to temp folder (`gunzip_<hash>`), move file with unique name (`file-1.pdf`, `file-2.pdf`, etc.), delete temp folder
+- **Single file archives**: Extract to temp folder (`qunzip_<hash>`), move file with unique name (`file-1.pdf`, `file-2.pdf`, etc.), delete temp folder
 - **Single folder archives**: Extract to temp folder, move folder with unique name (`folder-1`, `folder-2`, etc.), delete temp folder
 - **Multi-file archives**: Create uniquely named destination folder directly (`project-1`, `project-2`, etc.) - no temp folder needed
 
@@ -191,7 +191,7 @@ When extracting would overwrite an existing file or folder, the application hand
 - Platform-specific registry/launch services management
 
 ### User Preferences
-Stored in JSON format at `~/.gunzip/preferences.json`:
+Stored in JSON format at `~/.qunzip/preferences.json`:
 - `moveToTrashAfterExtraction` - Move archive to trash after successful extraction (default: false)
 - `showCompletionDialog` - Show completion dialog after extraction; when false, app silently closes (default: false)
 
@@ -216,8 +216,8 @@ Stored in JSON format at `~/.gunzip/preferences.json`:
 - **Conflict handling**: All file/folder naming conflicts must be tested
 
 #### Test Organization
-- **Unit tests** for domain layer in `src/commonTest/kotlin/gunzip/domain/`
-- **ViewModel tests** in `src/commonTest/kotlin/gunzip/presentation/viewmodels/`
+- **Unit tests** for domain layer in `src/commonTest/kotlin/qunzip/domain/`
+- **ViewModel tests** in `src/commonTest/kotlin/qunzip/presentation/viewmodels/`
 - **Mock implementations** for isolating units under test
 - **Flow testing** using Turbine library for reactive streams
 

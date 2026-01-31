@@ -1,22 +1,22 @@
 #!/bin/bash
 # ============================================================================
-# Gunzip End-to-End Black Box Tests for Linux
+# Qunzip End-to-End Black Box Tests for Linux
 # ============================================================================
-# This script tests the actual gunzip executable as a black box
+# This script tests the actual qunzip executable as a black box
 # by running it with test fixtures and verifying the filesystem results.
 #
 # Requirements:
-#   - gunzip built for Linux (linuxX64)
+#   - qunzip built for Linux (linuxX64)
 #   - Test fixtures in ../fixtures/
 #   - 7-Zip installed (p7zip-full package)
 #
-# Usage: ./run-tests.sh [path-to-gunzip]
+# Usage: ./run-tests.sh [path-to-qunzip]
 # ============================================================================
 
 set -e
 
 # Configuration
-GUNZIP_EXE="${1:-../../../build/bin/linuxX64/debugExecutable/gunzip.kexe}"
+QUNZIP_EXE="${1:-../../../build/bin/linuxX64/debugExecutable/qunzip.kexe}"
 FIXTURES_DIR="$(dirname "$0")/../fixtures"
 WORK_DIR="$(dirname "$0")/../results/linux"
 TEST_COUNT=0
@@ -32,18 +32,18 @@ NC='\033[0m' # No Color
 
 echo ""
 echo "============================================================================"
-echo "                    Gunzip E2E Black Box Tests (Linux)"
+echo "                    Qunzip E2E Black Box Tests (Linux)"
 echo "============================================================================"
 echo ""
 
-# Check if gunzip exists
-if [ ! -f "$GUNZIP_EXE" ]; then
-    echo -e "${RED}ERROR: gunzip not found at: $GUNZIP_EXE${NC}"
+# Check if qunzip exists
+if [ ! -f "$QUNZIP_EXE" ]; then
+    echo -e "${RED}ERROR: qunzip not found at: $QUNZIP_EXE${NC}"
     echo "Please build the project first: ./gradlew buildAll"
     exit 1
 fi
 
-echo "Using gunzip: $GUNZIP_EXE"
+echo "Using qunzip: $QUNZIP_EXE"
 echo "Fixtures directory: $FIXTURES_DIR"
 echo "Work directory: $WORK_DIR"
 echo ""
@@ -80,7 +80,7 @@ mkdir -p "$TEST_DIR"
 cp "$FIXTURES_DIR/single-file.zip" "$TEST_DIR/"
 
 cd "$TEST_DIR"
-"$GUNZIP_EXE" single-file.zip 2>/dev/null || true
+"$QUNZIP_EXE" single-file.zip 2>/dev/null || true
 
 # Verify: file1.txt should exist
 if [ -f "file1.txt" ]; then
@@ -106,7 +106,7 @@ mkdir -p "$TEST_DIR"
 cp "$FIXTURES_DIR/multiple-files.zip" "$TEST_DIR/"
 
 cd "$TEST_DIR"
-"$GUNZIP_EXE" multiple-files.zip 2>/dev/null || true
+"$QUNZIP_EXE" multiple-files.zip 2>/dev/null || true
 
 # Verify: folder should be created
 if [ -d "multiple-files" ] && \
@@ -134,7 +134,7 @@ mkdir -p "$TEST_DIR"
 cp "$FIXTURES_DIR/nested-folder.zip" "$TEST_DIR/"
 
 cd "$TEST_DIR"
-"$GUNZIP_EXE" nested-folder.zip 2>/dev/null || true
+"$QUNZIP_EXE" nested-folder.zip 2>/dev/null || true
 
 # Verify: nested directory structure should exist
 if [ -f "nested/nested-file.txt" ] && \

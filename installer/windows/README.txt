@@ -1,20 +1,20 @@
 =============================================================
-  GUNZIP - Archive Extraction Utility
+  QUNZIP - Archive Extraction Utility
   Version 1.0.0
 =============================================================
 
-Thank you for installing Gunzip!
+Thank you for installing Qunzip!
 
-WHAT IS GUNZIP?
+WHAT IS QUNZIP?
 ---------------
-Gunzip is a cross-platform archive extraction utility that makes it easy to
+Qunzip is a cross-platform archive extraction utility that makes it easy to
 extract compressed files. Just double-click any supported archive file and
-Gunzip will automatically extract it to the right location.
+Qunzip will automatically extract it to the right location.
 
 
 SUPPORTED FORMATS
 -----------------
-Gunzip supports the following archive formats:
+Qunzip supports the following archive formats:
 
   • ZIP       (.zip)
   • 7-Zip     (.7z)
@@ -28,35 +28,35 @@ Gunzip supports the following archive formats:
 HOW TO USE
 ----------
 1. AUTOMATIC EXTRACTION (Recommended)
-   Simply double-click any archive file in Windows Explorer. Gunzip will:
+   Simply double-click any archive file in Windows Explorer. Qunzip will:
    - Extract single files to the same directory as the archive
    - Extract multiple files to a new folder with the archive's name
    - Automatically move the original archive to the Recycle Bin after extraction
 
 2. COMMAND-LINE USAGE
-   You can also use Gunzip from the command line:
+   You can also use Qunzip from the command line:
 
-   gunzip <archive-file>
+   qunzip <archive-file>
 
    Examples:
-     gunzip C:\Downloads\example.zip
-     gunzip "D:\My Files\archive.7z"
+     qunzip C:\Downloads\example.zip
+     qunzip "D:\My Files\archive.7z"
 
 
 FILE ASSOCIATIONS
 -----------------
-If you selected "Register file associations" during installation, Gunzip is
+If you selected "Register file associations" during installation, Qunzip is
 now the default application for opening archive files.
 
 To manually register or unregister file associations:
 
-  Register:   gunzip --register-associations
-  Unregister: gunzip --unregister-associations
+  Register:   qunzip --register-associations
+  Unregister: qunzip --unregister-associations
 
 
 EXTRACTION BEHAVIOR
 -------------------
-Gunzip follows these smart extraction rules:
+Qunzip follows these smart extraction rules:
 
   • Single file archive → Extracted to same directory as archive
   • Multiple files → New folder created with archive name
@@ -68,25 +68,25 @@ GETTING HELP
 ------------
 For help and additional options:
 
-  gunzip --help
+  qunzip --help
 
 For version information:
 
-  gunzip --version
+  qunzip --version
 
 
 PROJECT INFORMATION
 -------------------
-Website:     https://github.com/yourusername/gunzip
+Website:     https://github.com/telepist/qunzip
 License:     MIT License (see LICENSE.txt)
 7-Zip Tools: GNU LGPL (bundled with permission)
 
 
 UNINSTALLING
 ------------
-To uninstall Gunzip:
+To uninstall Qunzip:
 1. Open "Add or Remove Programs" in Windows Settings
-2. Find "Gunzip" in the list
+2. Find "Qunzip" in the list
 3. Click "Uninstall"
 
 All files and file associations will be removed automatically.
@@ -97,7 +97,7 @@ TROUBLESHOOTING
 If file associations aren't working:
   1. Right-click an archive file
   2. Choose "Open with" → "Choose another app"
-  3. Select Gunzip
+  3. Select Qunzip
   4. Check "Always use this app"
 
 If you encounter errors:
@@ -106,6 +106,6 @@ If you encounter errors:
   • Ensure you have enough disk space
 
 
-Thank you for using Gunzip!
+Thank you for using Qunzip!
 
 =============================================================
