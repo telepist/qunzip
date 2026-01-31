@@ -137,14 +137,14 @@ fun main(args: Array<String>) {
             }
         }
 
-        args.contains("--set-notification-on") -> {
+        args.contains("--set-dialog-on") -> {
             runBlocking {
                 try {
                     val dependencies = initializeDependencies()
                     val currentPrefs = dependencies.preferencesRepository.loadPreferences()
-                    val newPrefs = currentPrefs.copy(showCompletionNotification = true)
+                    val newPrefs = currentPrefs.copy(showCompletionDialog = true)
                     if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
-                        println("Setting updated: Show completion notification = ON")
+                        println("Setting updated: Show completion dialog = ON")
                         exitProcess(0)
                     } else {
                         println("Error: Failed to save preferences")
@@ -157,14 +157,14 @@ fun main(args: Array<String>) {
             }
         }
 
-        args.contains("--set-notification-off") -> {
+        args.contains("--set-dialog-off") -> {
             runBlocking {
                 try {
                     val dependencies = initializeDependencies()
                     val currentPrefs = dependencies.preferencesRepository.loadPreferences()
-                    val newPrefs = currentPrefs.copy(showCompletionNotification = false)
+                    val newPrefs = currentPrefs.copy(showCompletionDialog = false)
                     if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
-                        println("Setting updated: Show completion notification = OFF")
+                        println("Setting updated: Show completion dialog = OFF")
                         exitProcess(0)
                     } else {
                         println("Error: Failed to save preferences")
@@ -267,8 +267,8 @@ fun printHelp() {
           --tui                       Force TUI mode (terminal UI)
           --set-trash-on              Enable moving archive to trash after extraction
           --set-trash-off             Disable moving archive to trash (default)
-          --set-notification-on       Enable completion notification dialog
-          --set-notification-off      Disable completion notification (silent exit)
+          --set-dialog-on             Enable completion dialog after extraction
+          --set-dialog-off            Disable completion dialog (silent exit, default)
           --register-associations     Register file associations for supported formats
           --unregister-associations   Remove file associations
           --help, -h                  Show this help message

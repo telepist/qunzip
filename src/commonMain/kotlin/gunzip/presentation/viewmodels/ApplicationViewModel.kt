@@ -71,11 +71,9 @@ class ApplicationViewModel(
                 when (event) {
                     is ExtractionEvent.ExtractionCompleted -> {
                         _events.tryEmit(ApplicationEvent.ExtractionCompleted)
-                        // Check preference before auto-exiting
-                        val preferences = preferencesRepository.loadPreferences()
-                        if (preferences.autoCloseAfterExtraction) {
-                            _uiState.value = _uiState.value.copy(shouldExit = true)
-                        }
+                        // Always signal exit after extraction completes
+                        // (GUI layer handles showing completion dialog if needed based on showCompletionDialog preference)
+                        _uiState.value = _uiState.value.copy(shouldExit = true)
                     }
                     is ExtractionEvent.ExtractionFailed -> {
                         _events.tryEmit(ApplicationEvent.ExtractionFailed(event.throwable))

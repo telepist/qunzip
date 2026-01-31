@@ -137,7 +137,8 @@ class ExtractArchiveUseCaseTest {
         mockFileSystemRepository.parentDirectory = "/test"
         mockFileSystemRepository.existingPaths = setOf("/test/data.csv")
 
-        useCase(archivePath).toList()
+        val options = ExtractionOptions(showCompletionDialog = true)
+        useCase(archivePath, options).toList()
 
         assertTrue(mockNotificationRepository.successNotificationShown)
         assertEquals("/test/data-1.csv", mockNotificationRepository.lastExtractedPath)
@@ -238,7 +239,8 @@ class ExtractArchiveUseCaseTest {
         mockFileSystemRepository.parentDirectory = "/test"
         mockFileSystemRepository.existingPaths = setOf("/test/project")
 
-        useCase(archivePath).toList()
+        val options = ExtractionOptions(showCompletionDialog = true)
+        useCase(archivePath, options).toList()
 
         assertTrue(mockNotificationRepository.successNotificationShown)
         assertEquals("/test/project-1", mockNotificationRepository.lastExtractedPath)
@@ -352,7 +354,7 @@ class ExtractArchiveUseCaseTest {
         mockArchiveRepository.archiveContents = contents
         mockFileSystemRepository.parentDirectory = "/test"
 
-        val options = ExtractionOptions(showCompletionNotification = false)
+        val options = ExtractionOptions(showCompletionDialog = false)
         useCase(archivePath, options).toList()
 
         assertFalse(mockNotificationRepository.successNotificationShown)

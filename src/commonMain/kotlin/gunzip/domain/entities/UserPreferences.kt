@@ -15,23 +15,18 @@ data class UserPreferences(
     val moveToTrashAfterExtraction: Boolean = false,
 
     /**
-     * Whether to show a notification when extraction completes.
-     * Default is true.
+     * Whether to show a completion dialog with OK button when extraction completes.
+     * When false (default), the application silently closes after successful extraction.
+     * When true, shows "Extraction complete!" dialog and waits for user to click OK.
      */
-    val showCompletionNotification: Boolean = true,
-
-    /**
-     * Whether to automatically close the application after successful extraction.
-     * Default is true for seamless double-click experience.
-     */
-    val autoCloseAfterExtraction: Boolean = true
+    val showCompletionDialog: Boolean = false
 ) {
     /**
      * Convert to ExtractionOptions for use in extraction use case
      */
     fun toExtractionOptions(): ExtractionOptions = ExtractionOptions(
         moveToTrashAfterExtraction = moveToTrashAfterExtraction,
-        showCompletionNotification = showCompletionNotification
+        showCompletionDialog = showCompletionDialog
     )
 
     companion object {

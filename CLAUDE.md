@@ -39,8 +39,8 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 | `--unregister-associations` | Unregister file associations |
 | `--set-trash-on` | Enable moving archives to trash after extraction |
 | `--set-trash-off` | Disable moving archives to trash after extraction |
-| `--set-notification-on` | Enable completion notifications |
-| `--set-notification-off` | Disable completion notifications |
+| `--set-dialog-on` | Enable completion dialog after extraction |
+| `--set-dialog-off` | Disable completion dialog (silent exit, default) |
 
 ### Windows Installer Commands
 - `./gradlew prepareInstallerResources` - Prepare files for installer
@@ -192,9 +192,8 @@ When extracting would overwrite an existing file or folder, the application hand
 
 ### User Preferences
 Stored in JSON format at `~/.gunzip/preferences.json`:
-- `moveToTrashAfterExtraction` - Move archive to trash after successful extraction
-- `showCompletionNotification` - Show notification when extraction completes
-- `autoCloseAfterExtraction` - Auto-close the application after extraction
+- `moveToTrashAfterExtraction` - Move archive to trash after successful extraction (default: false)
+- `showCompletionDialog` - Show completion dialog after extraction; when false, app silently closes (default: false)
 
 ## Development Notes
 

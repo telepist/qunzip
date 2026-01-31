@@ -38,7 +38,7 @@ class Win32GuiRenderer : UiRenderer {
     private var hFont: HFONT? = null
     private var statusText: String = "Initializing..."
     private var completionHandled = false
-    private var showNotification = true
+    private var showCompletionDialog = false
     private var extractionCancelled = false
     private var currentViewModel: ApplicationViewModel? = null
 
@@ -116,8 +116,8 @@ class Win32GuiRenderer : UiRenderer {
         currentViewModel = viewModel
         activeGuiRenderer = this
 
-        // Get notification preference
-        showNotification = viewModel.settingsViewModel.uiState.value.preferences.showCompletionNotification
+        // Get completion dialog preference
+        showCompletionDialog = viewModel.settingsViewModel.uiState.value.preferences.showCompletionDialog
 
         val archiveName = uiState.targetFile?.substringAfterLast("\\")?.substringAfterLast("/") ?: "archive"
 
@@ -407,12 +407,12 @@ class Win32GuiRenderer : UiRenderer {
                 when (state.progress?.stage) {
                     ExtractionStage.COMPLETED -> {
                         completionHandled = true
-                        if (showNotification) {
-                            // Show completion in window with OK button
+                        if (showCompletionDialog) {
+                            // Show completion dialog with OK button
                             showCompletionInWindow(state)
                             waitingForOk = true
                         } else {
-                            // No notification, just exit
+                            // No dialog, just exit
                             running = false
                             hwnd?.let { PostMessageW(it, WM_CLOSE.toUInt(), 0u, 0) }
                         }
@@ -568,8 +568,7 @@ private fun windowProc(hwnd: HWND?, msg: UINT, wParam: WPARAM, lParam: LPARAM): 
 
 // Settings window control IDs
 private const val IDC_SETTINGS_MOVE_TO_TRASH = 2001
-private const val IDC_SETTINGS_SHOW_NOTIFICATION = 2002
-private const val IDC_SETTINGS_AUTO_CLOSE = 2003
+private const val IDC_SETTINGS_SHOW_COMPLETION_DIALOG = 2002
 private const val IDC_SETTINGS_CLOSE_BUTTON = 2004
 private const val IDC_SETTINGS_RESET_BUTTON = 2005
 
@@ -730,45 +729,24 @@ class Win32SettingsGui(
         }
         yPos += CHECKBOX_HEIGHT + CONTROL_SPACING
 
-        // Checkbox: Show notification
-        val chkShowNotification = CreateWindowExW(
+        // Checkbox: Show completion dialog
+        val chkShowCompletionDialog = CreateWindowExW(
             dwExStyle = 0u,
             lpClassName = "BUTTON",
-            lpWindowName = "Show completion notification",
+            lpWindowName = "Show completion dialog",
             dwStyle = (WS_CHILD or WS_VISIBLE or BS_AUTOCHECKBOX.toInt()).toUInt(),
             X = PADDING,
             Y = yPos,
             nWidth = contentWidth,
             nHeight = CHECKBOX_HEIGHT,
             hWndParent = window,
-            hMenu = IDC_SETTINGS_SHOW_NOTIFICATION.toLong().toCPointer(),
+            hMenu = IDC_SETTINGS_SHOW_COMPLETION_DIALOG.toLong().toCPointer(),
             hInstance = hInstance,
             lpParam = null
         )
-        applyFont(chkShowNotification)
-        if (prefs.showCompletionNotification) {
-            SendMessageW(chkShowNotification, BM_SETCHECK.toUInt(), BST_CHECKED.toULong(), 0)
-        }
-        yPos += CHECKBOX_HEIGHT + CONTROL_SPACING
-
-        // Checkbox: Auto-close
-        val chkAutoClose = CreateWindowExW(
-            dwExStyle = 0u,
-            lpClassName = "BUTTON",
-            lpWindowName = "Auto-close after extraction",
-            dwStyle = (WS_CHILD or WS_VISIBLE or BS_AUTOCHECKBOX.toInt()).toUInt(),
-            X = PADDING,
-            Y = yPos,
-            nWidth = contentWidth,
-            nHeight = CHECKBOX_HEIGHT,
-            hWndParent = window,
-            hMenu = IDC_SETTINGS_AUTO_CLOSE.toLong().toCPointer(),
-            hInstance = hInstance,
-            lpParam = null
-        )
-        applyFont(chkAutoClose)
-        if (prefs.autoCloseAfterExtraction) {
-            SendMessageW(chkAutoClose, BM_SETCHECK.toUInt(), BST_CHECKED.toULong(), 0)
+        applyFont(chkShowCompletionDialog)
+        if (prefs.showCompletionDialog) {
+            SendMessageW(chkShowCompletionDialog, BM_SETCHECK.toUInt(), BST_CHECKED.toULong(), 0)
         }
         yPos += CHECKBOX_HEIGHT + CONTROL_SPACING + 8
 
@@ -788,45 +766,6 @@ class Win32SettingsGui(
             lpParam = null
         )
         yPos += 16
-
-        // Settings file path
-        val settingsPath = viewModel.settingsViewModel.uiState.value.preferencesPath
-        if (settingsPath.isNotEmpty()) {
-            val pathLabel = CreateWindowExW(
-                dwExStyle = 0u,
-                lpClassName = "STATIC",
-                lpWindowName = "Settings file:",
-                dwStyle = (WS_CHILD or WS_VISIBLE or SS_LEFT.toInt()).toUInt(),
-                X = PADDING,
-                Y = yPos,
-                nWidth = contentWidth,
-                nHeight = 16,
-                hWndParent = window,
-                hMenu = null,
-                hInstance = hInstance,
-                lpParam = null
-            )
-            applySmallFont(pathLabel)
-            yPos += 18
-
-            val displayPath = if (settingsPath.length > 50) "...${settingsPath.takeLast(47)}" else settingsPath
-            val pathValueLabel = CreateWindowExW(
-                dwExStyle = 0u,
-                lpClassName = "STATIC",
-                lpWindowName = displayPath,
-                dwStyle = (WS_CHILD or WS_VISIBLE or SS_LEFT.toInt() or SS_PATHELLIPSIS.toInt()).toUInt(),
-                X = PADDING,
-                Y = yPos,
-                nWidth = contentWidth,
-                nHeight = 16,
-                hWndParent = window,
-                hMenu = null,
-                hInstance = hInstance,
-                lpParam = null
-            )
-            applySmallFont(pathValueLabel)
-            yPos += 20
-        }
 
         // Buttons at bottom - use yPos to position below content
         yPos += CONTROL_SPACING + 8
@@ -921,19 +860,12 @@ class Win32SettingsGui(
                 )
                 viewModel.settingsViewModel.setMoveToTrashAfterExtraction(checkState == BST_CHECKED.toLong())
             }
-            IDC_SETTINGS_SHOW_NOTIFICATION -> {
+            IDC_SETTINGS_SHOW_COMPLETION_DIALOG -> {
                 val checkState = SendMessageW(
-                    GetDlgItem(window, IDC_SETTINGS_SHOW_NOTIFICATION),
+                    GetDlgItem(window, IDC_SETTINGS_SHOW_COMPLETION_DIALOG),
                     BM_GETCHECK.toUInt(), 0u, 0
                 )
-                viewModel.settingsViewModel.setShowCompletionNotification(checkState == BST_CHECKED.toLong())
-            }
-            IDC_SETTINGS_AUTO_CLOSE -> {
-                val checkState = SendMessageW(
-                    GetDlgItem(window, IDC_SETTINGS_AUTO_CLOSE),
-                    BM_GETCHECK.toUInt(), 0u, 0
-                )
-                viewModel.settingsViewModel.setAutoCloseAfterExtraction(checkState == BST_CHECKED.toLong())
+                viewModel.settingsViewModel.setShowCompletionDialog(checkState == BST_CHECKED.toLong())
             }
             IDC_SETTINGS_RESET_BUTTON -> {
                 viewModel.settingsViewModel.resetToDefaults()
@@ -957,15 +889,9 @@ class Win32SettingsGui(
             0
         )
         SendMessageW(
-            GetDlgItem(window, IDC_SETTINGS_SHOW_NOTIFICATION),
+            GetDlgItem(window, IDC_SETTINGS_SHOW_COMPLETION_DIALOG),
             BM_SETCHECK.toUInt(),
-            if (prefs.showCompletionNotification) BST_CHECKED.toULong() else BST_UNCHECKED.toULong(),
-            0
-        )
-        SendMessageW(
-            GetDlgItem(window, IDC_SETTINGS_AUTO_CLOSE),
-            BM_SETCHECK.toUInt(),
-            if (prefs.autoCloseAfterExtraction) BST_CHECKED.toULong() else BST_UNCHECKED.toULong(),
+            if (prefs.showCompletionDialog) BST_CHECKED.toULong() else BST_UNCHECKED.toULong(),
             0
         )
     }

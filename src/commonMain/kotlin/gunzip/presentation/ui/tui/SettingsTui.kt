@@ -14,8 +14,7 @@ import kotlin.system.exitProcess
  */
 private enum class SettingsMenuItem(val label: String) {
     MOVE_TO_TRASH("Move archive to trash after extraction"),
-    SHOW_NOTIFICATION("Show completion notification"),
-    AUTO_CLOSE("Auto-close after extraction"),
+    SHOW_COMPLETION_DIALOG("Show completion dialog"),
     QUIT("Quit")
 }
 
@@ -53,11 +52,8 @@ fun SettingsTui(
                         SettingsMenuItem.MOVE_TO_TRASH -> {
                             settingsViewModel.setMoveToTrashAfterExtraction(!prefs.moveToTrashAfterExtraction)
                         }
-                        SettingsMenuItem.SHOW_NOTIFICATION -> {
-                            settingsViewModel.setShowCompletionNotification(!prefs.showCompletionNotification)
-                        }
-                        SettingsMenuItem.AUTO_CLOSE -> {
-                            settingsViewModel.setAutoCloseAfterExtraction(!prefs.autoCloseAfterExtraction)
+                        SettingsMenuItem.SHOW_COMPLETION_DIALOG -> {
+                            settingsViewModel.setShowCompletionDialog(!prefs.showCompletionDialog)
                         }
                         SettingsMenuItem.QUIT -> {
                             exitProcess(0)
@@ -101,19 +97,9 @@ fun SettingsTui(
                         Text(item.label, color = textColor)
                     }
                 }
-                SettingsMenuItem.SHOW_NOTIFICATION -> {
-                    val icon = if (prefs.showCompletionNotification) "✓" else "✗"
-                    val valueColor = if (prefs.showCompletionNotification) Color.Green else Color.Red
-                    val textColor = if (isSelected) Color.Yellow else Color.White
-                    Row {
-                        Text(prefix, color = Color.Cyan)
-                        Text("[$icon] ", color = valueColor)
-                        Text(item.label, color = textColor)
-                    }
-                }
-                SettingsMenuItem.AUTO_CLOSE -> {
-                    val icon = if (prefs.autoCloseAfterExtraction) "✓" else "✗"
-                    val valueColor = if (prefs.autoCloseAfterExtraction) Color.Green else Color.Red
+                SettingsMenuItem.SHOW_COMPLETION_DIALOG -> {
+                    val icon = if (prefs.showCompletionDialog) "✓" else "✗"
+                    val valueColor = if (prefs.showCompletionDialog) Color.Green else Color.Red
                     val textColor = if (isSelected) Color.Yellow else Color.White
                     Row {
                         Text(prefix, color = Color.Cyan)
@@ -129,18 +115,6 @@ fun SettingsTui(
         }
 
         Text("│", color = Color.Cyan)
-
-        // Config file location
-        if (settingsState.preferencesPath.isNotEmpty()) {
-            Text("│  Settings file:", color = Color.White)
-            val displayPath = if (settingsState.preferencesPath.length > 40) {
-                "..." + settingsState.preferencesPath.takeLast(37)
-            } else {
-                settingsState.preferencesPath
-            }
-            Text("│    $displayPath", color = Color.White)
-            Text("│", color = Color.Cyan)
-        }
 
         // Divider
         Text("│──────────────────────────────────────────────│", color = Color.Cyan)

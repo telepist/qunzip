@@ -64,10 +64,10 @@ data class ExtractionOptions(
     val moveToTrashAfterExtraction: Boolean = false,
 
     /**
-     * Whether to show a notification when extraction completes.
-     * Default is true.
+     * Whether to show a completion dialog when extraction completes.
+     * When false (default), the application silently closes after extraction.
      */
-    val showCompletionNotification: Boolean = true
+    val showCompletionDialog: Boolean = false
 )
 
 sealed class ExtractionError(override val message: String, override val cause: Throwable? = null) : Throwable(message, cause) {
