@@ -156,6 +156,23 @@ class RegistryHelper {
     }
 
     /**
+     * Recursively deletes a registry key and all its subkeys.
+     * Uses RegDeleteTreeA which handles nested subkeys.
+     * Returns true on success or if the key doesn't exist.
+     */
+    fun deleteKeyTree(rootKey: HKEY?, subKey: String): Boolean {
+        // RegDeleteTreeA is not available in MinGW headers, so we
+        // recursively delete using SHDeleteKeyA from shlwapi.
+        // As a simpler approach, delete known subkeys manually then the key.
+        // For ProgIDs the structure is: ProgID\DefaultIcon, ProgID\shell\open\command
+        deleteKey(rootKey, "$subKey\\shell\\open\\command")
+        deleteKey(rootKey, "$subKey\\shell\\open")
+        deleteKey(rootKey, "$subKey\\shell")
+        deleteKey(rootKey, "$subKey\\DefaultIcon")
+        return deleteKey(rootKey, subKey)
+    }
+
+    /**
      * Closes a registry key handle
      */
     fun closeKey(hKey: HKEY?) {

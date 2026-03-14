@@ -84,62 +84,135 @@ Filename: "{app}\{#MyAppExeName}"; Parameters: "--unregister-associations"; RunO
 ; The executable will try to create them first, this is just a backup
 ; Admin installs write to HKCR (HKLM\Software\Classes), per-user installs write to HKCU\Software\Classes
 
-; Create ProgID for Qunzip
-Root: HKCR; Subkey: "Qunzip.ArchiveFile"; ValueType: string; ValueName: ""; ValueData: "Archive File"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: "Qunzip.ArchiveFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: "Qunzip.ArchiveFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\Qunzip.ArchiveFile"; ValueType: string; ValueName: ""; ValueData: "Archive File"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\Qunzip.ArchiveFile\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\Qunzip.ArchiveFile\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
-
-; Associate file extensions with ProgID
-; ZIP format
-Root: HKCR; Subkey: ".zip"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: ".zip\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.ArchiveFile"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.zip"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.zip\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.ArchiveFile"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-
-; 7-Zip format
-Root: HKCR; Subkey: ".7z"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: ".7z\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.ArchiveFile"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.7z"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.7z\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.ArchiveFile"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-
-; RAR format
-Root: HKCR; Subkey: ".rar"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: ".rar\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.ArchiveFile"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.rar"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.rar\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.ArchiveFile"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-
-; TAR format
-Root: HKCR; Subkey: ".tar"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: ".tar\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.ArchiveFile"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.tar"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.tar\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.ArchiveFile"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-
+; Create per-format ProgIDs so each file type shows its own name in Explorer
+; ZIP
+Root: HKCR; Subkey: "Qunzip.zip"; ValueType: string; ValueName: ""; ValueData: "ZIP Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.zip\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.zip\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.zip"; ValueType: string; ValueName: ""; ValueData: "ZIP Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.zip\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.zip\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+; 7-Zip
+Root: HKCR; Subkey: "Qunzip.7z"; ValueType: string; ValueName: ""; ValueData: "7-Zip Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.7z\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.7z\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.7z"; ValueType: string; ValueName: ""; ValueData: "7-Zip Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.7z\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.7z\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+; RAR
+Root: HKCR; Subkey: "Qunzip.rar"; ValueType: string; ValueName: ""; ValueData: "RAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.rar\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.rar\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.rar"; ValueType: string; ValueName: ""; ValueData: "RAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.rar\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.rar\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+; TAR
+Root: HKCR; Subkey: "Qunzip.tar"; ValueType: string; ValueName: ""; ValueData: "TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tar\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tar\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar"; ValueType: string; ValueName: ""; ValueData: "TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
 ; Compressed TAR formats
-Root: HKCR; Subkey: ".tar.gz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: ".tar.bz2"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: ".tar.xz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.tar.gz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.tar.bz2"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.tar.xz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-
-; Short TAR format aliases
-Root: HKCR; Subkey: ".tgz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: ".tbz2"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: ".txz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.tgz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.tbz2"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.txz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-
+Root: HKCR; Subkey: "Qunzip.tar_gz"; ValueType: string; ValueName: ""; ValueData: "Gzipped TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tar_gz\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tar_gz\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar_gz"; ValueType: string; ValueName: ""; ValueData: "Gzipped TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar_gz\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar_gz\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tar_bz2"; ValueType: string; ValueName: ""; ValueData: "Bzip2 TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tar_bz2\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tar_bz2\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar_bz2"; ValueType: string; ValueName: ""; ValueData: "Bzip2 TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar_bz2\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar_bz2\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tar_xz"; ValueType: string; ValueName: ""; ValueData: "XZ TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tar_xz\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tar_xz\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar_xz"; ValueType: string; ValueName: ""; ValueData: "XZ TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar_xz\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tar_xz\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+; Short TAR aliases (share ProgID with their full form)
+Root: HKCR; Subkey: "Qunzip.tgz"; ValueType: string; ValueName: ""; ValueData: "Gzipped TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tgz\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tgz\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tgz"; ValueType: string; ValueName: ""; ValueData: "Gzipped TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tgz\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tgz\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tbz2"; ValueType: string; ValueName: ""; ValueData: "Bzip2 TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tbz2\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.tbz2\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tbz2"; ValueType: string; ValueName: ""; ValueData: "Bzip2 TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tbz2\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.tbz2\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.txz"; ValueType: string; ValueName: ""; ValueData: "XZ TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.txz\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.txz\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.txz"; ValueType: string; ValueName: ""; ValueData: "XZ TAR Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.txz\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.txz\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
 ; Other archive formats
-Root: HKCR; Subkey: ".cab"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: ".arj"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCR; Subkey: ".lzh"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.cab"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.arj"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
-Root: HKCU; Subkey: "Software\Classes\.lzh"; ValueType: string; ValueName: ""; ValueData: "Qunzip.ArchiveFile"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.cab"; ValueType: string; ValueName: ""; ValueData: "Cabinet Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.cab\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.cab\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.cab"; ValueType: string; ValueName: ""; ValueData: "Cabinet Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.cab\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.cab\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.arj"; ValueType: string; ValueName: ""; ValueData: "ARJ Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.arj\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.arj\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.arj"; ValueType: string; ValueName: ""; ValueData: "ARJ Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.arj\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.arj\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.lzh"; ValueType: string; ValueName: ""; ValueData: "LZH Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.lzh\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: "Qunzip.lzh\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.lzh"; ValueType: string; ValueName: ""; ValueData: "LZH Archive"; Flags: uninsdeletekey; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.lzh\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\Qunzip.lzh\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc; Check: not IsAdminInstallMode
+
+; Associate file extensions with their per-format ProgIDs
+; ZIP
+Root: HKCR; Subkey: ".zip"; ValueType: string; ValueName: ""; ValueData: "Qunzip.zip"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".zip\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.zip"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.zip"; ValueType: string; ValueName: ""; ValueData: "Qunzip.zip"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.zip\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.zip"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+; 7-Zip
+Root: HKCR; Subkey: ".7z"; ValueType: string; ValueName: ""; ValueData: "Qunzip.7z"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".7z\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.7z"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.7z"; ValueType: string; ValueName: ""; ValueData: "Qunzip.7z"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.7z\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.7z"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+; RAR
+Root: HKCR; Subkey: ".rar"; ValueType: string; ValueName: ""; ValueData: "Qunzip.rar"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".rar\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.rar"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.rar"; ValueType: string; ValueName: ""; ValueData: "Qunzip.rar"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.rar\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.rar"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+; TAR
+Root: HKCR; Subkey: ".tar"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tar"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".tar\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.tar"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tar"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tar"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tar\OpenWithProgids"; ValueType: string; ValueName: "Qunzip.tar"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+; Compressed TAR formats
+Root: HKCR; Subkey: ".tar.gz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tar_gz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".tar.bz2"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tar_bz2"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".tar.xz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tar_xz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tar.gz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tar_gz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tar.bz2"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tar_bz2"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tar.xz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tar_xz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+; Short TAR format aliases
+Root: HKCR; Subkey: ".tgz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tgz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".tbz2"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tbz2"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".txz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.txz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tgz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tgz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tbz2"; ValueType: string; ValueName: ""; ValueData: "Qunzip.tbz2"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.txz"; ValueType: string; ValueName: ""; ValueData: "Qunzip.txz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+; Other archive formats
+Root: HKCR; Subkey: ".cab"; ValueType: string; ValueName: ""; ValueData: "Qunzip.cab"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".arj"; ValueType: string; ValueName: ""; ValueData: "Qunzip.arj"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".lzh"; ValueType: string; ValueName: ""; ValueData: "Qunzip.lzh"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.cab"; ValueType: string; ValueName: ""; ValueData: "Qunzip.cab"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.arj"; ValueType: string; ValueName: ""; ValueData: "Qunzip.arj"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.lzh"; ValueType: string; ValueName: ""; ValueData: "Qunzip.lzh"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -152,19 +225,39 @@ begin
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ProgIds: array of string;
+  I: Integer;
 begin
   if CurUninstallStep = usPostUninstall then
   begin
-    // Fallback cleanup: Remove any remaining registry keys
+    // Fallback cleanup: Remove any remaining per-format ProgID keys
     // This runs after --unregister-associations
     Log('Performing final cleanup');
 
-    // Note: The --unregister-associations command should have already
-    // cleaned up the registry. This is just a safety measure.
-    if IsAdminInstallMode then
-      RegDeleteKeyIncludingSubkeys(HKEY_CLASSES_ROOT, 'Qunzip.ArchiveFile')
-    else
-      RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\Classes\Qunzip.ArchiveFile');
+    SetArrayLength(ProgIds, 14);
+    ProgIds[0] := 'Qunzip.zip';
+    ProgIds[1] := 'Qunzip.7z';
+    ProgIds[2] := 'Qunzip.rar';
+    ProgIds[3] := 'Qunzip.tar';
+    ProgIds[4] := 'Qunzip.tar_gz';
+    ProgIds[5] := 'Qunzip.tar_bz2';
+    ProgIds[6] := 'Qunzip.tar_xz';
+    ProgIds[7] := 'Qunzip.tgz';
+    ProgIds[8] := 'Qunzip.tbz2';
+    ProgIds[9] := 'Qunzip.txz';
+    ProgIds[10] := 'Qunzip.cab';
+    ProgIds[11] := 'Qunzip.arj';
+    ProgIds[12] := 'Qunzip.lzh';
+    ProgIds[13] := 'Qunzip.ArchiveFile'; // legacy single ProgID
+
+    for I := 0 to GetArrayLength(ProgIds) - 1 do
+    begin
+      if IsAdminInstallMode then
+        RegDeleteKeyIncludingSubkeys(HKEY_CLASSES_ROOT, ProgIds[I])
+      else
+        RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\Classes\' + ProgIds[I]);
+    end;
   end;
 end;
 

@@ -20,9 +20,6 @@ class WindowsFileAssociationRepository(
 
     private val registryHelper = RegistryHelper()
 
-    // ProgID used for all Qunzip archive associations
-    private val progId = "Qunzip.ArchiveFile"
-
     override suspend fun registerAssociation(
         extension: String,
         applicationPath: String,
@@ -39,8 +36,11 @@ class WindowsFileAssociationRepository(
             val isAdmin = prefix.isEmpty()
             logger.d { "Using ${if (isAdmin) "system-wide" else "user-specific"} registry" }
 
-            // Create the ProgID structure (if not already created)
-            // This is safe to call multiple times
+            // Each extension gets its own ProgID so Windows Explorer shows
+            // the correct type name (e.g., "ZIP Archive", "RAR Archive")
+            val progId = progIdForExtension(extension)
+
+            // Create the ProgID structure for this format
             if (!createProgId(progId, description, applicationPath, rootKeyPair, registryHelper)) {
                 logger.e { "Failed to create ProgID for .$extension" }
                 return@withContext AssociationResult(
@@ -84,11 +84,16 @@ class WindowsFileAssociationRepository(
 
         try {
             val rootKeyPair = registryHelper.getFileAssociationRootKey()
+            val progId = progIdForExtension(extension)
 
             // Remove the extension association
             if (!removeExtensionAssociation(extension, progId, rootKeyPair, registryHelper)) {
                 logger.w { "Could not remove association for .$extension (may not exist)" }
             }
+
+            // Also clean up the ProgID key itself
+            val (rootKey, prefix) = rootKeyPair
+            registryHelper.deleteKeyTree(rootKey, "${prefix}${progId}")
 
             // Notify Windows Shell of the change
             registryHelper.notifyShellAssociationChanged()
@@ -212,6 +217,25 @@ class WindowsFileAssociationRepository(
         extensions.map { extension ->
             registerAssociation(extension, applicationPath, applicationName, description)
         }
+    }
+
+    companion object {
+        /**
+         * Maps a file extension to a unique ProgID so each format gets its
+         * own type name in Windows Explorer.
+         * e.g., "zip" -> "Qunzip.zip", "tar.gz" -> "Qunzip.tar_gz"
+         */
+        fun progIdForExtension(extension: String): String {
+            val sanitized = extension.removePrefix(".").replace('.', '_')
+            return "Qunzip.$sanitized"
+        }
+
+        /** All ProgIDs that may have been registered, for cleanup. */
+        val allProgIds: List<String>
+            get() = listOf(
+                "zip", "7z", "rar", "tar", "tar.gz", "tar.bz2", "tar.xz",
+                "tgz", "tbz2", "txz", "cab", "arj", "lzh"
+            ).map { progIdForExtension(it) } + "Qunzip.ArchiveFile" // legacy single ProgID
     }
 
     override suspend fun requestElevatedPrivileges(): Boolean {
