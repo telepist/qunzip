@@ -17,14 +17,6 @@ kotlin {
             }
         }
     }
-    macosX64 {
-        binaries {
-            executable {
-                baseName = "qunzip"
-                entryPoint = "qunzip.main"
-            }
-        }
-    }
     linuxX64 {
         binaries {
             executable {
@@ -139,7 +131,6 @@ tasks.named("mingwX64Test") {
 tasks.register("buildAll") {
     dependsOn(
         "linkDebugExecutableMacosArm64",
-        "linkDebugExecutableMacosX64",
         "linkDebugExecutableLinuxX64",
         "linkDebugExecutableLinuxArm64",
         "linkDebugExecutableMingwX64"
@@ -151,7 +142,6 @@ tasks.register("buildAll") {
 tasks.register("buildAllRelease") {
     dependsOn(
         "linkReleaseExecutableMacosArm64",
-        "linkReleaseExecutableMacosX64",
         "linkReleaseExecutableLinuxX64",
         "linkReleaseExecutableLinuxArm64",
         "linkReleaseExecutableMingwX64"
