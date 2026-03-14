@@ -5,6 +5,7 @@ import qunzip.presentation.viewmodels.ApplicationViewModel
 import qunzip.domain.entities.ExtractionStage
 import qunzip.presentation.ui.tui.MosaicApp
 import qunzip.exitProcess
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -28,6 +29,16 @@ interface UiRenderer {
  * See: https://github.com/JakeWharton/mosaic/issues/963
  */
 class ExitException : RuntimeException()
+
+/**
+ * Signal that coordinates exit between UI callbacks and the Mosaic composition.
+ * Uses CompletableDeferred so it can be tested without Mosaic/Compose runtime.
+ */
+internal class ExitSignal {
+    private val deferred = CompletableDeferred<Unit>()
+    fun signal() { deferred.complete(Unit) }
+    suspend fun await() { deferred.await() }
+}
 
 /**
  * Mosaic-based TUI renderer.
@@ -62,12 +73,18 @@ class MosaicTuiRenderer(
                 }
             } else {
                 // CLI: full interactive terminal with auto-detected capabilities
+                val exitSignal = ExitSignal()
                 runMosaic {
-                    MosaicApp(viewModel)
+                    MosaicApp(viewModel, onExit = { exitSignal.signal() })
 
                     LaunchedEffect(Unit) {
                         awaitExtractionDone(viewModel)
                         delay(150)
+                        throw ExitException()
+                    }
+
+                    LaunchedEffect(Unit) {
+                        exitSignal.await()
                         throw ExitException()
                     }
                 }
