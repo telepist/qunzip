@@ -1,11 +1,9 @@
 package qunzip
 
 import qunzip.presentation.viewmodels.ApplicationViewModel
-import qunzip.presentation.viewmodels.ApplicationEvent
 import qunzip.presentation.ui.*
 import qunzip.domain.usecases.*
 import qunzip.domain.repositories.PreferencesRepository
-import qunzip.domain.entities.UserPreferences
 import kotlinx.coroutines.*
 import co.touchlab.kermit.Logger
 import co.touchlab.kermit.Severity
@@ -14,28 +12,18 @@ import co.touchlab.kermit.Severity
  * Main entry point for the Qunzip application
  */
 fun main(args: Array<String>) {
-    // Determine UI mode early to configure logging appropriately
-    val uiMode = selectUiMode(args.toList())
+    // Suppress logging to keep the TUI display clean
+    Logger.setMinSeverity(Severity.Assert)
+    UiConfig.enableTuiMode()
 
-    // Suppress logging and console output in TUI mode to keep the display clean
-    // Don't suppress if --gui was explicitly requested
-    val forceGui = args.contains("--gui")
-    val shouldSuppressForTui = uiMode == UiMode.TUI && !forceGui
-    if (shouldSuppressForTui) {
-        Logger.setMinSeverity(Severity.Assert) // Effectively disables logging
-        UiConfig.enableTuiMode() // Suppress println notifications
-    }
-
-    // Configure logging
     val logger = Logger.withTag("Main")
 
-    logger.i { "Qunzip application starting..." }
-    logger.i { "Arguments: ${args.toList()}" }
-
     // Handle special CLI arguments for installer integration
+    // --force-standalone: test standalone exit behavior from CLI
+    val forceStandalone = args.contains("--force-standalone")
+
     when {
         args.contains("--register-associations") -> {
-            logger.i { "Registering file associations..." }
             runBlocking {
                 try {
                     val dependencies = initializeDependencies()
@@ -47,19 +35,15 @@ fun main(args: Array<String>) {
                     val totalCount = results.size
 
                     if (allSuccess) {
-                        logger.i { "Successfully registered all $totalCount file associations" }
                         println("Successfully registered all $totalCount file associations")
                         exitProcess(0)
                     } else {
-                        logger.e { "Failed to register some file associations ($successCount/$totalCount succeeded)" }
                         results.filter { !it.success }.forEach {
-                            logger.e { "  - .${it.extension}: ${it.message}" }
                             println("Error: .${it.extension}: ${it.message}")
                         }
                         exitProcess(1)
                     }
                 } catch (e: Exception) {
-                    logger.e(e) { "Fatal error during file association registration" }
                     println("Error: ${e.message}")
                     exitProcess(1)
                 }
@@ -67,7 +51,6 @@ fun main(args: Array<String>) {
         }
 
         args.contains("--unregister-associations") -> {
-            logger.i { "Unregistering file associations..." }
             runBlocking {
                 try {
                     val dependencies = initializeDependencies()
@@ -78,19 +61,12 @@ fun main(args: Array<String>) {
                     val totalCount = results.size
 
                     if (allSuccess) {
-                        logger.i { "Successfully unregistered all $totalCount file associations" }
                         println("Successfully unregistered all $totalCount file associations")
                         exitProcess(0)
                     } else {
-                        logger.w { "Some file associations could not be unregistered ($successCount/$totalCount succeeded)" }
-                        results.filter { !it.success }.forEach {
-                            logger.w { "  - .${it.extension}: ${it.message}" }
-                        }
-                        // Exit with success even if some failed (they may not have been registered)
                         exitProcess(0)
                     }
                 } catch (e: Exception) {
-                    logger.e(e) { "Fatal error during file association unregistration" }
                     println("Error: ${e.message}")
                     exitProcess(1)
                 }
@@ -196,51 +172,29 @@ fun main(args: Array<String>) {
 
     runBlocking {
         try {
-            // Initialize dependency injection
             val dependencies = initializeDependencies()
 
-            // Create main ViewModel
+            val isStandalone = forceStandalone || isStandaloneLaunch()
+            if (isStandalone) {
+                configureStandaloneConsole()
+            }
+
             val applicationViewModel = ApplicationViewModel(
                 extractArchiveUseCase = dependencies.extractArchiveUseCase,
                 validateArchiveUseCase = dependencies.validateArchiveUseCase,
                 manageFileAssociationsUseCase = dependencies.manageFileAssociationsUseCase,
                 preferencesRepository = dependencies.preferencesRepository,
                 scope = applicationScope,
-                logger = logger
+                logger = logger,
+                isStandaloneLaunch = isStandalone
             )
 
-            // Initialize application with arguments (filter out UI mode flags)
-            val appArgs = args.toList().filterNot { it == "--gui" || it == "--tui" }
+            val appArgs = args.toList().filterNot { it == "--force-standalone" }
             applicationViewModel.handleApplicationStart(appArgs)
 
-            // Determine UI mode (GUI or TUI)
-            val uiMode = selectUiMode(args.toList())
-            logger.i { "Selected UI mode: $uiMode" }
-
-            // Select appropriate renderer
-            val renderer = when (uiMode) {
-                UiMode.GUI -> {
-                    val nativeGui = createNativeGuiRenderer()
-                    if (nativeGui?.isAvailable() == true) {
-                        logger.i { "Using native GUI renderer" }
-                        nativeGui
-                    } else {
-                        logger.w { "Native GUI not available, falling back to TUI" }
-                        // Enable TUI mode suppression since we're falling back to TUI
-                        Logger.setMinSeverity(Severity.Assert)
-                        UiConfig.enableTuiMode()
-                        MosaicTuiRenderer()
-                    }
-                }
-                UiMode.TUI -> {
-                    logger.i { "Using Mosaic TUI renderer" }
-                    MosaicTuiRenderer()
-                }
-            }
-
-            // Render UI
-            renderer.render(applicationViewModel, applicationScope)
-
+            // Always use TUI renderer
+            val renderer = MosaicTuiRenderer(isStandaloneLaunch = isStandalone)
+            renderer.render(applicationViewModel)
         } catch (e: Exception) {
             logger.e(e) { "Fatal error during application startup" }
             exitProcess(1)
@@ -263,8 +217,6 @@ fun printHelp() {
           <archive-file>              Path to archive file to extract
 
         Options:
-          --gui                       Force GUI mode (native dialogs)
-          --tui                       Force TUI mode (terminal UI)
           --set-trash-on              Enable moving archive to trash after extraction
           --set-trash-off             Disable moving archive to trash (default)
           --set-dialog-on             Enable completion dialog after extraction
@@ -280,8 +232,6 @@ fun printHelp() {
 
         Examples:
           qunzip archive.zip                    Extract archive.zip
-          qunzip --tui archive.zip              Extract with terminal UI
-          qunzip --gui archive.zip              Extract with native GUI
           qunzip --register-associations        Register file associations
           qunzip --unregister-associations      Remove file associations
     """.trimIndent())
@@ -314,3 +264,4 @@ internal expect fun getCurrentExecutablePath(): String
  * Platform-specific implementation
  */
 internal expect fun exitProcess(code: Int): Nothing
+

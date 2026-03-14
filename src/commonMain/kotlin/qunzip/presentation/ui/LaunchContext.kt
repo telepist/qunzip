@@ -22,38 +22,21 @@ object UiConfig {
 
 /**
  * Detect how the application was launched
- * Returns true if running in a terminal/console, false if launched from GUI
+ * Returns true if running in a terminal/console
  */
 expect fun isTerminal(): Boolean
 
 /**
- * Check if native GUI is available on this platform
+ * Detect if the application was launched standalone (e.g. double-click, file association).
+ * On Windows, uses GetConsoleProcessList to check if we're the only process in the console.
+ * When true, the console window was created for this process and will close when we exit.
+ * When false, we're sharing a console with a shell (CLI launch).
+ * On non-Windows platforms, returns !isTerminal().
  */
-expect fun isGuiAvailable(): Boolean
+expect fun isStandaloneLaunch(): Boolean
 
 /**
- * Check if this platform prefers GUI mode by default
- * Windows prefers GUI, other platforms use terminal detection
+ * Configure the console window for standalone (double-click) launches.
+ * On Windows, sets the console title. No-op on other platforms.
  */
-expect fun preferGuiByDefault(): Boolean
-
-/**
- * Determine which UI mode to use based on launch context and arguments
- */
-fun selectUiMode(args: List<String>): UiMode {
-    return when {
-        args.contains("--tui") -> UiMode.TUI
-        args.contains("--gui") -> UiMode.GUI
-        preferGuiByDefault() -> UiMode.GUI
-        isGuiAvailable() && !isTerminal() -> UiMode.GUI
-        else -> UiMode.TUI
-    }
-}
-
-/**
- * UI rendering mode
- */
-enum class UiMode {
-    GUI,  // Native platform GUI
-    TUI   // Mosaic terminal UI
-}
+expect fun configureStandaloneConsole()

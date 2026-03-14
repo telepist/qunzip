@@ -4,7 +4,7 @@ import qunzip.domain.usecases.*
 import qunzip.platform.*
 import co.touchlab.kermit.Logger
 import kotlinx.cinterop.*
-import platform.posix.exit
+import platform.windows.ExitProcess
 import platform.windows.GetModuleFileNameA
 import platform.windows.MAX_PATH
 
@@ -70,6 +70,6 @@ internal actual fun getCurrentExecutablePath(): String = memScoped {
  */
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun exitProcess(code: Int): Nothing {
-    exit(code)
-    throw RuntimeException("exit() should not return")
+    ExitProcess(code.toUInt())
+    throw RuntimeException("ExitProcess() should not return")
 }

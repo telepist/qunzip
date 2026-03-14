@@ -6,6 +6,7 @@ import qunzip.domain.usecases.ValidateArchiveUseCase
 import qunzip.domain.repositories.PreferencesRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import co.touchlab.kermit.Logger
 
@@ -18,7 +19,8 @@ class ApplicationViewModel(
     private val manageFileAssociationsUseCase: ManageFileAssociationsUseCase,
     private val preferencesRepository: PreferencesRepository,
     private val scope: CoroutineScope,
-    private val logger: Logger = Logger.withTag("ApplicationViewModel")
+    private val logger: Logger = Logger.withTag("ApplicationViewModel"),
+    private val isStandaloneLaunch: Boolean = false
 ) {
     // Child ViewModels
     val extractionViewModel = ExtractionViewModel(
@@ -48,8 +50,10 @@ class ApplicationViewModel(
     val events: SharedFlow<ApplicationEvent> = _events.asSharedFlow()
 
     init {
-        // Observe child ViewModel events and coordinate
-        scope.launch {
+        // Observe child ViewModel events and coordinate.
+        // Use UNDISPATCHED start so collectors subscribe synchronously before any
+        // extraction events can be emitted (prevents race with fast extractions).
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
             fileAssociationViewModel.events.collect { event ->
                 when (event) {
                     is FileAssociationEvent.SupportedFileOpened -> {
@@ -66,19 +70,42 @@ class ApplicationViewModel(
             }
         }
 
-        scope.launch {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
             extractionViewModel.events.collect { event ->
                 when (event) {
                     is ExtractionEvent.ExtractionCompleted -> {
                         _events.tryEmit(ApplicationEvent.ExtractionCompleted)
-                        // Always signal exit after extraction completes
-                        // (GUI layer handles showing completion dialog if needed based on showCompletionDialog preference)
-                        _uiState.value = _uiState.value.copy(shouldExit = true)
+                        handleExtractionFinished()
                     }
                     is ExtractionEvent.ExtractionFailed -> {
                         _events.tryEmit(ApplicationEvent.ExtractionFailed(event.throwable))
+                        handleExtractionFinished()
                     }
                     else -> { /* Forward other extraction events if needed */ }
+                }
+            }
+        }
+    }
+
+    /**
+     * Decide whether to auto-exit after extraction finishes.
+     * - CLI launch: always exit (user gets their shell back, output stays in scrollback)
+     * - Standalone launch (double-click): exit only if showCompletionDialog is false.
+     *   When true, keep the window open so the user can see the result.
+     */
+    private fun handleExtractionFinished() {
+        if (!isStandaloneLaunch) {
+            // CLI: always exit
+            _uiState.value = _uiState.value.copy(shouldExit = true)
+        } else {
+            // Standalone (double-click): check user preference
+            scope.launch {
+                val prefs = preferencesRepository.loadPreferences()
+                if (!prefs.showCompletionDialog) {
+                    _uiState.value = _uiState.value.copy(shouldExit = true)
+                } else {
+                    // Keep TUI visible, show hint to close the window
+                    _uiState.value = _uiState.value.copy(showCloseHint = true)
                 }
             }
         }
@@ -141,9 +168,6 @@ class ApplicationViewModel(
         _uiState.value = _uiState.value.copy(mode = mode)
     }
 
-    fun acknowledgeExit() {
-        _uiState.value = _uiState.value.copy(shouldExit = false)
-    }
 }
 
 data class ApplicationUiState(
@@ -151,6 +175,7 @@ data class ApplicationUiState(
     val mode: ApplicationMode = ApplicationMode.SETUP,
     val targetFile: String? = null,
     val shouldExit: Boolean = false,
+    val showCloseHint: Boolean = false,
     val error: String? = null
 ) {
     val isInExtractionMode: Boolean get() = mode == ApplicationMode.EXTRACTION

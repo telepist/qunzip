@@ -1,7 +1,13 @@
 package qunzip.presentation.ui
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.alloc
+import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.ptr
 import kotlinx.cinterop.toKString
+import kotlinx.cinterop.value
+import kotlinx.cinterop.UIntVar
 import platform.windows.*
 import platform.posix.getenv
 
@@ -19,16 +25,13 @@ actual fun isTerminal(): Boolean {
     }
 
     // Check for MSYS2/Cygwin/MinGW terminal (uses pipes but is still a terminal)
-    // These terminals set TERM or MSYSTEM environment variables
     val term = getenv("TERM")?.toKString()
     val msystem = getenv("MSYSTEM")?.toKString()
 
-    // If TERM is set to something other than "dumb", we're likely in a terminal
     if (term != null && term != "dumb" && term.isNotEmpty()) {
         return true
     }
 
-    // If MSYSTEM is set, we're in MSYS2/MinGW environment
     if (msystem != null && msystem.isNotEmpty()) {
         return true
     }
@@ -37,17 +40,33 @@ actual fun isTerminal(): Boolean {
 }
 
 /**
- * Check if GUI is available on Windows
- * Always true since Win32 GUI is always available
+ * Detect if launched standalone (double-click / file association) on Windows.
+ * Uses GetConsoleProcessList: if only 1 process is attached to the console,
+ * it means Windows created the console for us (standalone launch).
+ * If >1 processes, we're sharing with a shell (CLI launch).
  */
-actual fun isGuiAvailable(): Boolean {
-    return true
+@OptIn(ExperimentalForeignApi::class)
+actual fun isStandaloneLaunch(): Boolean = memScoped {
+    val processList = allocArray<UIntVar>(1)
+    val count = GetConsoleProcessList(processList, 1u)
+    count <= 1u
 }
 
-/**
- * Windows prefers GUI mode by default
- * Users can still use --tui to force terminal mode
- */
-actual fun preferGuiByDefault(): Boolean {
-    return true
+@OptIn(ExperimentalForeignApi::class)
+actual fun configureStandaloneConsole() {
+    SetConsoleTitleA("Qunzip")
+
+    // Enable ANSI/VT100 escape sequences on the stdout handle.
+    // Needed for legacy conhost.exe; Windows Terminal handles ANSI natively.
+    // Mosaic's NonInteractiveTerminal writes via print() which goes to this handle.
+    val handle = GetStdHandle(STD_OUTPUT_HANDLE)
+    if (handle != INVALID_HANDLE_VALUE) {
+        memScoped {
+            val mode = alloc<UIntVar>()
+            if (GetConsoleMode(handle, mode.ptr) != 0) {
+                val ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004u
+                SetConsoleMode(handle, mode.value or ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+            }
+        }
+    }
 }

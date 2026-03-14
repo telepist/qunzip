@@ -9,7 +9,7 @@ This application follows macOS-inspired design principles while maintaining cros
 ### 1. Zero-Configuration Extraction
 - **Double-click to extract**: Primary interaction method
 - **Smart extraction logic**: Automatically determines best extraction strategy
-- **No dialogs**: Minimal user interruption
+- **Minimal UI**: Clean TUI with only essential information
 
 ### 2. Intelligent Behavior
 - **Single file archives**: Extract directly to same directory
@@ -18,8 +18,8 @@ This application follows macOS-inspired design principles while maintaining cros
 
 ### 3. Seamless Integration
 - **Native file associations**: Registers as default handler for supported formats
-- **Platform-native notifications**: Uses OS notification system
 - **Trash integration**: Uses platform-appropriate trash/recycle bin
+- **Terminal-native**: Works in any terminal emulator with ANSI color support
 
 ## User Interaction Flows
 
@@ -28,7 +28,7 @@ This application follows macOS-inspired design principles while maintaining cros
 ```
 User double-clicks archive.zip
         ↓
-Application launches (background)
+Console window opens with TUI
         ↓
 Analysis: archive.zip contains multiple files
         ↓
@@ -36,21 +36,19 @@ Creates directory: archive/
         ↓
 Extracts all files to archive/
         ↓
-Shows progress notification (if large)
+Shows progress in TUI (progress bar, file count)
         ↓
 Moves archive.zip to trash (if enabled)
         ↓
-Shows success notification (if enabled)
-        ↓
-Application exits
+Application exits (or stays open if completion dialog enabled)
 ```
 
-### Alternative Flow: Single File Archive
+### Alternative Flow: CLI Extraction
 
 ```
-User double-clicks document.zip
+User runs: qunzip document.zip
         ↓
-Application launches (background)
+TUI renders in existing terminal
         ↓
 Analysis: document.zip contains single file
         ↓
@@ -58,10 +56,38 @@ Extracts document.pdf to same directory
         ↓
 Moves document.zip to trash (if enabled)
         ↓
-Shows success notification (if enabled)
-        ↓
-Application exits
+TUI exits, user returns to shell prompt
 ```
+
+## TUI Design
+
+### Extraction Screen
+
+The extraction TUI uses a clean, modern design with box-drawing characters and color coding:
+
+```
+  ╭──────────────────────────────────────────────────╮
+  │ qunzip                                           │
+  ╰──────────────────────────────────────────────────╯
+
+    Archive   my-files.zip
+    Format    ZIP  ·  15.2 MB
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  67%
+
+    45 / 67 files  ·  10.2 MB
+```
+
+Color scheme:
+- **Cyan**: Header border, progress bar (in progress)
+- **Green**: Progress bar (complete), "Done" badge
+- **Red**: Progress bar (failed), "Error" badge
+- **White**: Archive name, file statistics
+- **Gray**: Labels, status text
+
+### Settings Screen
+
+Shows current configuration and available commands in the same TUI style.
 
 ## Supported Archive Formats
 
@@ -79,59 +105,39 @@ Application exits
 ## Error Handling UX
 
 ### Error Scenarios
-1. **Corrupted archive**: Show error notification, don't move to trash
-2. **Insufficient permissions**: Request elevation or show permission error
+1. **Corrupted archive**: Show error in TUI, don't move to trash
+2. **Insufficient permissions**: Show permission error
 3. **Insufficient disk space**: Show space requirement and available space
-4. **Archive password protected**: Show password dialog (future feature)
+4. **Archive password protected**: Show error (not yet supported)
 
-### Error Notification Format
-```
-Title: "Extraction Failed"
-Message: "Could not extract [filename]: [specific reason]"
-Actions: [View Details] [OK]
-```
+### Error Display
+Errors are shown inline in the TUI with a red "Error" badge and descriptive message.
 
 ## Progress Indication
 
-### Small Archives (< 10MB)
-- No progress indication
-- Simple completion notification
-
-### Large Archives (> 10MB)
-- Native progress notification
-- Shows: filename, progress percentage, estimated time
-- Cancellable operation
-
-### Progress Notification Format
-```
-Title: "Extracting [filename]"
-Progress: [██████████████▒▒▒▒▒▒] 70%
-Message: "2.1 GB of 3.0 GB • 30 seconds remaining"
-Actions: [Cancel]
-```
+All archives show progress in the TUI:
+- Progress bar with percentage
+- File count (processed / total)
+- Bytes processed
+- Current file being extracted
+- Stage indicator (Analyzing → Extracting → Finalizing → Complete)
 
 ## Success Feedback
 
-### Completion Notification (when enabled)
-```
-Title: "Extraction Complete"
-Message: "[filename] extracted successfully"
-Actions: [OK]
-```
+### Completion Display
+On successful extraction, the TUI shows:
+- Green progress bar at 100%
+- Green "Done" badge
+- Total files and bytes extracted
 
-When completion dialog is disabled (default), the application exits silently after successful extraction.
+When `showCompletionDialog` is enabled (standalone mode), the TUI stays open with a "Close this window to exit." hint. When disabled (default), the application exits automatically.
 
 ## Accessibility
 
 ### Visual Accessibility
-- High contrast notification icons
-- Clear, readable notification text
+- High contrast color choices
+- Clear, readable text
 - Consistent visual language
-
-### Motor Accessibility
-- Large click targets in dialogs
-- Keyboard navigation support
-- No time-sensitive interactions
 
 ### Cognitive Accessibility
 - Clear, jargon-free language
@@ -141,19 +147,17 @@ When completion dialog is disabled (default), the application exits silently aft
 ## Platform-Specific Adaptations
 
 ### Windows
-- Uses Windows notification system
-- Follows Windows file naming conventions
-- Integrates with Windows Explorer context menu
+- Console window opens on double-click (CONSOLE subsystem)
+- VT processing enabled for ANSI colors in legacy conhost
+- Console title set to "Qunzip"
 
 ### macOS
-- Uses macOS notification center
-- Follows macOS file naming conventions
-- Integrates with Finder
+- Terminal detection via `isatty()`
+- Works in Terminal.app, iTerm2, etc.
 
 ### Linux
-- Uses desktop environment notification system
-- Follows XDG standards
-- Integrates with default file manager
+- Terminal detection via `isatty()`
+- Works in any terminal emulator with ANSI support
 
 ## Future UX Enhancements
 

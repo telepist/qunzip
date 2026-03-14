@@ -12,17 +12,10 @@ actual fun isTerminal(): Boolean {
     return isatty(STDOUT_FILENO) == 1
 }
 
-/**
- * Check if native GUI is available on Linux
- * Currently false - GTK GUI not yet implemented
- */
-actual fun isGuiAvailable(): Boolean {
-    return false // TODO: Will be true when GTK GUI is implemented
+actual fun isStandaloneLaunch(): Boolean {
+    return !isTerminal()
 }
 
-/**
- * Linux uses terminal detection to decide UI mode
- */
-actual fun preferGuiByDefault(): Boolean {
-    return false
+actual fun configureStandaloneConsole() {
+    // No-op on Linux
 }

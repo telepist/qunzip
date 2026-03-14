@@ -12,17 +12,10 @@ actual fun isTerminal(): Boolean {
     return isatty(STDOUT_FILENO) == 1
 }
 
-/**
- * Check if native GUI is available on macOS
- * Currently false - Cocoa GUI not yet implemented
- */
-actual fun isGuiAvailable(): Boolean {
-    return false // TODO: Will be true when Cocoa GUI is implemented
+actual fun isStandaloneLaunch(): Boolean {
+    return !isTerminal()
 }
 
-/**
- * macOS uses terminal detection to decide UI mode
- */
-actual fun preferGuiByDefault(): Boolean {
-    return false
+actual fun configureStandaloneConsole() {
+    // No-op on macOS
 }

@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Phase**: Windows Platform Feature-Complete, Testing & Validation In Progress
+**Phase**: TUI-Only Redesign Complete, Windows Platform Functional
 
 ## Completed Work
 
@@ -23,11 +23,13 @@
   - StateFlow for UI state management
   - SharedFlow for one-time events
   - Flow-based progress tracking for long-running operations
-- ✅ TDD testing framework
-  - 40 unit tests written and passing (100% pass rate)
-  - Comprehensive test coverage for domain entities
+- ✅ TDD testing framework with full test pyramid
+  - 52 unit tests (domain entities, use cases, viewmodels)
+  - 15 integration tests (real 7zip + filesystem)
+  - 12 E2E tests (launches compiled qunzip.exe)
+  - All tests run via Gradle (`./gradlew mingwX64Test`)
   - ViewModel testing with Turbine
-  - Mock implementations for testing
+  - Mock implementations for unit test isolation
 
 #### Entities Implemented
 - ✅ `Archive` - Represents archive files with metadata
@@ -72,13 +74,35 @@
   - Coordinates child ViewModels
   - Application lifecycle management
   - Event routing
+  - Standalone launch detection (controls exit behavior)
+- ✅ `SettingsViewModel` - User preferences management
 
 #### Application Structure
 - ✅ `main.kt` - Application entry point
   - Coroutine scope management
   - Dependency initialization structure
+  - Standalone launch detection and console configuration
   - Event handling
   - Application lifecycle
+
+### ✅ TUI-Only UI (Mosaic)
+
+Native GUI implementations (Win32, Cocoa, GTK) have been removed. The application now uses Mosaic TUI exclusively for all platforms and launch modes.
+
+- ✅ **Mosaic Terminal UI**
+  - Real-time progress bars with percentage and color coding
+  - Archive info display (name, format, size)
+  - Stage indicators (Starting, Analyzing, Extracting, Finalizing, Completed, Failed)
+  - File count and byte statistics
+  - Box drawing characters for header
+  - Settings and file associations display
+- ✅ **Standalone launch detection**
+  - Windows: `GetConsoleProcessList` (count ≤ 1 = standalone)
+  - Other platforms: `!isTerminal()`
+- ✅ **Dual terminal mode**
+  - CLI: Full interactive `TtyTerminal` with auto-detected ANSI level
+  - Standalone: `NonInteractiveTerminal` with truecolor (avoids raw mode / blocking stdin)
+  - Windows standalone: `configureStandaloneConsole()` enables VT processing and sets title
 
 ### Build & Test Infrastructure
 - ✅ Multi-platform Kotlin/Native build configuration
@@ -88,109 +112,45 @@
   - Linux x64
   - Linux ARM64
 - ✅ Build successfully compiles for all platforms
-- ✅ All 40 tests passing on all platforms
+- ✅ All 79 tests passing (52 unit + 15 integration + 12 E2E)
 - ✅ Clean separation between common and platform-specific code
+- ✅ Makefile with `install` target for updating local installations
 
-## In Progress
+### ✅ Windows Platform Implementation
+- ✅ `WindowsArchiveRepository` - 7zip integration with real-time progress
+- ✅ `WindowsFileSystemRepository` - File operations, Recycle Bin via SHFileOperation
+- ✅ `WindowsNotificationRepository` - Console-based notifications
+- ✅ `WindowsFileAssociationRepository` - Stub for registry access
+- ✅ `WindowsPreferencesRepository` - JSON file-based settings storage
+- ✅ `WindowsPlatform.kt` - DI and platform utilities
+- ✅ Embedded application icon in executable
+- ✅ Windows installer (Inno Setup) and portable ZIP distribution
 
-### 🔄 Windows Platform Testing (95% Complete)
+### ✅ User Preferences System
+- ✅ Move to trash after extraction (optional, default: off)
+- ✅ Show completion dialog (optional, default: off)
+- ✅ CLI flags for preference configuration
 
-#### Completed
-- ✅ Archive analysis logic (in use cases)
-- ✅ Smart extraction strategies
-- ✅ Error handling framework
-- ✅ Progress tracking infrastructure
-- ✅ **Windows Platform Repositories**
-  - ✅ `WindowsArchiveRepository` - 7zip integration with real-time progress
-  - ✅ `WindowsFileSystemRepository` - File operations, Recycle Bin via SHFileOperation
-  - ✅ `WindowsNotificationRepository` - Console-based notifications
-  - ✅ `WindowsFileAssociationRepository` - Stub for registry access
-  - ✅ `WindowsPreferencesRepository` - JSON file-based settings storage
-- ✅ **Windows Native GUI**
-  - ✅ Win32 progress window (420x180px, Segoe UI styling)
-  - ✅ Win32 settings window with checkboxes
-  - ✅ MessageBox dialogs for completion/error
-  - ✅ Cancel button support
-  - ✅ Embedded icon loading
-- ✅ **User Preferences System**
-  - ✅ Move to trash after extraction (optional, default: off)
-  - ✅ Show completion dialog (optional, default: off)
-  - ✅ CLI flags for preference configuration
-- ✅ **Smart Duplicate Handling**
-  - ✅ Manual file/folder conflict detection
-  - ✅ Unique naming with numeric suffixes (file-1, file-2, etc.)
-- ✅ **Platform-specific DI and main.kt integration**
-  - ✅ Expect/actual pattern for dependency injection
-  - ✅ Windows repositories fully wired
-- ✅ **Black Box End-to-End Tests**
-  - ✅ Windows E2E test script (run-tests.bat)
-  - ✅ Linux E2E test script (run-tests.sh)
-  - ✅ macOS E2E test script (run-tests.sh with architecture detection)
-  - ✅ Comprehensive E2E test documentation
-  - ✅ Test fixtures shared across platforms
+### ✅ Smart Duplicate Handling
+- ✅ Manual file/folder conflict detection
+- ✅ Unique naming with numeric suffixes (file-1, file-2, etc.)
 
-#### In Progress
-- 🔄 Comprehensive Windows testing and validation
-- 🔄 Bug fixes and edge case handling
+### ✅ Gradle-Integrated Test Pyramid
+- ✅ Unit tests in `src/commonTest/` — domain entities, use cases, viewmodels
+- ✅ Integration tests in `src/mingwX64Test/kotlin/qunzip/integration/` — real 7zip + filesystem
+  - `ArchiveExtractionIntegrationTest` (11 tests) — getArchiveInfo, getArchiveContents, testArchive, extractArchive
+  - `ExtractionPipelineIntegrationTest` (4 tests) — full ExtractArchiveUseCase with real repositories
+- ✅ E2E tests in `src/mingwX64Test/kotlin/qunzip/e2e/` — launches compiled qunzip.exe
+  - `QunzipExeE2eTest` (12 tests) — CLI args, extraction exit codes, standalone exit, settings flags
+- ✅ Test helpers in `src/mingwX64Test/kotlin/qunzip/TestHelpers.kt` — process execution with pipe draining, temp dirs, fixtures
+- ✅ Test fixtures in `src/mingwX64Test/resources/fixtures/` (single-file.zip, multiple-files.zip, nested-folder.zip)
 
-#### Pending
-- ⏳ Linux platform repositories (full implementation)
-- ⏳ macOS platform repositories (full implementation)
-- ⏳ Registry-based file associations for Windows (advanced feature)
+## Pending
 
-### ⏳ Platform Integration (Pending)
-- ⏳ File association registration
-- ⏳ Double-click handling
-- ⏳ Basic notifications
-
-## Next Steps (Priority Order)
-
-### Immediate Priority
-1. **Fix Build Errors (CRITICAL)**
-   - Add `getCurrentExecutablePath()` implementation to Linux platform files
-   - Add `getCurrentExecutablePath()` implementation to macOS platform files
-   - Verify project builds successfully across all platforms
-   - Run unit tests to ensure no regressions
-
-2. **Test Windows End-to-End**
-   - Build Windows executable: `./gradlew linkDebugExecutableMingwX64`
-   - Run black box E2E tests: `test\e2e\windows\run-tests.bat`
-   - Verify extraction works with real archives
-   - Document any issues found
-
-3. **Enhance Windows Implementation**
-   - Improve 7zip progress tracking (parse output for real-time progress)
-   - Implement proper disk space checking with Windows API
-   - Add Windows Toast notifications (upgrade from console)
-   - Implement Registry-based file associations
-
-### Short Term
-3. **Implement Linux Platform Code**
-   - 7zip integration for Linux
-   - XDG trash specification
-   - Desktop notifications via D-Bus
-   - XDG MIME type associations
-
-4. **Implement macOS Platform Code**
-   - 7zip integration for macOS
-   - NSFileManager for trash
-   - Notification Center integration
-   - Launch Services for associations
-
-5. **Integration Testing**
-   - Test extraction on each platform
-   - Verify file associations work
-   - Test notification systems
-
-### Medium Term
-6. **US-002: Basic ZIP Extraction**
-   - End-to-end ZIP extraction working
-   - File associations registered
-   - Notifications displayed
-
-7. **US-003: Multi-file Archive Handling**
-   - Smart folder creation
-   - Proper file organization
+- ⏳ Linux platform repositories (full implementation - stubs exist)
+- ⏳ macOS platform repositories (full implementation - stubs exist)
+- ⏳ Windows Registry file associations (advanced feature)
+- ⏳ End-to-end integration testing on Linux/macOS
 
 ## Technical Debt & Issues
 
@@ -200,13 +160,14 @@
 - ✅ Test timing issues with SharedFlow (simplified test approach)
 - ✅ Use case extensibility for testing (made classes open)
 - ✅ Windows platform repositories implemented
+- ✅ Removed native GUI code (Win32, Cocoa, GTK) - TUI only
 
 ### Current
 - ⚠️ Windows disk space check is stubbed (returns MAX_VALUE)
 - ⚠️ Windows file associations are stubbed (no Registry access yet)
 - ⚠️ Linux platform has only stub implementations (not functional)
 - ⚠️ macOS platform has only stub implementations (not functional)
-- ⚠️ E2E tests need validation on clean systems
+- ✅ E2E tests validated and passing (Gradle-integrated)
 
 ### Future Considerations
 - Consider dependency injection framework (Koin)
@@ -217,111 +178,38 @@
 ## Code Quality Metrics
 
 ### Current Status
-- **Lines of Code**: ~3,900 (common + Windows platform + all tests)
-- **Platform Implementation**: Windows ~800 lines
-- **Test Code**: ~1,240 lines (40 unit tests + black box E2E scripts)
 - **Test Coverage**: Domain layer ~95%, Presentation layer ~90%
-- **Tests**: 40 unit tests + 3 platform-specific E2E black box test scripts
+- **Tests**: 79 total (52 unit + 15 integration + 12 E2E), all Gradle-integrated
 - **Build Status**: ✅ All platforms building successfully
-- **Test Fixtures**: 3 sample ZIP files for E2E testing (single-file, multiple-files, nested-folder)
-- **Code Review**: Architectural foundation + Windows platform + comprehensive E2E test suite reviewed
+- **Test Fixtures**: 3 sample ZIP files (single-file, multiple-files, nested-folder)
 
 ### Quality Gates
 - ✅ Windows build working successfully
 - ✅ Unit tests passing
 - ✅ Clean Architecture principles followed
 - ✅ Windows platform repositories implemented
-- ✅ Windows native GUI implemented
+- ✅ Mosaic TUI functional for all launch modes
 - ✅ Windows integration complete (DI + main.kt wired)
 - ⚠️ Linux/macOS platforms have stubs (not functional)
-- ⏳ E2E tests need validation
+- ✅ Test pyramid integrated in Gradle (unit + integration + E2E)
 
-## Risk Assessment
+## Design Decisions
 
-### Active Risks
-1. **7zip Integration Complexity** - Medium/High
-   - Status: Not yet started
-   - Mitigation: Will prototype Windows implementation first
+### TUI-Only Architecture
+- Removed all native GUI implementations (Win32Gui, CocoaGui, GtkGui)
+- Mosaic TUI is the sole rendering backend for all platforms
+- Standalone launches (double-click) use NonInteractiveTerminal to avoid raw mode issues
+- CLI launches use full interactive TtyTerminal
+- Simplifies codebase and eliminates platform-specific GUI maintenance
 
-2. **Platform API Differences** - Medium/Medium
-   - Status: Architecture supports abstraction
-   - Mitigation: Repository pattern isolates platform code
+### Standalone Launch Detection (Windows)
+- `GetConsoleProcessList` returns count of processes attached to console
+- Count ≤ 1 means standalone launch (Windows created the console for us)
+- Count > 1 means CLI launch (sharing console with shell)
+- Standalone mode sets console title and enables VT processing for ANSI colors
 
-### Resolved Risks
-- ✅ Architecture complexity - Resolved through clean layering
-- ✅ Testing complexity - Resolved with proper mocking
-
-## Team Notes
-
-### What Went Well
-- Clean Architecture setup is solid and maintainable
-- Type-safe error handling with sealed classes
-- Comprehensive test coverage from the start
-- Build configuration working smoothly across platforms
-
-### Challenges Overcome
-- Fixed ExtractionError type hierarchy to properly extend Throwable
-- Resolved test mock implementation issues
-- Cleaned up SharedFlow event testing approach
-
-### Lessons Learned
-- Start with expect/actual for platform-specific code from the beginning
-- Mock implementations need all repository methods implemented
-- SharedFlow events need to be collected before triggering actions
-
-## Development History
-
-### Key Milestones Achieved
-
-**Foundation & Architecture:**
-- ✅ Clean Architecture with MVVM established
-- ✅ Domain layer complete with entities, use cases, repository interfaces
-- ✅ TDD framework with 40 unit tests
-- ✅ Kotlin Flow integration for reactive state management
-
-**Windows Platform Implementation:**
-- ✅ Platform directory structure established (mingwX64Main, linuxX64Main, macosX64Main, etc.)
-- ✅ Windows repository implementations (~800 LOC)
-  - `WindowsArchiveRepository`: 7zip integration with command-line execution
-  - `WindowsFileSystemRepository`: File operations, directory creation, Recycle Bin integration
-  - `WindowsNotificationRepository`: Console-based notifications
-  - `WindowsFileAssociationRepository`: Stub for future Registry integration
-- ✅ Platform-specific dependency injection via expect/actual pattern
-
-**Testing Infrastructure:**
-- ✅ Black box E2E test suite (~500 LOC)
-  - Platform-specific test scripts (Windows .bat, Linux/macOS .sh)
-  - Test fixtures: 3 sample ZIP files for different extraction scenarios
-  - Tests run actual compiled binary as true black box tests
-  - Verify filesystem changes without code access
-
-**Documentation:**
-- ✅ Comprehensive documentation suite
-- ✅ Architecture, UX design, user manual, project management docs
-- ✅ Windows installer build guide
-- ✅ E2E test documentation
-
-### Design Decisions
-
-**Black Box Testing Approach:**
-- Pivoted from Kotlin/Native integration tests to shell script black box tests
-- Advantages: True end-to-end testing, simpler test framework, platform-realistic, CI-friendly
-- Trade-off: Tests only run on the platform they're designed for
-
-**Technical Challenges Encountered:**
-- Kotlin/Native C interop requires @OptIn(ExperimentalForeignApi::class)
-- Windows API types (ULARGE_INTEGER) require special handling - simplified for now
-- 7zip progress tracking needs output parsing (deferred)
-- File associations require Registry access (complex, deferred)
-
-### Current Focus
-
-**Windows Validation:**
-- Comprehensive testing on Windows 10/11
-- Edge case handling for various archive types
-- User experience polish
-
-**Next Steps:**
-1. Complete Windows testing and validation
-2. Begin Linux platform implementation
-3. Begin macOS platform implementation
+### Mosaic Customization
+- Using local build of Mosaic (0.19.0-SNAPSHOT) published to mavenLocal
+- Added `ansiLevel` parameter to `runMosaic()` API
+- `NonInteractiveTerminal` accepts configurable `AnsiLevel` (was hardcoded NONE)
+- Allows truecolor rendering in standalone mode without TTY binding

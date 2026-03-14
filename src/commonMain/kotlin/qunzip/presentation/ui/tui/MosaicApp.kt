@@ -8,7 +8,11 @@ import qunzip.presentation.viewmodels.ApplicationMode
 import com.jakewharton.mosaic.ui.Column
 
 /**
- * Root Mosaic composable that switches between extraction and settings modes
+ * Root Mosaic composable that switches between extraction and settings modes.
+ *
+ * Exit from extraction mode is handled by the renderer (UiRenderer) which
+ * observes ExtractionViewModel state directly. The [onExit] callback is used
+ * only by SettingsTui for its "Quit" action.
  */
 @Composable
 fun MosaicApp(viewModel: ApplicationViewModel, onExit: () -> Unit = {}) {
@@ -17,7 +21,7 @@ fun MosaicApp(viewModel: ApplicationViewModel, onExit: () -> Unit = {}) {
     Column {
         when (uiState.mode) {
             ApplicationMode.EXTRACTION -> {
-                ExtractionTui(viewModel.extractionViewModel)
+                ExtractionTui(viewModel.extractionViewModel, showCloseHint = uiState.showCloseHint)
             }
             ApplicationMode.SETUP -> {
                 SettingsTui(

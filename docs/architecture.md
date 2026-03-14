@@ -18,10 +18,9 @@ This project implements a cross-platform unzip application using Clean Architect
 
 ### 3. Presentation Layer
 - **ViewModels**: State management with Kotlin Flow
-- **UI Layer**: Hybrid approach with multiple UI backends
-  - **Mosaic TUI**: Interactive terminal UI (all platforms)
-  - **Native GUIs**: Platform-specific dialogs (Windows, macOS, Linux)
-  - **UI Renderer Interface**: Common abstraction for UI backends
+- **UI Layer**: Mosaic TUI for all platforms
+  - **Mosaic TUI**: Terminal UI with progress bars, colors, and real-time updates
+  - **UI Renderer**: `MosaicTuiRenderer` with standalone/CLI mode support
 - **Mappers**: Convert between domain and presentation models
 
 ## MVVM with Kotlin Flow
@@ -31,68 +30,37 @@ This project implements a cross-platform unzip application using Clean Architect
 │   View/UI       │◄──►│   ViewModel     │◄──►│   Repository    │
 │                 │    │                 │    │                 │
 │ - TUI (Mosaic)  │    │ - State Flow    │    │ - File Ops      │
-│ - Native GUI    │    │ - Commands      │    │ - 7zip Calls    │
-│ - Notifications │    │ - Error Handle  │    │ - OS Integration│
+│ - Notifications │    │ - Commands      │    │ - 7zip Calls    │
+│                 │    │ - Error Handle  │    │ - OS Integration│
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## UI Architecture (Hybrid Approach)
+## UI Architecture
 
-### UI Renderer Interface
+### MosaicTuiRenderer
 
-The application uses a common `UiRenderer` interface that allows multiple UI backends:
+The application uses a single `MosaicTuiRenderer` that adapts its behavior based on how the application was launched:
+
+- **CLI mode** (launched from terminal): Uses Mosaic's full interactive `TtyTerminal` with auto-detected ANSI capabilities. Exits cleanly when extraction completes, returning control to the shell.
+- **Standalone mode** (double-click / file association): Uses Mosaic's `NonInteractiveTerminal` with truecolor ANSI level. This avoids raw mode and blocking stdin reads that would prevent clean process exit. Console VT processing is enabled via `SetConsoleMode` on Windows.
 
 ```kotlin
-interface UiRenderer {
-    suspend fun render(viewModel: ApplicationViewModel, scope: CoroutineScope)
-    fun isAvailable(): Boolean
+class MosaicTuiRenderer(
+    private val isStandaloneLaunch: Boolean = false,
+) : UiRenderer {
+    // Standalone: runMosaic(onNonInteractive = AssumeAndIgnore, ansiLevel = TRUECOLOR)
+    // CLI: runMosaic { ... } (full interactive terminal)
 }
 ```
-
-### UI Backends
-
-#### 1. Mosaic Terminal UI (Implemented)
-- **Technology**: [Mosaic](https://github.com/JakeWharton/mosaic) library for terminal UI
-- **Availability**: All platforms (Windows, macOS, Linux)
-- **Features**:
-  - Real-time progress bars with percentage
-  - Color-coded stages (Analyzing, Extracting, Finalizing, Complete)
-  - File count and byte statistics
-  - Emojis for visual feedback
-  - Box drawing characters for UI elements
-  - Dynamic updates using ANSI escape codes
-
-**TUI Components**:
-- `MosaicApp`: Root composable that switches between modes
-- `ExtractionTui`: Extraction progress display
-- `SettingsTui`: File associations and settings display
-
-#### 2. Native GUI
-- **Windows**: Win32 API dialogs (implemented - progress window, settings window, MessageBox notifications)
-- **macOS**: Cocoa/AppKit dialogs (planned - stubs exist)
-- **Linux**: GTK dialogs (planned - stubs exist)
-- **Implementation**: Platform-specific using C interop (Windows complete, others pending)
 
 ### Launch Context Detection
 
-The application auto-detects how it was launched and selects the appropriate UI:
+The application detects how it was launched to select the appropriate terminal mode:
 
-```kotlin
-fun selectUiMode(args: List<String>): UiMode {
-    return when {
-        args.contains("--tui") -> UiMode.TUI        // Force TUI
-        args.contains("--gui") -> UiMode.GUI        // Force GUI
-        isGuiAvailable() && !isTerminal() -> UiMode.GUI  // Auto-detect GUI
-        else -> UiMode.TUI                          // Default to TUI
-    }
-}
-```
+- **Windows**: Uses `GetConsoleProcessList` — if only 1 process is attached to the console, it means Windows created the console for this process (standalone launch). If >1 processes, we're sharing a console with a shell (CLI launch).
+- **macOS/Linux**: Uses `isatty()` — if stdout is not a TTY, it's a standalone launch.
 
-**Detection Logic**:
-- **Windows**: Uses `GetStdHandle` and `GetFileType` to check if stdout is a console
-- **macOS/Linux**: Uses POSIX `isatty()` to check if stdout is a TTY
-- **GUI Launch**: Double-clicking file in Explorer/Finder (no console attached)
-- **Terminal Launch**: Running from cmd.exe, PowerShell, bash, etc.
+For standalone launches on Windows, `configureStandaloneConsole()` sets the console title and enables ANSI/VT100 escape sequence processing via `ENABLE_VIRTUAL_TERMINAL_PROCESSING`.
 
 ### UI Flow
 
@@ -104,21 +72,23 @@ Application Start
 └──────┬───────┘
        ↓
 ┌──────────────────┐
-│ Select UI Mode   │
-│ (GUI or TUI)     │
+│ Detect Launch    │
+│ Mode (standalone │
+│ vs CLI)          │
 └──────┬───────────┘
        ↓
 ┌──────────────────────┐
-│ Create Renderer      │
-│ - NativeGuiRenderer  │
-│ - MosaicTuiRenderer  │
+│ MosaicTuiRenderer    │
+│ - NonInteractive     │
+│   (standalone)       │
+│ - Interactive (CLI)  │
 └──────┬───────────────┘
        ↓
 ┌──────────────────────┐
 │ renderer.render()    │
 │ - Observe ViewModel  │
-│ - Update UI          │
-│ - Handle events      │
+│ - Update TUI         │
+│ - Handle exit        │
 └──────────────────────┘
 ```
 
@@ -130,16 +100,17 @@ MosaicApp(viewModel)
     ├── when (mode)
     │   ├── EXTRACTION → ExtractionTui
     │   │   ├── Column
-    │   │   │   ├── Header (archive name)
-    │   │   │   ├── Progress Bar ([████░░░] 67%)
-    │   │   │   ├── Statistics (files, bytes)
-    │   │   │   ├── Stage Indicator (🔍📦✨✅)
-    │   │   │   └── Error Display (if any)
+    │   │   │   ├── Header (box-drawn title)
+    │   │   │   ├── Archive info (name, format, size)
+    │   │   │   ├── Progress Bar (━━━━━━━━ 67%)
+    │   │   │   ├── Status (stage, file counts, bytes)
+    │   │   │   └── Close hint (standalone + completion dialog)
     │   │
     │   └── SETUP → SettingsTui
     │       ├── Column
     │       │   ├── File Associations Status
     │       │   ├── Supported Formats List
+    │       │   ├── Settings Display
     │       │   └── Available Commands
 ```
 
@@ -200,16 +171,19 @@ File Double-Click → OS Handler → Application Entry Point
 - **Kotlin Compose Compiler Plugin**: Required for Mosaic composables
 - **Kotlin Coroutines**: Async operations
 - **Kotlin Flow**: Reactive state management
-- **Mosaic**: Terminal UI framework for Kotlin/Native
+- **Mosaic**: Terminal UI framework for Kotlin/Native (0.19.0-SNAPSHOT with AnsiLevel support)
 - **7zip**: Archive handling (via executable or library)
-- **Platform APIs**: File system, trash, associations, native GUIs
+- **Platform APIs**: File system, trash, associations
 
 ## Testing Strategy
 
-- **Unit Tests**: Domain layer (use cases, entities)
-- **Integration Tests**: Repository implementations
-- **Platform Tests**: OS-specific functionality
-- **E2E Tests**: Complete extraction workflows
+Gradle-integrated test pyramid, all run via `./gradlew mingwX64Test`:
+
+- **Unit Tests** (`src/commonTest/`): Domain entities, use cases, viewmodels with mock dependencies. Flow testing via Turbine.
+- **Integration Tests** (`src/mingwX64Test/.../integration/`): Real 7zip extraction, real filesystem operations, full ExtractArchiveUseCase pipeline.
+- **E2E Tests** (`src/mingwX64Test/.../e2e/`): Launches compiled `qunzip.exe` as external process, verifies CLI args, exit codes, and timeout behavior.
+
+Run selectively with `--tests` filter: `./gradlew mingwX64Test --tests "qunzip.e2e.*"`
 
 ## File Structure
 
@@ -223,8 +197,8 @@ src/
 │   ├── presentation/
 │   │   ├── viewmodels/        # State management
 │   │   └── ui/                # UI layer
-│   │       ├── UiRenderer.kt       # UI backend interface
-│   │       ├── LaunchContext.kt    # UI mode detection
+│   │       ├── UiRenderer.kt       # Mosaic TUI renderer
+│   │       ├── LaunchContext.kt    # Launch mode detection
 │   │       └── tui/                # Mosaic Terminal UI
 │   │           ├── MosaicApp.kt         # Root composable
 │   │           ├── ExtractionTui.kt     # Extraction UI
@@ -233,25 +207,20 @@ src/
 ├── commonTest/kotlin/qunzip/  # Shared unit tests
 ├── mingwX64Main/kotlin/qunzip/
 │   ├── platform/              # Windows repository implementations
-│   ├── presentation/ui/       # Windows GUI
-│   │   ├── Win32Gui.kt        # Win32 renderer (implemented)
-│   │   └── LaunchContext.kt   # Terminal detection
+│   ├── presentation/ui/
+│   │   └── LaunchContext.kt   # Windows standalone detection (GetConsoleProcessList)
 │   └── WindowsPlatform.kt     # DI and platform utilities
 ├── linuxX64Main/kotlin/qunzip/
 │   ├── platform/              # Linux repository implementations
-│   ├── presentation/ui/       # Linux GUI
-│   │   ├── GtkGui.kt          # GTK renderer (stub)
-│   │   └── LaunchContext.kt   # Terminal detection
-│   └── LinuxPlatform.kt       # DI and platform utilities
+│   └── presentation/ui/
+│       └── LaunchContext.kt   # Linux terminal detection
 ├── linuxArm64Main/kotlin/qunzip/
 │   ├── platform/              # Linux ARM64 repository implementations
 │   └── LinuxPlatform.kt
 ├── macosX64Main/kotlin/qunzip/
 │   ├── platform/              # macOS Intel repository implementations
-│   ├── presentation/ui/       # macOS GUI
-│   │   ├── CocoaGui.kt        # Cocoa renderer (stub)
-│   │   └── LaunchContext.kt   # Terminal detection
-│   └── MacosPlatform.kt       # DI and platform utilities
+│   └── presentation/ui/
+│       └── LaunchContext.kt   # macOS terminal detection
 └── macosArm64Main/kotlin/qunzip/
     ├── platform/              # macOS ARM64 repository implementations
     └── MacosPlatform.kt

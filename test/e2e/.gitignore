@@ -1,5 +1,0 @@
-# Ignore test results directory
-results/
-
-# But keep the .gitignore inside results
-!results/.gitignore

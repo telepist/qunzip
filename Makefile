@@ -3,7 +3,7 @@
 
 .PHONY: help build run clean build-all build-release run-release test \
 	prepare-installer build-windows-installer create-portable-zip \
-	package-windows clean-installer info
+	package-windows clean-installer info install
 
 # Detect current OS and architecture
 UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
@@ -97,6 +97,9 @@ help:
 	@echo "  make build-windows - Build for Windows x64"
 	@echo "  make build-linux   - Build for Linux x64"
 	@echo "  make build-macos   - Build for macOS ARM64"
+	@echo ""
+	@echo "Development:"
+	@echo "  make install       - Build release and update local installation"
 	@echo ""
 	@echo "Windows installer & packaging:"
 	@echo "  make prepare-installer      - Stage files for Windows installer/ZIP"
@@ -205,3 +208,56 @@ clean-installer:
 	@echo "Cleaning Windows installer artifacts..."
 	$(GRADLEW) cleanInstaller
 	@echo "Installer artifacts cleaned!"
+
+# Build release and update locally installed qunzip
+# Checks standard Inno Setup install paths (per-user and system-wide)
+install: build-release
+ifeq ($(PLATFORM),MingwX64)
+	@INSTALL_DIR=""; \
+	if [ -f "$(LOCALAPPDATA)/Programs/Qunzip/qunzip.exe" ]; then \
+		INSTALL_DIR="$(LOCALAPPDATA)/Programs/Qunzip"; \
+	elif [ -f "/c/Program Files/Qunzip/qunzip.exe" ]; then \
+		INSTALL_DIR="/c/Program Files/Qunzip"; \
+	elif [ -f "/c/Program Files (x86)/Qunzip/qunzip.exe" ]; then \
+		INSTALL_DIR="/c/Program Files (x86)/Qunzip"; \
+	fi; \
+	if [ -z "$$INSTALL_DIR" ]; then \
+		echo "Error: No existing qunzip installation found."; \
+		echo "Checked:"; \
+		echo "  $(LOCALAPPDATA)/Programs/Qunzip/"; \
+		echo "  C:/Program Files/Qunzip/"; \
+		echo "  C:/Program Files (x86)/Qunzip/"; \
+		exit 1; \
+	fi; \
+	echo "Updating $$INSTALL_DIR/qunzip.exe ..."; \
+	cp "$(RELEASE_BUILD_PATH)" "$$INSTALL_DIR/qunzip.exe" && \
+	echo "Done. Updated qunzip at $$INSTALL_DIR/"
+else ifeq ($(findstring Linux,$(UNAME_S)),Linux)
+	@INSTALL_DIR=""; \
+	if [ -f "/usr/local/bin/qunzip" ]; then \
+		INSTALL_DIR="/usr/local/bin"; \
+	elif [ -f "$(HOME)/.local/bin/qunzip" ]; then \
+		INSTALL_DIR="$(HOME)/.local/bin"; \
+	fi; \
+	if [ -z "$$INSTALL_DIR" ]; then \
+		echo "Error: No existing qunzip installation found."; \
+		exit 1; \
+	fi; \
+	echo "Updating $$INSTALL_DIR/qunzip ..."; \
+	cp "$(RELEASE_BUILD_PATH)" "$$INSTALL_DIR/qunzip" && \
+	echo "Done. Updated qunzip at $$INSTALL_DIR/"
+else ifeq ($(UNAME_S),Darwin)
+	@INSTALL_DIR=""; \
+	if [ -f "/usr/local/bin/qunzip" ]; then \
+		INSTALL_DIR="/usr/local/bin"; \
+	elif [ -f "$(HOME)/.local/bin/qunzip" ]; then \
+		INSTALL_DIR="$(HOME)/.local/bin"; \
+	fi; \
+	if [ -z "$$INSTALL_DIR" ]; then \
+		echo "Error: No existing qunzip installation found."; \
+		exit 1; \
+	fi; \
+	echo "Updating $$INSTALL_DIR/qunzip ..."; \
+	cp "$(RELEASE_BUILD_PATH)" "$$INSTALL_DIR/qunzip" && \
+	echo "Done. Updated qunzip at $$INSTALL_DIR/"
+endif

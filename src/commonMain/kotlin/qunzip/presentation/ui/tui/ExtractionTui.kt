@@ -7,84 +7,168 @@ import qunzip.presentation.viewmodels.ExtractionViewModel
 import qunzip.domain.entities.ExtractionStage
 import com.jakewharton.mosaic.ui.*
 
-/**
- * Mosaic TUI for extraction progress
- * Shows real-time progress with bars, colors, and status
- */
+private const val BOX_WIDTH = 52
+
 @Composable
-fun ExtractionTui(viewModel: ExtractionViewModel) {
+fun ExtractionTui(viewModel: ExtractionViewModel, showCloseHint: Boolean = false) {
     val uiState by viewModel.uiState.collectAsState()
+    val progress = uiState.progress
+    val stage = progress?.stage
 
     Column {
-        // Header with border
-        Text("┌─── Qunzip Archive Extractor ───┐", color = Color.Cyan)
-        Text("│", color = Color.Cyan)
+        Text("")
+        // Header
+        Header("qunzip")
+        Text("")
 
-        // Archive name
-        uiState.archive?.let { archive ->
-            Text("│ Archive: ${archive.name}", color = Color.White)
+        // Archive info
+        val archiveName = uiState.archive?.name
+            ?: uiState.currentArchive?.substringAfterLast("/")?.substringAfterLast("\\")
+            ?: ""
+        val archiveFormat = uiState.archive?.format?.name ?: ""
+        val archiveSize = uiState.archive?.size?.let { formatBytes(it) } ?: ""
+        val formatInfo = if (archiveFormat.isNotEmpty() && archiveSize.isNotEmpty()) {
+            "$archiveFormat  ·  $archiveSize"
+        } else {
+            archiveFormat
         }
 
-        // Current file being extracted
-        uiState.progress?.currentFile?.let { currentFile ->
-            val displayFile = if (currentFile.length > 30) {
-                "..." + currentFile.takeLast(27)
-            } else {
-                currentFile
-            }
-            Text("│ Current: $displayFile", color = Color.Black)
+        if (archiveName.isNotEmpty()) {
+            InfoRow("Archive", archiveName, Color.White)
+        }
+        if (formatInfo.isNotEmpty()) {
+            InfoRow("Format", formatInfo, Color(170, 170, 170))
         }
 
-        Text("│", color = Color.Cyan)
+        Text("")
 
         // Progress bar
-        uiState.progress?.let { progress ->
-            val percentage = progress.progressPercentage
-            val barWidth = 40
-            val filled = (barWidth * percentage / 100).toInt().coerceIn(0, barWidth)
-            val bar = "█".repeat(filled) + "░".repeat(barWidth - filled)
+        val percentage = progress?.progressPercentage?.toInt()?.coerceIn(0, 100) ?: 0
+        ProgressBar(percentage, stage == ExtractionStage.COMPLETED, stage == ExtractionStage.FAILED)
 
-            Text("│ [$bar] $percentage%", color = Color.Green)
+        Text("")
 
-            // Stats line
-            val filesText = "${progress.filesProcessed}/${progress.totalFiles} files"
-            val bytesText = formatBytes(progress.bytesProcessed)
-            Text("│ $filesText  •  $bytesText", color = Color.White)
+        // Status & current file
+        when (stage) {
+            ExtractionStage.STARTING -> {
+                StatusLine("Starting...")
+            }
+            ExtractionStage.ANALYZING -> {
+                StatusLine("Analyzing archive...")
+            }
+            ExtractionStage.EXTRACTING -> {
+                val currentFile = progress?.currentFile?.let { truncatePath(it, 42) } ?: ""
+                if (currentFile.isNotEmpty()) {
+                    StatusLine(currentFile)
+                }
+                val filesText = "${progress?.filesProcessed ?: 0} / ${progress?.totalFiles ?: 0} files"
+                val bytesText = formatBytes(progress?.bytesProcessed ?: 0)
+                InfoRow("Progress", "$filesText  ·  $bytesText", Color.White)
+            }
+            ExtractionStage.FINALIZING -> {
+                StatusLine("Finalizing...")
+            }
+            ExtractionStage.COMPLETED -> {
+                Row {
+                    Text("  ")
+                    Text(" Done ", color = Color.Black, background = Color.Green, textStyle = TextStyle.Bold)
+                    Text("  ")
+                    val totalFiles = progress?.totalFiles ?: 0
+                    val totalBytes = formatBytes(progress?.totalBytes ?: 0)
+                    Text("$totalFiles files  ·  $totalBytes", color = Color.White)
+                }
+            }
+            ExtractionStage.FAILED -> {
+                Row {
+                    Text("  ")
+                    Text(" Error ", color = Color.White, background = Color.Red, textStyle = TextStyle.Bold)
+                    Text("  ")
+                    Text(uiState.error ?: "Extraction failed", color = Color.Red)
+                }
+            }
+            else -> {
+                StatusLine("Waiting...")
+            }
         }
 
-        Text("│", color = Color.Cyan)
+        Text("")
 
-        // Stage indicator with emoji
-        val stageText = when (uiState.progress?.stage) {
-            ExtractionStage.STARTING -> "⏳ Starting..."
-            ExtractionStage.ANALYZING -> "🔍 Analyzing archive..."
-            ExtractionStage.EXTRACTING -> "📦 Extracting files..."
-            ExtractionStage.FINALIZING -> "✨ Finalizing..."
-            ExtractionStage.COMPLETED -> "✅ Complete!"
-            ExtractionStage.FAILED -> "❌ Failed"
-            else -> "⏸ Idle"
+        if (showCloseHint && (stage == ExtractionStage.COMPLETED || stage == ExtractionStage.FAILED)) {
+            StatusLine("Close this window to exit.")
+            Text("")
         }
-        Text("│ $stageText", color = Color.Yellow)
-
-        // Error display
-        if (uiState.error != null) {
-            Text("│", color = Color.Cyan)
-            Text("│ Error: ${uiState.error}", color = Color.Red)
-        }
-
-        // Footer border
-        Text("└────────────────────────────────┘", color = Color.Cyan)
     }
 }
 
-/**
- * Format bytes to human-readable format
- */
+@Composable
+private fun Header(title: String) {
+    val inner = BOX_WIDTH - 4
+    Text("  ╭${"─".repeat(inner + 2)}╮", color = Color.Cyan)
+    Row {
+        Text("  │ ", color = Color.Cyan)
+        Text(title, color = Color.White, textStyle = TextStyle.Bold)
+        Text(" ".repeat((inner - title.length).coerceAtLeast(0)))
+        Text(" │", color = Color.Cyan)
+    }
+    Text("  ╰${"─".repeat(inner + 2)}╯", color = Color.Cyan)
+}
+
+@Composable
+private fun InfoRow(label: String, value: String, valueColor: Color) {
+    Row {
+        Text("    ")
+        Text(label.padEnd(10), color = Color(100, 100, 100))
+        Text(value, color = valueColor)
+    }
+}
+
+@Composable
+private fun StatusLine(text: String) {
+    Row {
+        Text("    ")
+        Text(text, color = Color(170, 170, 170))
+    }
+}
+
+@Composable
+private fun ProgressBar(percentage: Int, isComplete: Boolean, isFailed: Boolean) {
+    val barWidth = BOX_WIDTH - 10
+    val filled = (barWidth * percentage / 100).coerceIn(0, barWidth)
+    val empty = barWidth - filled
+
+    val barColor = when {
+        isFailed -> Color.Red
+        isComplete -> Color.Green
+        else -> Color.Cyan
+    }
+
+    Row {
+        Text("    ")
+        Text("━".repeat(filled), color = barColor)
+        if (empty > 0) {
+            Text("━".repeat(empty), color = Color(60, 60, 60))
+        }
+        Text("  ")
+        Text("${percentage}%".padStart(4), color = barColor, textStyle = TextStyle.Bold)
+    }
+}
+
+private fun truncatePath(path: String, maxLen: Int): String {
+    if (path.length <= maxLen) return path
+    return "..." + path.takeLast(maxLen - 3)
+}
+
 private fun formatBytes(bytes: Long): String {
     return when {
         bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
-        else -> "${bytes / (1024 * 1024 * 1024)} GB"
+        bytes < 1024 * 1024 -> "${formatDecimal(bytes / 1024.0)} KB"
+        bytes < 1024 * 1024 * 1024 -> "${formatDecimal(bytes / (1024.0 * 1024.0))} MB"
+        else -> "${formatDecimal(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
     }
+}
+
+private fun formatDecimal(value: Double): String {
+    val whole = value.toLong()
+    val frac = ((value - whole) * 10).toLong().coerceIn(0, 9)
+    return "$whole.$frac"
 }

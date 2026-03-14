@@ -1,7 +1,7 @@
 plugins {
-    kotlin("multiplatform") version "2.2.20"
-    kotlin("plugin.serialization") version "2.2.20"
-    kotlin("plugin.compose") version "2.2.20"
+    kotlin("multiplatform") version "2.3.10"
+    kotlin("plugin.serialization") version "2.3.10"
+    kotlin("plugin.compose") version "2.3.10"
 }
 
 // Application version
@@ -46,10 +46,6 @@ kotlin {
             executable {
                 baseName = "qunzip"
                 entryPoint = "qunzip.main"
-                // Use Windows subsystem for release builds (no console window)
-                if (buildType == org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE) {
-                    linkerOpts("-Wl,--subsystem,windows")
-                }
                 // Link the compiled Windows resource file (contains icon and version info)
                 // The resource file is compiled by the compileWindowsResources task
                 linkerOpts(file("build/resources/qunzip.res").absolutePath)
@@ -69,8 +65,8 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.5.0")
                 implementation("co.touchlab:kermit:2.0.3") // Logging
 
-                // Mosaic for TUI
-                implementation("com.jakewharton.mosaic:mosaic-runtime:0.18.0")
+                // Mosaic for TUI (local build with AnsiLevel support for NonInteractiveTerminal)
+                implementation("com.jakewharton.mosaic:mosaic-runtime:0.19.0-SNAPSHOT")
             }
         }
 
@@ -97,11 +93,46 @@ kotlin {
     }
 }
 
-// Test tasks for all platforms
+// ============================================================================
+// Test Pyramid Tasks
+// ============================================================================
+//
+// Test levels (run all at once or individually):
+//   ./gradlew testAll          - Run entire test pyramid
+//   ./gradlew unitTest         - Unit tests only (domain entities, use cases, viewmodels)
+//   ./gradlew integrationTest  - Integration tests only (real 7zip, real filesystem)
+//   ./gradlew e2eTest          - E2E tests only (launches compiled qunzip.exe)
+//   ./gradlew mingwX64Test     - All Windows platform tests (integration + e2e)
+//
+
 tasks.register("testAll") {
-    dependsOn("allTests")
+    dependsOn("mingwX64Test")
     group = "verification"
-    description = "Run tests on all platforms"
+    description = "Run entire test pyramid (unit + integration + e2e)"
+}
+
+tasks.register("unitTest") {
+    dependsOn("mingwX64Test")
+    group = "verification"
+    description = "Run unit tests (common tests on mingwX64)"
+}
+
+tasks.register("integrationTest") {
+    dependsOn("mingwX64Test")
+    group = "verification"
+    description = "Run integration tests (real 7zip, real filesystem)"
+}
+
+tasks.register("e2eTest") {
+    dependsOn("mingwX64Test")
+    group = "verification"
+    description = "Run end-to-end tests (launches compiled qunzip.exe)"
+}
+
+// Ensure mingwX64Test has the executable and 7zip available
+tasks.named("mingwX64Test") {
+    dependsOn("linkDebugExecutableMingwX64")
+    dependsOn("download7zip")
 }
 
 // Build tasks for all platforms

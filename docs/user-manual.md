@@ -1,10 +1,10 @@
 # User Manual
 
-> **⚠️ Note**: This manual describes the functionality of Qunzip. The project is currently under active development. **Windows is feature-complete** with both native Win32 GUI and Terminal UI (TUI). Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
+> **Note**: This manual describes the functionality of Qunzip. The project is currently under active development. **Windows is functional** with Mosaic TUI. Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
 
 ## Overview
 
-**Qunzip** is a cross-platform archive extraction utility that provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives. Inspired by macOS simplicity, it works intelligently in the background to extract your files exactly where you expect them.
+**Qunzip** is a cross-platform archive extraction utility that provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives. Inspired by macOS simplicity, it works intelligently to extract your files exactly where you expect them.
 
 ## Installation
 
@@ -33,61 +33,52 @@
 
 ## Basic Usage
 
-### Two User Interface Modes
+### Terminal UI
 
-Qunzip provides two user interfaces:
+Qunzip uses a Mosaic-based terminal UI for all interactions. The same TUI renders in both terminal and double-click launch scenarios.
 
-1. **Terminal UI (TUI)** - Interactive terminal interface with live progress updates
-2. **Native GUI** - Platform-specific graphical dialogs (Windows implemented, macOS/Linux planned)
-
-The application automatically chooses the appropriate interface:
-- **Double-clicking** an archive in File Explorer → Native GUI mode (Windows)
-- **Running from terminal** → Terminal UI with interactive progress display
-
-You can also force a specific mode:
-- `qunzip --tui archive.zip` - Force terminal UI
-- `qunzip --gui archive.zip` - Force GUI mode
-
-### Extracting Archives (Terminal UI)
+### Extracting Archives
 
 Run from your terminal:
 ```bash
 qunzip archive.zip
 ```
 
-You'll see an interactive progress display:
+You'll see a progress display:
 ```
-┌─── Qunzip Archive Extractor ───┐
-│
-│ Archive: my-files.zip
-│
-│ [████████████████████░░░░░░░] 67.3%
-│ 45/67 files  •  128 MB
-│
-│ 📦 Extracting files...
-└────────────────────────────────┘
+  ╭──────────────────────────────────────────────────╮
+  │ qunzip                                           │
+  ╰──────────────────────────────────────────────────╯
+
+    Archive   my-files.zip
+    Format    ZIP  ·  15.2 MB
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  67%
+
+    45 / 67 files  ·  10.2 MB
 ```
 
-The Terminal UI shows:
+The TUI shows:
 - Real-time progress bar with percentage
+- Archive info (name, format, size)
 - File count and data statistics
-- Current extraction stage with visual indicators:
-  - 🔍 Analyzing archive...
-  - 📦 Extracting files...
-  - ✨ Finalizing...
-  - ✅ Complete!
+- Color-coded status:
+  - Cyan progress bar during extraction
+  - Green bar and "Done" badge on completion
+  - Red bar and "Error" badge on failure
 
-### Extracting Archives (GUI Mode)
+### Double-Click Extraction
 
 **Simply double-click any supported archive file.**
 
 The application will:
-1. Analyze the archive contents
-2. Extract files intelligently:
+1. Open a console window with the TUI
+2. Analyze the archive contents
+3. Extract files intelligently:
    - **Single file**: Extracts directly to the same folder
    - **Multiple files**: Creates a new folder named after the archive
-3. Optionally move the original archive to trash (if enabled in settings)
-4. Optionally show a completion dialog (if enabled in settings)
+4. Optionally move the original archive to trash (if enabled in settings)
+5. Exit when complete (or stay open if completion dialog is enabled)
 
 ### Example Scenarios
 
@@ -126,13 +117,12 @@ After:  /Downloads/project/src/
 For archives larger than 10MB, you'll see a progress notification showing:
 - Current progress percentage
 - Data transferred vs. total size
-- Estimated time remaining
 - Cancel option
 
 ### Error Recovery
 If extraction fails:
 - The original archive remains untouched
-- An error notification explains what went wrong
+- An error message is displayed in the TUI
 - No partial files are left behind
 
 ### Smart Conflict Resolution
@@ -143,37 +133,14 @@ If extracted files would overwrite existing files or folders:
 
 ## Settings and Configuration
 
-### Viewing and Configuring Settings
+### Viewing Settings
 
-Run without any archive file to open the settings window:
+Run without any archive file to see the settings display:
 ```bash
 qunzip
 ```
 
-**Windows**: Opens native settings window with checkboxes for preferences.
-
-**Terminal**: Shows settings in TUI format:
-```
-┌─────── Qunzip Settings ───────┐
-│
-│ File Associations
-│
-│ Status: ⭕ Not Registered
-│
-│ Supported formats:
-│   · .zip
-│   · .7z
-│   · .rar
-│   · .tar
-│   · .tar.gz
-│   · .tar.bz2
-│   · .tar.xz
-│
-│ Commands:
-│   --register-associations
-│   --unregister-associations
-└───────────────────────────────┘
-```
+Shows settings in TUI format with file association status, supported formats, current preferences, and available commands.
 
 ### Configuring Preferences via Command Line
 
@@ -196,7 +163,6 @@ Preferences are stored in `~/.qunzip/preferences.json`.
 ### File Associations
 The application automatically registers itself for supported file types during installation. To manually manage associations:
 
-**Command Line**:
 ```bash
 qunzip --register-associations    # Register all supported formats
 qunzip --unregister-associations  # Unregister all formats
@@ -206,12 +172,6 @@ qunzip --unregister-associations  # Unregister all formats
 - **Windows**: Right-click archive → "Open with" → "Choose another app" → Select Qunzip
 - **macOS**: Right-click archive → "Get Info" → "Open with" → Select Qunzip → "Change All"
 - **Linux**: Depends on desktop environment (usually in file manager preferences)
-
-### Notification Preferences
-Notifications follow your system preferences:
-- **Windows**: Control Panel → System → Notifications
-- **macOS**: System Preferences → Notifications → Qunzip
-- **Linux**: Desktop environment notification settings
 
 ## Troubleshooting
 
@@ -234,9 +194,6 @@ Notifications follow your system preferences:
 - Check if the file extension matches the actual format
 - Ensure the archive isn't password-protected
 
-#### No Progress Notification
-**Normal behavior** for archives under 10MB. Large archives will show progress automatically.
-
 #### Original Archive Not Moved to Trash
 This happens when:
 - The "move to trash" setting is disabled (default behavior)
@@ -246,27 +203,10 @@ This happens when:
 
 ### Getting Help
 
-> **Note**: Logging features are implemented but not yet tested in the current development build.
-
-#### Log Files
-Application logs are stored at:
-- **Windows**: `%APPDATA%\Qunzip\logs/` _(planned)_
-- **macOS**: `~/Library/Logs/Qunzip/` _(pending implementation)_
-- **Linux**: `~/.local/share/qunzip/logs/` _(pending implementation)_
-
 #### Reporting Issues
 For development feedback and bug reports, see the project's documentation:
 - [Development Progress](development-progress.md)
 - [Architecture Documentation](architecture.md)
-
-## Keyboard Shortcuts
-
-### During Extraction
-- **Escape**: Cancel ongoing extraction (for large files)
-
-### In Error Dialogs
-- **Enter**: Dismiss dialog
-- **Tab**: Navigate between buttons
 
 ## Privacy and Security
 
@@ -286,9 +226,3 @@ For development feedback and bug reports, see the project's documentation:
 - Extract archives to fast storage (SSD preferred)
 - Ensure sufficient free space (at least 2x archive size)
 - Close other disk-intensive applications during large extractions
-
-### Batch Processing
-To extract multiple archives:
-1. Select all archive files
-2. Press Enter (or double-click the last selected file)
-3. Each archive will be processed sequentially

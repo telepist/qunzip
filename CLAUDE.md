@@ -17,23 +17,22 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 - `./gradlew linkReleaseExecutable<Platform>` - Build release version for specific platform
 - `./gradlew download7zip` - Download 7-Zip binaries (automatic during Windows build)
 
-### Testing Commands
-- `./gradlew testAll` - Run tests on all platforms
-- `./gradlew test` - Run common tests
-- `./gradlew <platform>Test` - Run platform-specific tests
+### Testing Commands (Test Pyramid)
+- `./gradlew testAll` - Run entire test pyramid (unit + integration + e2e)
+- `./gradlew mingwX64Test` - Run all Windows tests (unit + integration + e2e)
+- `./gradlew mingwX64Test --tests "qunzip.domain.*"` - Unit tests only (entities, use cases)
+- `./gradlew mingwX64Test --tests "qunzip.presentation.*"` - ViewModel tests only
+- `./gradlew mingwX64Test --tests "qunzip.integration.*"` - Integration tests only (real 7zip)
+- `./gradlew mingwX64Test --tests "qunzip.e2e.*"` - E2E tests only (launches qunzip.exe)
 
 ### Running the Application
-- **GUI mode** (double-click or auto-detect): `./build/bin/<platform>/debugExecutable/qunzip.kexe <archive-file>`
-- **TUI mode** (terminal UI): `./build/bin/<platform>/debugExecutable/qunzip.kexe --tui <archive-file>`
-- **Force GUI mode**: `./build/bin/<platform>/debugExecutable/qunzip.kexe --gui <archive-file>`
+- **Extract an archive**: `./build/bin/<platform>/debugExecutable/qunzip.kexe <archive-file>`
 - **Settings mode**: `./build/bin/<platform>/debugExecutable/qunzip.kexe` (no file argument)
-- The application auto-detects launch context and chooses appropriate UI (native GUI or terminal TUI)
+- The application uses Mosaic TUI for all rendering (both CLI and double-click launches)
 
 ### CLI Arguments
 | Argument | Description |
 |----------|-------------|
-| `--gui` | Force GUI mode |
-| `--tui` | Force TUI (terminal UI) mode |
 | `--help`, `-h` | Display help information |
 | `--version`, `-v` | Display version information |
 | `--register-associations` | Register file associations (installer integration) |
@@ -42,6 +41,7 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 | `--set-trash-off` | Disable moving archives to trash after extraction |
 | `--set-dialog-on` | Enable completion dialog after extraction |
 | `--set-dialog-off` | Disable completion dialog (silent exit, default) |
+| `--force-standalone` | Force standalone mode (for testing standalone exit behavior) |
 
 ### Windows Installer Commands
 - `./gradlew prepareInstallerResources` - Prepare files for installer
@@ -60,6 +60,7 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 
 ### Other Commands
 - `./gradlew clean` - Clean build artifacts
+- `make install` - Build release and update local installation (detects existing install path)
 
 ## Architecture
 
@@ -78,10 +79,10 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 #### Presentation Layer (`src/commonMain/kotlin/qunzip/presentation/`)
 - **ViewModels**: `ExtractionViewModel`, `FileAssociationViewModel`, `ApplicationViewModel`, `SettingsViewModel`
 - **State Management**: Kotlin Flow with StateFlow/SharedFlow patterns
-- **UI Layer**: Hybrid approach with Mosaic TUI and platform-native GUIs
-  - **Mosaic TUI**: Interactive terminal UI with progress bars, colors, and real-time updates (all platforms)
-  - **Native GUIs**: Platform-specific dialogs (Windows Win32 complete, macOS/Linux stubs)
-  - **Auto-detection**: Chooses GUI for double-click, TUI for terminal launch
+- **UI Layer**: Mosaic TUI for all platforms
+  - **Mosaic TUI**: Terminal UI with progress bars, colors, and real-time updates
+  - **Standalone detection**: On Windows, detects double-click vs CLI launch via `GetConsoleProcessList`
+  - **Standalone mode**: Uses Mosaic's `NonInteractiveTerminal` with truecolor to avoid raw mode issues
 
 ### MVVM with Kotlin Flow
 - ViewModels expose `StateFlow` for UI state
@@ -103,13 +104,13 @@ Common interfaces in domain layer, platform-specific implementations:
 - Linux ARM64
 
 ### Dependencies
-- **Kotlin Multiplatform**: `2.2.20`
-- **Kotlin Compose Compiler Plugin**: `2.2.20` - Required for Mosaic composables
+- **Kotlin Multiplatform**: `2.3.10`
+- **Kotlin Compose Compiler Plugin**: `2.3.10` - Required for Mosaic composables
 - **Kotlinx Coroutines**: `1.8.0` - Async operations
 - **Kotlinx Serialization**: `1.6.3` - Data serialization
 - **Kotlinx DateTime**: `0.5.0` - Date/time handling
 - **Kermit**: `2.0.3` - Multiplatform logging
-- **Mosaic**: `0.18.0` - Terminal UI framework for Kotlin/Native
+- **Mosaic**: `0.19.0-SNAPSHOT` - Terminal UI framework for Kotlin/Native (local build with AnsiLevel support)
 - **Turbine**: `1.0.0` - Flow testing (test only)
 
 ### Build Configuration
@@ -130,14 +131,14 @@ src/
 │   ├── presentation/
 │   │   ├── viewmodels/        # State management
 │   │   └── ui/                # UI layer
-│   │       ├── UiRenderer.kt       # UI backend interface
-│   │       ├── LaunchContext.kt    # UI mode detection
+│   │       ├── UiRenderer.kt       # Mosaic TUI renderer
+│   │       ├── LaunchContext.kt    # Launch mode detection
 │   │       └── tui/                # Mosaic Terminal UI
 │   │           ├── MosaicApp.kt         # Root Mosaic composable
 │   │           ├── ExtractionTui.kt     # Extraction progress TUI
 │   │           └── SettingsTui.kt       # Settings display TUI
 │   └── main.kt               # Application entry point
-├── commonTest/kotlin/qunzip/  # Shared tests
+├── commonTest/kotlin/qunzip/  # Unit tests (entities, use cases, viewmodels)
 ├── mingwX64Main/kotlin/qunzip/     # Windows x64 (MinGW) implementations
 │   ├── platform/                   # Windows repository implementations
 │   │   ├── WindowsArchiveRepository.kt
@@ -145,21 +146,26 @@ src/
 │   │   ├── WindowsNotificationRepository.kt
 │   │   ├── WindowsFileAssociationRepository.kt
 │   │   └── WindowsPreferencesRepository.kt
-│   ├── presentation/ui/            # Windows native GUI
-│   │   ├── Win32Gui.kt             # Win32 GUI renderer with progress window + settings window
-│   │   └── LaunchContext.kt        # Windows terminal detection
+│   ├── presentation/ui/
+│   │   └── LaunchContext.kt        # Windows standalone launch detection
 │   ├── resources/                  # Windows resources
 │   │   ├── qunzip.rc               # Resource file (icon, version info)
 │   │   └── qunzip.exe.manifest     # Windows manifest
 │   └── WindowsPlatform.kt          # DI and platform utilities
+├── mingwX64Test/kotlin/qunzip/     # Windows platform tests
+│   ├── TestHelpers.kt              # Process execution, temp dirs, fixtures
+│   ├── integration/                # Integration tests (real 7zip + filesystem)
+│   │   ├── ArchiveExtractionIntegrationTest.kt
+│   │   └── ExtractionPipelineIntegrationTest.kt
+│   ├── e2e/                        # End-to-end tests (launches qunzip.exe)
+│   │   └── QunzipExeE2eTest.kt
+│   └── resources/fixtures/         # Test archive files
 ├── linuxX64Main/kotlin/qunzip/     # Linux x64 implementations
-│   └── presentation/ui/            # Linux GUI (stubs)
-│       ├── GtkGui.kt               # GTK GUI renderer (future)
+│   └── presentation/ui/
 │       └── LaunchContext.kt        # Linux terminal detection
 ├── linuxArm64Main/kotlin/qunzip/   # Linux ARM64 implementations
 ├── macosX64Main/kotlin/qunzip/     # macOS Intel implementations
-│   └── presentation/ui/            # macOS GUI (stubs)
-│       ├── CocoaGui.kt             # Cocoa GUI renderer (future)
+│   └── presentation/ui/
 │       └── LaunchContext.kt        # macOS terminal detection
 └── macosArm64Main/kotlin/qunzip/   # macOS Apple Silicon implementations
 ```
@@ -215,11 +221,20 @@ Stored in JSON format at `~/.qunzip/preferences.json`:
 - **Edge cases**: Every edge case and error condition must be tested
 - **Conflict handling**: All file/folder naming conflicts must be tested
 
-#### Test Organization
-- **Unit tests** for domain layer in `src/commonTest/kotlin/qunzip/domain/`
-- **ViewModel tests** in `src/commonTest/kotlin/qunzip/presentation/viewmodels/`
-- **Mock implementations** for isolating units under test
-- **Flow testing** using Turbine library for reactive streams
+#### Test Pyramid Organization
+- **Unit tests** in `src/commonTest/kotlin/qunzip/domain/` and `src/commonTest/kotlin/qunzip/presentation/viewmodels/`
+  - Domain entities, use cases, viewmodels with mock dependencies
+  - Flow testing using Turbine library
+- **Integration tests** in `src/mingwX64Test/kotlin/qunzip/integration/`
+  - Real `WindowsArchiveRepository` with 7zip, real `WindowsFileSystemRepository`
+  - Full `ExtractArchiveUseCase` pipeline with real archive files
+- **E2E tests** in `src/mingwX64Test/kotlin/qunzip/e2e/`
+  - Launch compiled `qunzip.exe` as external process
+  - Verify CLI arguments, exit codes, timeout behavior (standalone exit)
+- **Test helpers** in `src/mingwX64Test/kotlin/qunzip/TestHelpers.kt`
+  - Process execution with pipe draining and timeout
+  - Temp directory management, fixture paths
+- **Test fixtures** in `src/mingwX64Test/resources/fixtures/`
 
 #### When Adding New Features
 1. Identify all scenarios and edge cases
@@ -263,8 +278,8 @@ When a feature like "avoid overwriting files" is added, tests must cover:
 
 ## Current Development Status
 
-**Phase**: Windows Feature-Complete
-**Progress**: Core architecture complete, Windows platform feature-complete with GUI and settings, Mosaic TUI fully functional
+**Phase**: TUI-Only Redesign
+**Progress**: Core architecture complete, Windows platform functional, Mosaic TUI is the sole UI
 
 ### ✅ Completed
 - Clean Architecture with MVVM setup (100%)
@@ -282,32 +297,23 @@ When a feature like "avoid overwriting files" is added, tests must cover:
   - WindowsPlatform.kt (DI and platform utilities)
   - Embedded application icon in executable
 - **Mosaic Terminal UI (100%)**
-  - Interactive TUI with real-time progress updates
-  - Progress bars, colors, emojis for visual feedback
+  - TUI with real-time progress updates
+  - Progress bars, colors for visual feedback
   - Extraction progress display (stages, files, bytes)
   - Settings/file associations display
-  - Auto-detection of terminal launch vs GUI launch
-  - `--tui` and `--gui` flags for manual override
+  - Standalone launch detection (Windows: `GetConsoleProcessList`)
+  - Standalone mode uses `NonInteractiveTerminal` with truecolor
+  - CLI mode uses full interactive `TtyTerminal`
 - **Black Box E2E Test Scripts**
   - Windows, Linux, and macOS test scripts created
   - Test fixtures prepared (single-file.zip, multiple-files.zip, nested-folder.zip)
   - TUI extraction tested and working
-- **Windows Win32 Native GUI (100%)**
-  - Native progress window during extraction (420x180px, modern Segoe UI styling)
-  - Native settings window with preferences checkboxes
-  - MessageBox dialogs for completion/error notifications
-  - Cancel button for extraction operations
-  - Embedded icon loading from executable resources
-  - Auto-detects GUI vs TUI mode based on launch context
-  - Seamless integration with MVVM architecture
 - **Windows Installer (100%)**
   - Inno Setup script for Windows installer
   - Portable ZIP distribution support
   - Icon and resource compilation
 
 ### ⏳ Pending
-- macOS Cocoa native GUI implementation (stubs exist)
-- Linux GTK native GUI implementation (stubs exist)
 - Linux/macOS platform full repository implementations (stubs with NotImplementedError)
 - End-to-end integration testing on Linux/macOS
 - Windows Registry file associations (advanced feature)

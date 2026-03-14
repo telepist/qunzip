@@ -196,21 +196,24 @@ See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run entire test pyramid (unit + integration + e2e)
 ./gradlew testAll
 
-# Run common (platform-agnostic) tests
-./gradlew test
-
-# Run Windows-specific tests
+# Run all Windows tests
 ./gradlew mingwX64Test
+
+# Run selectively by layer
+./gradlew mingwX64Test --tests "qunzip.domain.*"        # Unit tests
+./gradlew mingwX64Test --tests "qunzip.presentation.*"  # ViewModel tests
+./gradlew mingwX64Test --tests "qunzip.integration.*"    # Integration tests
+./gradlew mingwX64Test --tests "qunzip.e2e.*"            # E2E tests
 ```
 
 ### Code Structure
 
 - **Clean Architecture**: Domain, Data, Presentation layers
 - **MVVM Pattern**: ViewModels with Kotlin Flow
-- **TDD**: Unit tests with Turbine for Flow testing
+- **TDD**: Full test pyramid (unit → integration → E2E) with Turbine for Flow testing
 - **Platform Abstraction**: Expect/actual for platform-specific code
 
 ## Contributing

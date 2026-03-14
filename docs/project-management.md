@@ -107,34 +107,30 @@
 **US-004**: As a Windows user, I want native Windows integration so that the app feels like a Windows application
 - **Tasks**:
   - Implement Windows file associations
-  - Add Windows notification support
   - Integrate with Windows Recycle Bin
   - Handle Windows-specific paths
+  - Standalone launch detection and console configuration
 - **Acceptance Criteria**:
   - File associations work correctly
-  - Native Windows notifications
   - Files go to Recycle Bin
+  - TUI renders correctly in both CLI and double-click modes
 
-**US-005**: As a macOS user, I want native macOS integration so that the app feels like a Mac application
+**US-005**: As a macOS user, I want native macOS integration so that the app works on Mac
 - **Tasks**:
   - Implement macOS file associations via Launch Services
-  - Add macOS notification center support
   - Integrate with macOS Trash
   - Handle macOS-specific paths
 - **Acceptance Criteria**:
   - Launch Services integration works
-  - Notification Center notifications
   - Files go to Trash
 
 **US-006**: As a Linux user, I want desktop integration so that the app works with my file manager
 - **Tasks**:
   - Implement XDG file associations
-  - Add desktop notification support
   - Integrate with XDG trash specification
   - Handle various Linux distributions
 - **Acceptance Criteria**:
   - XDG associations work
-  - Desktop notifications appear
   - Files go to trash folder
 
 ### Enhanced Experience Features

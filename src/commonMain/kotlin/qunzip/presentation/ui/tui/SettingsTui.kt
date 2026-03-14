@@ -7,20 +7,15 @@ import com.jakewharton.mosaic.layout.KeyEvent
 import com.jakewharton.mosaic.layout.onKeyEvent
 import com.jakewharton.mosaic.modifier.Modifier
 import com.jakewharton.mosaic.ui.*
-import kotlin.system.exitProcess
 
-/**
- * Menu items for the settings screen
- */
-private enum class SettingsMenuItem(val label: String) {
+private const val BOX_WIDTH = 52
+
+private enum class MenuItem(val label: String) {
     MOVE_TO_TRASH("Move archive to trash after extraction"),
     SHOW_COMPLETION_DIALOG("Show completion dialog"),
     QUIT("Quit")
 }
 
-/**
- * Mosaic TUI for settings and file associations with keyboard navigation
- */
 @Composable
 fun SettingsTui(
     fileAssociationViewModel: FileAssociationViewModel,
@@ -31,11 +26,9 @@ fun SettingsTui(
     val settingsState by settingsViewModel.uiState.collectAsState()
     val prefs = settingsState.preferences
 
-    // Track selected menu item
     var selectedIndex by remember { mutableStateOf(0) }
-    val menuItems = SettingsMenuItem.entries
+    val menuItems = MenuItem.entries
 
-    // Handle keyboard input
     Column(
         modifier = Modifier.onKeyEvent { event ->
             when (event) {
@@ -49,100 +42,161 @@ fun SettingsTui(
                 }
                 KeyEvent("Enter"), KeyEvent(" ") -> {
                     when (menuItems[selectedIndex]) {
-                        SettingsMenuItem.MOVE_TO_TRASH -> {
+                        MenuItem.MOVE_TO_TRASH -> {
                             settingsViewModel.setMoveToTrashAfterExtraction(!prefs.moveToTrashAfterExtraction)
                         }
-                        SettingsMenuItem.SHOW_COMPLETION_DIALOG -> {
+                        MenuItem.SHOW_COMPLETION_DIALOG -> {
                             settingsViewModel.setShowCompletionDialog(!prefs.showCompletionDialog)
                         }
-                        SettingsMenuItem.QUIT -> {
-                            exitProcess(0)
+                        MenuItem.QUIT -> {
+                            onExit()
                         }
                     }
                     true
                 }
                 KeyEvent("q") -> {
-                    exitProcess(0)
+                    onExit()
                     true
                 }
                 else -> false
             }
         }
     ) {
+        Text("")
+
         // Header
-        Text("┌────────────── Qunzip Settings ──────────────┐", color = Color.Cyan)
-        Text("│", color = Color.Cyan)
+        SettingsHeader("qunzip settings")
+        Text("")
 
-        // Instructions
-        Text("│  Use ↑/↓ to navigate, Enter/Space to toggle", color = Color.Green)
-        Text("│", color = Color.Cyan)
-
-        // Preferences Section
-        Text("│  Extraction Preferences", color = Color.White)
-        Text("│", color = Color.Cyan)
+        // Preferences section
+        Text("  Preferences", color = Color.White, textStyle = TextStyle.Bold)
+        Text("")
 
         // Menu items
         menuItems.forEachIndexed { index, item ->
             val isSelected = index == selectedIndex
-            val prefix = if (isSelected) "│  ▶ " else "│    "
 
             when (item) {
-                SettingsMenuItem.MOVE_TO_TRASH -> {
-                    val icon = if (prefs.moveToTrashAfterExtraction) "✓" else "✗"
-                    val valueColor = if (prefs.moveToTrashAfterExtraction) Color.Green else Color.Red
-                    val textColor = if (isSelected) Color.Yellow else Color.White
+                MenuItem.MOVE_TO_TRASH -> {
+                    ToggleRow(
+                        label = item.label,
+                        enabled = prefs.moveToTrashAfterExtraction,
+                        selected = isSelected
+                    )
+                }
+                MenuItem.SHOW_COMPLETION_DIALOG -> {
+                    ToggleRow(
+                        label = item.label,
+                        enabled = prefs.showCompletionDialog,
+                        selected = isSelected
+                    )
+                }
+                MenuItem.QUIT -> {
+                    Text("")
                     Row {
-                        Text(prefix, color = Color.Cyan)
-                        Text("[$icon] ", color = valueColor)
+                        val cursor = if (isSelected) ">" else " "
+                        val textColor = if (isSelected) Color.Cyan else Color(170, 170, 170)
+                        Text("  $cursor ", color = Color.Cyan)
                         Text(item.label, color = textColor)
                     }
-                }
-                SettingsMenuItem.SHOW_COMPLETION_DIALOG -> {
-                    val icon = if (prefs.showCompletionDialog) "✓" else "✗"
-                    val valueColor = if (prefs.showCompletionDialog) Color.Green else Color.Red
-                    val textColor = if (isSelected) Color.Yellow else Color.White
-                    Row {
-                        Text(prefix, color = Color.Cyan)
-                        Text("[$icon] ", color = valueColor)
-                        Text(item.label, color = textColor)
-                    }
-                }
-                SettingsMenuItem.QUIT -> {
-                    val textColor = if (isSelected) Color.Yellow else Color.Green
-                    Text("$prefix${item.label}", color = textColor)
                 }
             }
         }
 
-        Text("│", color = Color.Cyan)
+        Text("")
 
-        // Divider
-        Text("│──────────────────────────────────────────────│", color = Color.Cyan)
-        Text("│", color = Color.Cyan)
+        // File Associations box
+        val inner = BOX_WIDTH - 4
+        Text("  ╭${"─".repeat(inner + 2)}╮", color = Color(80, 80, 80))
 
-        // File Associations Section
-        Text("│  File Associations", color = Color.White)
-        Text("│", color = Color.Cyan)
+        Row {
+            Text("  │ ", color = Color(80, 80, 80))
+            Text("File Associations", color = Color.White, textStyle = TextStyle.Bold)
+            Text(" ".repeat((inner - 17).coerceAtLeast(0)))
+            Text(" │", color = Color(80, 80, 80))
+        }
 
-        // Registration status
-        val statusText = if (fileAssocState.isRegistered) "✅ Registered" else "⭕ Not Registered"
-        val statusColor = if (fileAssocState.isRegistered) Color.Green else Color.Yellow
-        Text("│  Status: $statusText", color = statusColor)
+        Row {
+            Text("  │ ", color = Color(80, 80, 80))
+            val statusText: String
+            val statusColor: Color
+            if (fileAssocState.isRegistered) {
+                statusText = "Registered"
+                statusColor = Color.Green
+            } else {
+                statusText = "Not registered"
+                statusColor = Color(170, 170, 170)
+            }
+            Text("Status: ", color = Color(100, 100, 100))
+            Text(statusText, color = statusColor)
+            Text(" ".repeat((inner - 8 - statusText.length).coerceAtLeast(0)))
+            Text(" │", color = Color(80, 80, 80))
+        }
 
-        // Extension list (compact)
-        Text("│  Formats: .zip .7z .rar .tar .tar.gz .cab", color = Color.White)
+        Row {
+            Text("  │ ", color = Color(80, 80, 80))
+            val formats = ".zip .7z .rar .tar .cab .arj"
+            Text(formats, color = Color(100, 100, 100))
+            Text(" ".repeat((inner - formats.length).coerceAtLeast(0)))
+            Text(" │", color = Color(80, 80, 80))
+        }
 
-        Text("│", color = Color.Cyan)
+        Text("  ╰${"─".repeat(inner + 2)}╯", color = Color(80, 80, 80))
 
-        // Footer
-        Text("└──────────────────────────────────────────────┘", color = Color.Cyan)
+        Text("")
+
+        // Keybindings hint
+        Row {
+            Text("  ")
+            Text("^", color = Color(170, 170, 170), background = Color(40, 40, 40))
+            Text("v", color = Color(170, 170, 170), background = Color(40, 40, 40))
+            Text(" navigate  ", color = Color(100, 100, 100))
+            Text("space", color = Color(170, 170, 170), background = Color(40, 40, 40))
+            Text(" toggle  ", color = Color(100, 100, 100))
+            Text("q", color = Color(170, 170, 170), background = Color(40, 40, 40))
+            Text(" quit", color = Color(100, 100, 100))
+        }
 
         // Status messages
         if (settingsState.isSaving) {
+            Text("")
             Text("  Saving...", color = Color.Yellow)
         }
         if (settingsState.error != null) {
+            Text("")
             Text("  Error: ${settingsState.error}", color = Color.Red)
         }
+    }
+}
+
+@Composable
+private fun SettingsHeader(title: String) {
+    val inner = BOX_WIDTH - 4
+    Text("  ╭${"─".repeat(inner + 2)}╮", color = Color.Cyan)
+    Row {
+        Text("  │ ", color = Color.Cyan)
+        Text(title, color = Color.White, textStyle = TextStyle.Bold)
+        Text(" ".repeat((inner - title.length).coerceAtLeast(0)))
+        Text(" │", color = Color.Cyan)
+    }
+    Text("  ╰${"─".repeat(inner + 2)}╯", color = Color.Cyan)
+}
+
+@Composable
+private fun ToggleRow(label: String, enabled: Boolean, selected: Boolean) {
+    Row {
+        val cursor = if (selected) ">" else " "
+        Text("  $cursor ", color = Color.Cyan)
+
+        if (enabled) {
+            Text("[", color = Color(80, 80, 80))
+            Text("*", color = Color.Green)
+            Text("] ", color = Color(80, 80, 80))
+        } else {
+            Text("[ ] ", color = Color(80, 80, 80))
+        }
+
+        val textColor = if (selected) Color.White else Color(170, 170, 170)
+        Text(label, color = textColor)
     }
 }

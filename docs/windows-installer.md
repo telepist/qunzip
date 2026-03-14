@@ -181,9 +181,9 @@ To add/remove formats, edit the `[Registry]` section in `qunzip.iss`.
 1. Download test archives (.zip, .7z, .rar)
 2. Double-click an archive
 3. Verify:
-   - Qunzip opens automatically
-   - Archive is extracted
-   - Original moved to Recycle Bin
+   - Console window opens with Qunzip TUI
+   - Archive is extracted with progress display
+   - Original moved to Recycle Bin (if setting enabled)
 4. Check "Open With" context menu shows Qunzip
 
 ### Uninstallation Test
