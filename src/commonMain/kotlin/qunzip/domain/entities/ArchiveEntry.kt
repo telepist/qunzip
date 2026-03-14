@@ -32,19 +32,44 @@ data class ArchiveContents(
     val isEmpty: Boolean get() = entries.isEmpty()
 
     val hasMultipleRootItems: Boolean
-        get() {
-            val rootItems = entries.filter { it.depth == 0 }
-            return rootItems.size > 1
-        }
+        get() = topLevelEntries.size > 1
 
     val singleRootDirectory: ArchiveEntry?
         get() {
-            val rootItems = entries.filter { it.depth == 0 }
-            return if (rootItems.size == 1 && rootItems.first().isDirectory) {
-                rootItems.first()
+            val topLevel = topLevelEntries
+            return if (topLevel.size == 1 && topLevel.first().isDirectory) {
+                topLevel.first()
             } else null
         }
 
+    /**
+     * Returns top-level entries, including implicit directories.
+     * Some archives don't include explicit directory entries for parent folders
+     * (e.g., listing "End/Binaries" but not "End" itself). This computes the
+     * true top-level entries by also considering the first path segment of
+     * nested entries.
+     */
     val topLevelEntries: List<ArchiveEntry>
-        get() = entries.filter { it.depth == 0 }
+        get() {
+            val explicit = entries.filter { it.depth == 0 }
+            val explicitNames = explicit.map { it.name }.toSet()
+
+            // Find implicit top-level directories from nested entries
+            val implicitDirNames = entries
+                .filter { it.depth > 0 }
+                .map { it.path.substringBefore('/') }
+                .toSet()
+                .minus(explicitNames)
+
+            val implicitDirs = implicitDirNames.map { name ->
+                ArchiveEntry(
+                    path = name,
+                    name = name,
+                    isDirectory = true,
+                    size = 0L
+                )
+            }
+
+            return explicit + implicitDirs
+        }
 }

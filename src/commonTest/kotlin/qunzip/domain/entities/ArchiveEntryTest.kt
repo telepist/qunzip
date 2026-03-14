@@ -168,4 +168,52 @@ class ArchiveContentsTest {
         val contents = ArchiveContents(emptyList(), 0L)
         assertTrue(contents.topLevelEntries.isEmpty())
     }
+
+    @Test
+    fun `topLevelEntries includes implicit directories from nested entries`() {
+        // Simulates an archive where 7zip lists "End/Binaries" but not "End" itself
+        val entries = listOf(
+            ArchiveEntry("End/Binaries", "Binaries", true, 0L),
+            ArchiveEntry("End/Binaries/Win64/dsound.dll", "dsound.dll", false, 1178624L),
+            ArchiveEntry("End/Binaries/Win64/FF7RemakeFix.asi", "FF7RemakeFix.asi", false, 1179136L),
+            ArchiveEntry("End/Binaries/Win64/FF7RemakeFix.ini", "FF7RemakeFix.ini", false, 1297L),
+            ArchiveEntry("EXTRACT_TO_GAME_FOLDER", "EXTRACT_TO_GAME_FOLDER", false, 0L)
+        )
+
+        val contents = ArchiveContents(entries, 2359057L)
+        val topLevel = contents.topLevelEntries
+
+        assertEquals(2, topLevel.size)
+        assertTrue(topLevel.any { it.name == "End" && it.isDirectory })
+        assertTrue(topLevel.any { it.name == "EXTRACT_TO_GAME_FOLDER" })
+    }
+
+    @Test
+    fun `hasMultipleRootItems detects implicit directories`() {
+        // Archive with no explicit root directory entry, only nested entries
+        val entries = listOf(
+            ArchiveEntry("End/Binaries", "Binaries", true, 0L),
+            ArchiveEntry("End/Binaries/Win64/file.dll", "file.dll", false, 1000L),
+            ArchiveEntry("README.txt", "README.txt", false, 100L)
+        )
+
+        val contents = ArchiveContents(entries, 1100L)
+        assertTrue(contents.hasMultipleRootItems)
+    }
+
+    @Test
+    fun `singleRootDirectory detects implicit single root directory`() {
+        // Archive where all entries are under "project/" but "project" dir entry is missing
+        val entries = listOf(
+            ArchiveEntry("project/src/main.kt", "main.kt", false, 500L),
+            ArchiveEntry("project/README.md", "README.md", false, 100L)
+        )
+
+        val contents = ArchiveContents(entries, 600L)
+        val rootDir = contents.singleRootDirectory
+
+        assertNotNull(rootDir)
+        assertEquals("project", rootDir.name)
+        assertTrue(rootDir.isDirectory)
+    }
 }
