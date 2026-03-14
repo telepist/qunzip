@@ -18,12 +18,16 @@ enum class ArchiveFormat(val extensions: List<String>, val displayName: String) 
     SEVEN_ZIP(listOf("7z"), "7-Zip Archive"),
     RAR(listOf("rar"), "RAR Archive"),
     TAR(listOf("tar"), "TAR Archive"),
-    TAR_GZ(listOf("tar.gz", "tgz"), "Gzipped TAR Archive"),
-    TAR_BZ2(listOf("tar.bz2", "tbz2"), "Bzip2 TAR Archive"),
-    TAR_XZ(listOf("tar.xz", "txz"), "XZ TAR Archive"),
+    TAR_GZ(listOf("tar.gz", "tgz", "gz"), "Gzipped TAR Archive"),
+    TAR_BZ2(listOf("tar.bz2", "tbz2", "bz2"), "Bzip2 TAR Archive"),
+    TAR_XZ(listOf("tar.xz", "txz", "xz"), "XZ TAR Archive"),
     CAB(listOf("cab"), "Cabinet Archive"),
     ARJ(listOf("arj"), "ARJ Archive"),
     LZH(listOf("lzh"), "LZH Archive");
+
+    /** Whether this is a compressed tar format that requires two-stage extraction (decompress + untar). */
+    val isCompoundTarFormat: Boolean
+        get() = this == TAR_GZ || this == TAR_BZ2 || this == TAR_XZ
 
     companion object {
         fun fromExtension(extension: String): ArchiveFormat? {

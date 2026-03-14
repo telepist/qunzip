@@ -113,4 +113,22 @@ class ArchiveFormatTest {
             assertTrue(format.displayName.isNotEmpty(), "Format ${format.name} should have a display name")
         }
     }
+
+    @Test
+    fun `isCompoundTarFormat returns true for compressed tar formats`() {
+        assertTrue(ArchiveFormat.TAR_GZ.isCompoundTarFormat)
+        assertTrue(ArchiveFormat.TAR_BZ2.isCompoundTarFormat)
+        assertTrue(ArchiveFormat.TAR_XZ.isCompoundTarFormat)
+    }
+
+    @Test
+    fun `isCompoundTarFormat returns false for non-compound formats`() {
+        assertFalse(ArchiveFormat.ZIP.isCompoundTarFormat)
+        assertFalse(ArchiveFormat.SEVEN_ZIP.isCompoundTarFormat)
+        assertFalse(ArchiveFormat.RAR.isCompoundTarFormat)
+        assertFalse(ArchiveFormat.TAR.isCompoundTarFormat)
+        assertFalse(ArchiveFormat.CAB.isCompoundTarFormat)
+        assertFalse(ArchiveFormat.ARJ.isCompoundTarFormat)
+        assertFalse(ArchiveFormat.LZH.isCompoundTarFormat)
+    }
 }

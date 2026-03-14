@@ -30,10 +30,13 @@ class WindowsFileAssociationRepositoryTest {
     }
 
     @Test
-    fun `progIdForExtension handles short TAR aliases`() {
+    fun `progIdForExtension handles short TAR aliases and simple compression extensions`() {
         assertEquals("Qunzip.tgz", WindowsFileAssociationRepository.progIdForExtension("tgz"))
         assertEquals("Qunzip.tbz2", WindowsFileAssociationRepository.progIdForExtension("tbz2"))
         assertEquals("Qunzip.txz", WindowsFileAssociationRepository.progIdForExtension("txz"))
+        assertEquals("Qunzip.gz", WindowsFileAssociationRepository.progIdForExtension("gz"))
+        assertEquals("Qunzip.bz2", WindowsFileAssociationRepository.progIdForExtension("bz2"))
+        assertEquals("Qunzip.xz", WindowsFileAssociationRepository.progIdForExtension("xz"))
     }
 
     @Test
@@ -47,6 +50,9 @@ class WindowsFileAssociationRepositoryTest {
         assertEquals(true, progIds.contains("Qunzip.tar_gz"))
         assertEquals(true, progIds.contains("Qunzip.tar_bz2"))
         assertEquals(true, progIds.contains("Qunzip.tar_xz"))
+        assertEquals(true, progIds.contains("Qunzip.gz"))
+        assertEquals(true, progIds.contains("Qunzip.bz2"))
+        assertEquals(true, progIds.contains("Qunzip.xz"))
         assertEquals(true, progIds.contains("Qunzip.tgz"))
         assertEquals(true, progIds.contains("Qunzip.tbz2"))
         assertEquals(true, progIds.contains("Qunzip.txz"))

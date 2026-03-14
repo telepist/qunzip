@@ -25,9 +25,34 @@ open class ExtractArchiveUseCase(
 
             emit(ExtractionProgress(archivePath, stage = ExtractionStage.ANALYZING))
 
-            val contents = archiveRepository.getArchiveContents(archivePath)
-            val strategy = determineExtractionStrategy(contents)
             val parentDir = fileSystemRepository.getParentDirectory(archivePath)
+
+            // For compound tar formats (.tar.gz, .tar.bz2, .tar.xz), first decompress
+            // to get the intermediate .tar, then extract that.
+            val actualArchivePath: String
+            var intermediateTarPath: String? = null
+
+            if (archive.format.isCompoundTarFormat) {
+                val outerContents = archiveRepository.getArchiveContents(archivePath)
+                val tarName = outerContents.topLevelEntries.firstOrNull()?.name
+
+                // Decompress outer layer to parent dir
+                archiveRepository.extractArchive(archivePath, parentDir)
+                    .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
+
+                if (tarName != null) {
+                    val tarPath = fileSystemRepository.joinPath(parentDir, tarName)
+                    intermediateTarPath = tarPath
+                    actualArchivePath = tarPath
+                } else {
+                    actualArchivePath = archivePath
+                }
+            } else {
+                actualArchivePath = archivePath
+            }
+
+            val contents = archiveRepository.getArchiveContents(actualArchivePath)
+            val strategy = determineExtractionStrategy(contents)
 
             // Check disk space
             val requiredSpace = contents.totalSize
@@ -44,10 +69,17 @@ open class ExtractArchiveUseCase(
             ))
 
             // Determine target path and check for conflicts
+            // For compound formats, use the original archive name (without .tar.gz etc.)
+            val archiveNameForFolder = if (intermediateTarPath != null) {
+                archive.name.substringBeforeLast('.').substringBeforeLast('.')
+            } else {
+                archive.nameWithoutExtension
+            }
+
             val targetName = when (strategy) {
                 ExtractionStrategy.SINGLE_FILE_TO_DIRECTORY -> contents.topLevelEntries.first().name
                 ExtractionStrategy.SINGLE_FOLDER_TO_DIRECTORY -> contents.topLevelEntries.first().name
-                ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER -> archive.nameWithoutExtension
+                ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER -> archiveNameForFolder
             }
             val targetPath = fileSystemRepository.joinPath(parentDir, targetName)
             val hasConflict = fileSystemRepository.exists(targetPath)
@@ -58,14 +90,14 @@ open class ExtractArchiveUseCase(
                 finalPath = generateUniquePath(targetPath)
                 fileSystemRepository.createDirectory(finalPath)
 
-                archiveRepository.extractArchive(archivePath, finalPath)
+                archiveRepository.extractArchive(actualArchivePath, finalPath)
                     .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
             } else if (hasConflict) {
                 // Single file or folder with conflict: use temp folder
                 val tempFolder = createTempFolder(parentDir)
                 fileSystemRepository.createDirectory(tempFolder)
 
-                archiveRepository.extractArchive(archivePath, tempFolder)
+                archiveRepository.extractArchive(actualArchivePath, tempFolder)
                     .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
 
                 // Move to final location
@@ -81,8 +113,13 @@ open class ExtractArchiveUseCase(
             } else {
                 // No conflict: extract directly
                 finalPath = targetPath
-                archiveRepository.extractArchive(archivePath, parentDir)
+                archiveRepository.extractArchive(actualArchivePath, parentDir)
                     .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
+            }
+
+            // Clean up intermediate .tar file from compound extraction
+            if (intermediateTarPath != null) {
+                fileSystemRepository.deleteFile(intermediateTarPath)
             }
 
             emit(ExtractionProgress(

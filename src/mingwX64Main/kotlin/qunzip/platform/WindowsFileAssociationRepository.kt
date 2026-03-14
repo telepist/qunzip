@@ -190,7 +190,7 @@ class WindowsFileAssociationRepository(
             // Get all common archive extensions
             val commonExtensions = listOf(
                 "zip", "7z", "rar", "tar", "tar.gz", "tar.bz2", "tar.xz",
-                "tgz", "tbz2", "txz", "cab", "arj", "lzh"
+                "gz", "bz2", "xz", "tgz", "tbz2", "txz", "cab", "arj", "lzh"
             )
 
             commonExtensions.mapNotNull { ext ->
@@ -234,7 +234,7 @@ class WindowsFileAssociationRepository(
         val allProgIds: List<String>
             get() = listOf(
                 "zip", "7z", "rar", "tar", "tar.gz", "tar.bz2", "tar.xz",
-                "tgz", "tbz2", "txz", "cab", "arj", "lzh"
+                "gz", "bz2", "xz", "tgz", "tbz2", "txz", "cab", "arj", "lzh"
             ).map { progIdForExtension(it) } + "Qunzip.ArchiveFile" // legacy single ProgID
     }
 

@@ -4,6 +4,7 @@ import qunzip.domain.entities.*
 import qunzip.domain.repositories.ArchiveRepository
 import qunzip.domain.repositories.FileSystemRepository
 import qunzip.domain.repositories.NotificationRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -319,6 +320,84 @@ class ExtractArchiveUseCaseTest {
         assertEquals("/test/project-3", mockFileSystemRepository.createdDirectory)
     }
 
+    // ========== Compound TAR Format Tests ==========
+
+    @Test
+    fun `tar_gz archive extracts both stages and deletes intermediate tar`() = runTest {
+        val archivePath = "/test/archive.tar.gz"
+        val archive = Archive(archivePath, "archive.tar.gz", ArchiveFormat.TAR_GZ, 2048L)
+
+        // Outer archive (tar.gz) contains a single .tar entry
+        val outerContents = ArchiveContents(
+            entries = listOf(ArchiveEntry("archive.tar", "archive.tar", false, 4096L)),
+            totalSize = 4096L
+        )
+
+        // Inner archive (.tar) contains the actual files
+        val innerContents = ArchiveContents(
+            entries = listOf(
+                ArchiveEntry("readme.txt", "readme.txt", false, 1024L),
+                ArchiveEntry("data.csv", "data.csv", false, 2048L)
+            ),
+            totalSize = 3072L
+        )
+
+        mockArchiveRepository.archiveInfoMap[archivePath] = archive
+        mockArchiveRepository.archiveContentsMap[archivePath] = outerContents
+        mockArchiveRepository.archiveContentsMap["/test/archive.tar"] = innerContents
+        // Inner tar is recognized as a TAR archive
+        mockArchiveRepository.archiveInfoMap["/test/archive.tar"] = Archive(
+            "/test/archive.tar", "archive.tar", ArchiveFormat.TAR, 4096L
+        )
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        val progressList = useCase(archivePath).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        // Should have extracted twice: first the .tar.gz, then the .tar
+        assertEquals(2, mockArchiveRepository.extractCallCount)
+        // The final extraction should use the inner contents' strategy (multi-file -> folder)
+        assertTrue(mockFileSystemRepository.createDirectoryCalled)
+        assertEquals("/test/archive", mockFileSystemRepository.createdDirectory)
+        // Should delete the intermediate .tar file
+        assertTrue(mockFileSystemRepository.deletedFiles.contains("/test/archive.tar"))
+    }
+
+    @Test
+    fun `tar_gz with single folder in tar extracts directly`() = runTest {
+        val archivePath = "/test/project.tar.gz"
+        val archive = Archive(archivePath, "project.tar.gz", ArchiveFormat.TAR_GZ, 2048L)
+
+        val outerContents = ArchiveContents(
+            entries = listOf(ArchiveEntry("project.tar", "project.tar", false, 4096L)),
+            totalSize = 4096L
+        )
+
+        val innerContents = ArchiveContents(
+            entries = listOf(
+                ArchiveEntry("myproject", "myproject", true, 0L),
+                ArchiveEntry("myproject/main.kt", "main.kt", false, 1024L)
+            ),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfoMap[archivePath] = archive
+        mockArchiveRepository.archiveContentsMap[archivePath] = outerContents
+        mockArchiveRepository.archiveContentsMap["/test/project.tar"] = innerContents
+        mockArchiveRepository.archiveInfoMap["/test/project.tar"] = Archive(
+            "/test/project.tar", "project.tar", ArchiveFormat.TAR, 4096L
+        )
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        val progressList = useCase(archivePath).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        // Single folder -> extract to parent dir
+        assertEquals("/test", mockArchiveRepository.lastExtractionPath)
+        // Intermediate .tar cleaned up
+        assertTrue(mockFileSystemRepository.deletedFiles.contains("/test/project.tar"))
+    }
+
     // ========== Options Tests ==========
 
     @Test
@@ -422,23 +501,35 @@ class ExtractArchiveUseCaseTest {
         var extractCalled = false
         var extractionPath: String? = null
 
-        override suspend fun getArchiveInfo(archivePath: String) = archiveInfo
-        override suspend fun getArchiveContents(archivePath: String) = archiveContents
+        // Per-path overrides for compound format testing
+        val archiveInfoMap = mutableMapOf<String, Archive>()
+        val archiveContentsMap = mutableMapOf<String, ArchiveContents>()
+        var extractCallCount = 0
+        var lastExtractionPath: String? = null
+
+        override suspend fun getArchiveInfo(archivePath: String) =
+            archiveInfoMap[archivePath] ?: archiveInfo
+        override suspend fun getArchiveContents(archivePath: String) =
+            archiveContentsMap[archivePath] ?: archiveContents
         override suspend fun testArchive(archivePath: String) = true
 
-        override suspend fun extractArchive(archivePath: String, destinationPath: String) = flowOf(
-            ExtractionProgress(archivePath, stage = ExtractionStage.EXTRACTING),
-            ExtractionProgress(
-                archivePath,
-                filesProcessed = archiveContents.fileCount,
-                totalFiles = archiveContents.fileCount,
-                bytesProcessed = archiveContents.totalSize,
-                totalBytes = archiveContents.totalSize,
-                stage = ExtractionStage.EXTRACTING
-            )
-        ).also {
+        override suspend fun extractArchive(archivePath: String, destinationPath: String): Flow<ExtractionProgress> {
             extractCalled = true
             extractionPath = destinationPath
+            extractCallCount++
+            lastExtractionPath = destinationPath
+            val contents = archiveContentsMap[archivePath] ?: archiveContents
+            return flowOf(
+                ExtractionProgress(archivePath, stage = ExtractionStage.EXTRACTING),
+                ExtractionProgress(
+                    archivePath,
+                    filesProcessed = contents.fileCount,
+                    totalFiles = contents.fileCount,
+                    bytesProcessed = contents.totalSize,
+                    totalBytes = contents.totalSize,
+                    stage = ExtractionStage.EXTRACTING
+                )
+            )
         }
 
         override fun isFormatSupported(format: ArchiveFormat) = true
@@ -458,6 +549,7 @@ class ExtractArchiveUseCaseTest {
         var moveFileCalled = false
         var moveFileDestination: String? = null
         var deleteDirectoryCalled = false
+        val deletedFiles = mutableListOf<String>()
 
         override suspend fun exists(path: String) = path in existingPaths
         override suspend fun isReadable(path: String) = true
@@ -489,7 +581,10 @@ class ExtractArchiveUseCaseTest {
             return true
         }
 
-        override suspend fun deleteFile(path: String) = true
+        override suspend fun deleteFile(path: String): Boolean {
+            deletedFiles.add(path)
+            return true
+        }
 
         override suspend fun deleteDirectory(path: String): Boolean {
             deleteDirectoryCalled = true

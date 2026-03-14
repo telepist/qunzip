@@ -2,8 +2,8 @@
 # Automatically detects current platform and builds accordingly
 
 .PHONY: help build run clean build-all build-release run-release test \
-	prepare-installer build-windows-installer create-portable-zip \
-	package-windows clean-installer info install
+	prepare-installer build-windows-installer run-windows-installer \
+	create-portable-zip package-windows clean-installer info install
 
 # Detect current OS and architecture
 UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
@@ -192,6 +192,16 @@ build-windows-installer:
 	@echo "Building Windows installer (requires Inno Setup 6)..."
 	$(GRADLEW) buildWindowsInstaller
 	@echo "Installer output in $(INSTALLER_OUTPUT_DIR)"
+
+run-windows-installer: build-windows-installer
+	@echo "Running Windows installer..."
+	@INSTALLER=$$(ls -t $(INSTALLER_OUTPUT_DIR)/qunzip-setup-*.exe 2>/dev/null | head -1); \
+	if [ -z "$$INSTALLER" ]; then \
+		echo "Error: No installer found in $(INSTALLER_OUTPUT_DIR)"; \
+		exit 1; \
+	fi; \
+	echo "Launching $$INSTALLER"; \
+	"$$INSTALLER"
 
 create-portable-zip:
 	@echo "Creating portable Windows ZIP..."
