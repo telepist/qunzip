@@ -19,3 +19,7 @@ actual fun isStandaloneLaunch(): Boolean {
 actual fun configureStandaloneConsole() {
     // No-op on Linux
 }
+
+actual fun readLineFromConsole(): String? {
+    return readLine()
+}

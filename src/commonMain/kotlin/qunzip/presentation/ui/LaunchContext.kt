@@ -40,3 +40,10 @@ expect fun isStandaloneLaunch(): Boolean
  * On Windows, sets the console title. No-op on other platforms.
  */
 expect fun configureStandaloneConsole()
+
+/**
+ * Read a line of text from the console, used for password input in standalone mode
+ * where Mosaic's NonInteractiveTerminal doesn't process keyboard events.
+ * Returns null if reading fails.
+ */
+expect fun readLineFromConsole(): String?

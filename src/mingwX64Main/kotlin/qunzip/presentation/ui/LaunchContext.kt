@@ -1,13 +1,6 @@
 package qunzip.presentation.ui
 
-import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.alloc
-import kotlinx.cinterop.allocArray
-import kotlinx.cinterop.memScoped
-import kotlinx.cinterop.ptr
-import kotlinx.cinterop.toKString
-import kotlinx.cinterop.value
-import kotlinx.cinterop.UIntVar
+import kotlinx.cinterop.*
 import platform.windows.*
 import platform.posix.getenv
 
@@ -50,6 +43,54 @@ actual fun isStandaloneLaunch(): Boolean = memScoped {
     val processList = allocArray<UIntVar>(1)
     val count = GetConsoleProcessList(processList, 1u)
     count <= 1u
+}
+
+/**
+ * Read a line from the Windows console input handle using raw input events.
+ * Used for password entry in standalone mode where Mosaic's NonInteractiveTerminal
+ * doesn't process keyboard events. Returns null on Escape (cancel).
+ */
+@OptIn(ExperimentalForeignApi::class)
+actual fun readLineFromConsole(): String? = memScoped {
+    val inputHandle = GetStdHandle(STD_INPUT_HANDLE)
+    if (inputHandle == INVALID_HANDLE_VALUE) return null
+
+    // Flush any pending input events so we start clean
+    FlushConsoleInputBuffer(inputHandle)
+
+    val eventsRead = alloc<UIntVar>()
+    val inputRecord = alloc<INPUT_RECORD>()
+    val result = StringBuilder()
+
+    while (true) {
+        if (ReadConsoleInputW(inputHandle, inputRecord.ptr, 1u, eventsRead.ptr) == 0) {
+            return@memScoped null
+        }
+        if (eventsRead.value == 0u) continue
+
+        // Only process key-down events
+        if (inputRecord.EventType.toInt() != KEY_EVENT) continue
+        val keyEvent = inputRecord.Event.KeyEvent
+        if (keyEvent.bKeyDown == 0) continue
+
+        val vk = keyEvent.wVirtualKeyCode.toInt()
+        val ch = keyEvent.uChar.UnicodeChar.toInt().toChar()
+
+        when {
+            vk == VK_ESCAPE -> return@memScoped null
+            vk == VK_RETURN -> break
+            vk == VK_BACK -> {
+                if (result.isNotEmpty()) {
+                    result.deleteAt(result.length - 1)
+                }
+            }
+            ch.code >= 32 -> {
+                result.append(ch)
+            }
+        }
+    }
+
+    result.toString()
 }
 
 @OptIn(ExperimentalForeignApi::class)

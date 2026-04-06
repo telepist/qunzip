@@ -5,7 +5,6 @@ import qunzip.domain.repositories.ArchiveRepository
 import qunzip.domain.usecases.FileInfo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.flow
 import kotlin.time.TimeSource
 import kotlinx.cinterop.*
 import platform.posix.*
@@ -53,13 +52,15 @@ class WindowsArchiveRepository(
         )
     }
 
-    override suspend fun getArchiveContents(archivePath: String): ArchiveContents {
+    override suspend fun getArchiveContents(archivePath: String, password: String?): ArchiveContents {
         val startMark = TimeSource.Monotonic.markNow()
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Analyzing archive contents: $archivePath" }
 
-        // Execute 7zip list command: 7z l -slt archive.zip
+        // Execute 7zip list command: 7z l -slt archive.zip -p"password"
+        // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Running 7z l -slt..." }
-        val output = execute7zipCommand(listOf("l", "-slt", archivePath))
+        val args = mutableListOf("l", "-slt", archivePath, "-p\"${password ?: ""}\"")
+        val output = execute7zipCommand(args)
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] 7z command completed, output size: ${output.length} chars" }
 
         // Parse 7zip output to extract file entries
@@ -78,12 +79,12 @@ class WindowsArchiveRepository(
         )
     }
 
-    override suspend fun testArchive(archivePath: String): Boolean {
+    override suspend fun testArchive(archivePath: String, password: String?): Boolean {
         logger.d { "Testing archive integrity: $archivePath" }
 
         return try {
-            // Execute 7zip test command: 7z t archive.zip
-            val exitCode = execute7zipTest(archivePath)
+            // Execute 7zip test command: 7z t archive.zip [-p"password"]
+            val exitCode = execute7zipTest(archivePath, password)
             val isValid = exitCode == 0
 
             if (isValid) {
@@ -101,7 +102,8 @@ class WindowsArchiveRepository(
 
     override suspend fun extractArchive(
         archivePath: String,
-        destinationPath: String
+        destinationPath: String,
+        password: String?
     ): Flow<ExtractionProgress> = channelFlow {
         val startMark = TimeSource.Monotonic.markNow()
         logger.i { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Extracting archive: $archivePath to $destinationPath" }
@@ -111,7 +113,7 @@ class WindowsArchiveRepository(
         try {
             // Get archive info for progress tracking
             logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Starting getArchiveContents..." }
-            val contents = getArchiveContents(archivePath)
+            val contents = getArchiveContents(archivePath, password)
             logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] getArchiveContents completed: ${contents.fileCount} files, ${contents.totalSize} bytes" }
             val totalFiles = contents.fileCount
 
@@ -127,7 +129,8 @@ class WindowsArchiveRepository(
             val exitCode = execute7zipExtractWithProgress(
                 archivePath,
                 destinationPath,
-                contents.totalSize
+                contents.totalSize,
+                password
             ) { bytesExtracted, currentFile ->
                 // Send progress update with actual bytes extracted
                 trySend(ExtractionProgress(
@@ -181,18 +184,14 @@ class WindowsArchiveRepository(
     override suspend fun isPasswordRequired(archivePath: String): Boolean {
         logger.d { "Checking if password required: $archivePath" }
 
-        // Try to test the archive; if it fails with password error, return true
-        // For now, return false (password support is a future feature)
-        return false
-    }
-
-    override suspend fun extractPasswordProtectedArchive(
-        archivePath: String,
-        destinationPath: String,
-        password: String
-    ): Flow<ExtractionProgress> = flow {
-        // Future feature - not yet implemented
-        throw ExtractionError.PasswordRequired("Password-protected archives not yet supported")
+        // Run 7z t with empty password (-p"") and capture output to check for password indicators.
+        // The empty password prevents 7zip from blocking on stdin waiting for user input.
+        val output = execute7zipCommand(listOf("t", "-p\"\"", archivePath))
+        val lowerOutput = output.lowercase()
+        return lowerOutput.contains("wrong password") ||
+                lowerOutput.contains("can not open encrypted archive") ||
+                lowerOutput.contains("enter password") ||
+                lowerOutput.contains("encrypted")
     }
 
     // Private helper methods
@@ -308,15 +307,20 @@ class WindowsArchiveRepository(
         return@memScoped output.toString()
     }
 
-    private fun execute7zipTest(archivePath: String): Int {
-        val command = "$sevenZipPath t \"$archivePath\""
+    private fun execute7zipTest(archivePath: String, password: String? = null): Int {
+        // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
+        // Empty password (-p"") is harmless for non-encrypted archives.
+        val passwordArg = " -p\"${password ?: ""}\""
+        val command = "$sevenZipPath t \"$archivePath\"$passwordArg"
         return executeCommandSilently(command)
     }
 
-    private fun execute7zipExtract(archivePath: String, destinationPath: String): Int {
+    private fun execute7zipExtract(archivePath: String, destinationPath: String, password: String? = null): Int {
         // Use -o flag for output directory (no space between -o and path)
         // Note: Conflict handling is done at application level, not by 7zip's -aou flag
-        val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y"
+        // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
+        val passwordArg = " -p\"${password ?: ""}\""
+        val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y$passwordArg"
         logger.d { "Extraction command: $command" }
         return executeCommandSilently(command)
     }
@@ -330,11 +334,14 @@ class WindowsArchiveRepository(
         archivePath: String,
         destinationPath: String,
         totalBytes: Long,
+        password: String? = null,
         onProgress: (bytesExtracted: Long, currentFile: String?) -> Unit
     ): Int = memScoped {
         // Use -bsp1 to output progress to stdout, -bb1 for file names
         // Note: Conflict handling is done at application level, not by 7zip's -aou flag
-        val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y -bsp1 -bb1"
+        // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
+        val passwordArg = " -p\"${password ?: ""}\""
+        val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y -bsp1 -bb1$passwordArg"
         logger.d { "Extraction command with progress: $command" }
 
         // Create pipe for stdout
@@ -348,7 +355,8 @@ class WindowsArchiveRepository(
 
         if (CreatePipe(stdoutReadHandle.ptr, stdoutWriteHandle.ptr, securityAttrs.ptr, 0u) == 0) {
             logger.e { "Failed to create pipe for progress tracking" }
-            return@memScoped executeCommandSilently("$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y")
+            return@memScoped executeCommandSilently("$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y -p\"${password ?: ""}\"")
+
         }
 
         // Ensure the read handle is not inherited
@@ -390,6 +398,7 @@ class WindowsArchiveRepository(
         val buffer = allocArray<ByteVar>(4096)
         val bytesRead = alloc<UIntVar>()
         val lineBuffer = StringBuilder()
+        val allOutput = StringBuilder()
         var lastPercentage = -1
         var currentFile: String? = null
 
@@ -408,6 +417,7 @@ class WindowsArchiveRepository(
 
             buffer[bytesRead.value.toInt()] = 0
             val chunk = buffer.toKString()
+            allOutput.append(chunk)
 
             // Process character by character, treating \r and \n as line endings
             for (char in chunk) {
@@ -439,6 +449,7 @@ class WindowsArchiveRepository(
         // Process remaining buffer
         val remaining = lineBuffer.toString().trim()
         if (remaining.isNotEmpty()) {
+            allOutput.append(remaining)
             val percentMatch = percentRegex.find(remaining)
             if (percentMatch != null) {
                 val percent = percentMatch.groupValues[1].toIntOrNull() ?: 0
@@ -458,7 +469,20 @@ class WindowsArchiveRepository(
         CloseHandle(processInfo.hThread)
         CloseHandle(stdoutReadHandle.value)
 
-        return@memScoped exitCode.value.toInt()
+        val code = exitCode.value.toInt()
+
+        // Check for password errors before returning
+        if (code != 0) {
+            val lowerOutput = allOutput.toString().lowercase()
+            if (lowerOutput.contains("wrong password") ||
+                lowerOutput.contains("can not open encrypted archive") ||
+                lowerOutput.contains("data error in encrypted file") ||
+                lowerOutput.contains("encrypted")) {
+                throw ExtractionError.PasswordRequired("Wrong password")
+            }
+        }
+
+        return@memScoped code
     }
 
     /**

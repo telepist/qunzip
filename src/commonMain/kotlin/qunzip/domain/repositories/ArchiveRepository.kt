@@ -13,22 +13,25 @@ interface ArchiveRepository {
 
     /**
      * Analyze archive contents without extracting
+     * @param password Optional password for encrypted archives
      */
-    suspend fun getArchiveContents(archivePath: String): ArchiveContents
+    suspend fun getArchiveContents(archivePath: String, password: String? = null): ArchiveContents
 
     /**
      * Test archive integrity
+     * @param password Optional password for encrypted archives
      * @return true if archive is valid and can be extracted
      */
-    suspend fun testArchive(archivePath: String): Boolean
+    suspend fun testArchive(archivePath: String, password: String? = null): Boolean
 
     /**
      * Extract archive to specified destination with progress tracking
      * @param archivePath Path to the archive file
      * @param destinationPath Path where files should be extracted
+     * @param password Optional password for encrypted archives
      * @return Flow of extraction progress
      */
-    suspend fun extractArchive(archivePath: String, destinationPath: String): Flow<ExtractionProgress>
+    suspend fun extractArchive(archivePath: String, destinationPath: String, password: String? = null): Flow<ExtractionProgress>
 
     /**
      * Check if the archive format is supported by this implementation
@@ -44,13 +47,4 @@ interface ArchiveRepository {
      * Check if password is required for the archive
      */
     suspend fun isPasswordRequired(archivePath: String): Boolean
-
-    /**
-     * Extract password-protected archive (future feature)
-     */
-    suspend fun extractPasswordProtectedArchive(
-        archivePath: String,
-        destinationPath: String,
-        password: String
-    ): Flow<ExtractionProgress>
 }

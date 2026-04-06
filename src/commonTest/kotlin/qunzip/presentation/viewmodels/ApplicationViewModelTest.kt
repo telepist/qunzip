@@ -103,13 +103,12 @@ class ApplicationViewModelTest {
     private class MockExtractArchiveUseCase : ExtractArchiveUseCase(
         archiveRepository = object : ArchiveRepository {
             override suspend fun getArchiveInfo(archivePath: String) = null
-            override suspend fun getArchiveContents(archivePath: String) = ArchiveContents(emptyList(), 0L)
-            override suspend fun extractArchive(archivePath: String, destinationPath: String) = flowOf<ExtractionProgress>()
-            override suspend fun testArchive(archivePath: String) = true
+            override suspend fun getArchiveContents(archivePath: String, password: String?) = ArchiveContents(emptyList(), 0L)
+            override suspend fun extractArchive(archivePath: String, destinationPath: String, password: String?) = flowOf<ExtractionProgress>()
+            override suspend fun testArchive(archivePath: String, password: String?) = true
             override fun isFormatSupported(format: ArchiveFormat) = true
             override fun getSupportedFormats() = ArchiveFormat.values().toList()
             override suspend fun isPasswordRequired(archivePath: String) = false
-            override suspend fun extractPasswordProtectedArchive(archivePath: String, destinationPath: String, password: String) = flowOf<ExtractionProgress>()
         },
         fileSystemRepository = object : FileSystemRepository {
             override suspend fun exists(path: String) = true
@@ -153,13 +152,12 @@ class ApplicationViewModelTest {
     private class MockValidateArchiveUseCase : ValidateArchiveUseCase(
         archiveRepository = object : ArchiveRepository {
             override suspend fun getArchiveInfo(archivePath: String) = null
-            override suspend fun getArchiveContents(archivePath: String) = ArchiveContents(emptyList(), 0L)
-            override suspend fun extractArchive(archivePath: String, destinationPath: String) = flowOf<ExtractionProgress>()
-            override suspend fun testArchive(archivePath: String) = true
+            override suspend fun getArchiveContents(archivePath: String, password: String?) = ArchiveContents(emptyList(), 0L)
+            override suspend fun extractArchive(archivePath: String, destinationPath: String, password: String?) = flowOf<ExtractionProgress>()
+            override suspend fun testArchive(archivePath: String, password: String?) = true
             override fun isFormatSupported(format: ArchiveFormat) = true
             override fun getSupportedFormats() = ArchiveFormat.values().toList()
             override suspend fun isPasswordRequired(archivePath: String) = false
-            override suspend fun extractPasswordProtectedArchive(archivePath: String, destinationPath: String, password: String) = flowOf<ExtractionProgress>()
         },
         fileSystemRepository = object : FileSystemRepository {
             override suspend fun exists(path: String) = true

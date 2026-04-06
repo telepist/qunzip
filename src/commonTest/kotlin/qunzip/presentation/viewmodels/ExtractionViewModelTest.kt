@@ -183,6 +183,98 @@ class ExtractionViewModelTest {
         assertTrue(state.showProgress)
     }
 
+    @Test
+    fun `password required sets waiting state`() = testScope.runTest {
+        val archivePath = "/test/encrypted.zip"
+        val archive = Archive(archivePath, "encrypted.zip", ArchiveFormat.ZIP, 1024L)
+
+        mockValidateUseCase.result = ValidationResult.PasswordRequired(archive)
+
+        viewModel.uiState.test {
+            awaitItem() // Initial state
+
+            viewModel.extractArchive(archivePath)
+
+            awaitItem() // Loading state
+
+            val waitingState = awaitItem()
+            assertTrue(waitingState.isWaitingForPassword)
+            assertFalse(waitingState.isLoading)
+            assertEquals(archive, waitingState.archive)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `submit password retries extraction with password`() = testScope.runTest {
+        val archivePath = "/test/encrypted.zip"
+        val archive = Archive(archivePath, "encrypted.zip", ArchiveFormat.ZIP, 1024L)
+
+        mockValidateUseCase.result = ValidationResult.PasswordRequired(archive)
+
+        viewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        // Now submit password - switch validation to Valid for the retry
+        mockValidateUseCase.result = ValidationResult.Valid(archive)
+        mockExtractUseCase.progressFlow = flowOf(
+            ExtractionProgress(archivePath, stage = ExtractionStage.STARTING),
+            ExtractionProgress(archivePath, stage = ExtractionStage.COMPLETED)
+        )
+
+        viewModel.submitPassword("secret123")
+        advanceUntilIdle()
+
+        val finalState = viewModel.uiState.value
+        assertFalse(finalState.isWaitingForPassword)
+        assertFalse(finalState.isLoading)
+    }
+
+    @Test
+    fun `submit wrong password shows error and waits again`() = testScope.runTest {
+        val archivePath = "/test/encrypted.zip"
+        val archive = Archive(archivePath, "encrypted.zip", ArchiveFormat.ZIP, 1024L)
+
+        mockValidateUseCase.result = ValidationResult.PasswordRequired(archive)
+
+        viewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        // Submit wrong password - extraction fails with PasswordRequired
+        mockExtractUseCase.progressFlow = flowOf(
+            ExtractionProgress(archivePath, stage = ExtractionStage.STARTING)
+        )
+        mockExtractUseCase.throwOnInvoke = ExtractionError.PasswordRequired("Wrong password")
+
+        viewModel.submitPassword("wrongpassword")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isWaitingForPassword)
+        assertEquals("Wrong password", state.error)
+    }
+
+    @Test
+    fun `cancel password clears waiting state and sets failed`() = testScope.runTest {
+        val archivePath = "/test/encrypted.zip"
+        val archive = Archive(archivePath, "encrypted.zip", ArchiveFormat.ZIP, 1024L)
+
+        mockValidateUseCase.result = ValidationResult.PasswordRequired(archive)
+
+        viewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isWaitingForPassword)
+
+        viewModel.cancelExtraction()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.isWaitingForPassword)
+        assertFalse(state.isLoading)
+        assertEquals(ExtractionStage.FAILED, state.progress?.stage)
+    }
+
     // Mock implementations
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private class MockExtractArchiveUseCase(
@@ -192,13 +284,12 @@ class ExtractionViewModelTest {
     ) : ExtractArchiveUseCase(
         archiveRepository = archiveRepository ?: object : qunzip.domain.repositories.ArchiveRepository {
             override suspend fun getArchiveInfo(archivePath: String) = null
-            override suspend fun getArchiveContents(archivePath: String) = ArchiveContents(emptyList(), 0L)
-            override suspend fun extractArchive(archivePath: String, destinationPath: String) = flowOf<ExtractionProgress>()
-            override suspend fun testArchive(archivePath: String) = true
+            override suspend fun getArchiveContents(archivePath: String, password: String?) = ArchiveContents(emptyList(), 0L)
+            override suspend fun extractArchive(archivePath: String, destinationPath: String, password: String?) = flowOf<ExtractionProgress>()
+            override suspend fun testArchive(archivePath: String, password: String?) = true
             override fun isFormatSupported(format: ArchiveFormat) = true
             override fun getSupportedFormats() = ArchiveFormat.values().toList()
             override suspend fun isPasswordRequired(archivePath: String) = false
-            override suspend fun extractPasswordProtectedArchive(archivePath: String, destinationPath: String, password: String) = flowOf<ExtractionProgress>()
         },
         fileSystemRepository = fileSystemRepository ?: object : qunzip.domain.repositories.FileSystemRepository {
             override suspend fun exists(path: String) = true
@@ -237,8 +328,18 @@ class ExtractionViewModelTest {
         }
     ) {
         var progressFlow = flowOf<ExtractionProgress>()
+        var throwOnInvoke: Throwable? = null
+        var lastOptions: ExtractionOptions? = null
 
-        override suspend operator fun invoke(archivePath: String, options: ExtractionOptions) = progressFlow
+        override suspend operator fun invoke(archivePath: String, options: ExtractionOptions): kotlinx.coroutines.flow.Flow<ExtractionProgress> {
+            lastOptions = options
+            val error = throwOnInvoke
+            if (error != null) {
+                throwOnInvoke = null // Reset after throwing
+                throw error
+            }
+            return progressFlow
+        }
     }
 
     private class MockValidateArchiveUseCase(
@@ -247,13 +348,12 @@ class ExtractionViewModelTest {
     ) : ValidateArchiveUseCase(
         archiveRepository = archiveRepository ?: object : qunzip.domain.repositories.ArchiveRepository {
             override suspend fun getArchiveInfo(archivePath: String) = null
-            override suspend fun getArchiveContents(archivePath: String) = ArchiveContents(emptyList(), 0L)
-            override suspend fun extractArchive(archivePath: String, destinationPath: String) = flowOf<ExtractionProgress>()
-            override suspend fun testArchive(archivePath: String) = true
+            override suspend fun getArchiveContents(archivePath: String, password: String?) = ArchiveContents(emptyList(), 0L)
+            override suspend fun extractArchive(archivePath: String, destinationPath: String, password: String?) = flowOf<ExtractionProgress>()
+            override suspend fun testArchive(archivePath: String, password: String?) = true
             override fun isFormatSupported(format: ArchiveFormat) = true
             override fun getSupportedFormats() = ArchiveFormat.values().toList()
             override suspend fun isPasswordRequired(archivePath: String) = false
-            override suspend fun extractPasswordProtectedArchive(archivePath: String, destinationPath: String, password: String) = flowOf<ExtractionProgress>()
         },
         fileSystemRepository = fileSystemRepository ?: object : qunzip.domain.repositories.FileSystemRepository {
             override suspend fun exists(path: String) = true

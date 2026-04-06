@@ -17,6 +17,8 @@ open class ExtractArchiveUseCase(
         archivePath: String,
         options: ExtractionOptions = ExtractionOptions()
     ): Flow<ExtractionProgress> = flow {
+        // Track directories we create so we can clean up on failure
+        var createdDir: String? = null
         try {
             emit(ExtractionProgress(archivePath, stage = ExtractionStage.STARTING))
 
@@ -26,6 +28,7 @@ open class ExtractArchiveUseCase(
             emit(ExtractionProgress(archivePath, stage = ExtractionStage.ANALYZING))
 
             val parentDir = fileSystemRepository.getParentDirectory(archivePath)
+            val password = options.password
 
             // For compound tar formats (.tar.gz, .tar.bz2, .tar.xz), first decompress
             // to get the intermediate .tar, then extract that.
@@ -33,11 +36,11 @@ open class ExtractArchiveUseCase(
             var intermediateTarPath: String? = null
 
             if (archive.format.isCompoundTarFormat) {
-                val outerContents = archiveRepository.getArchiveContents(archivePath)
+                val outerContents = archiveRepository.getArchiveContents(archivePath, password)
                 val tarName = outerContents.topLevelEntries.firstOrNull()?.name
 
                 // Decompress outer layer to parent dir
-                archiveRepository.extractArchive(archivePath, parentDir)
+                archiveRepository.extractArchive(archivePath, parentDir, password)
                     .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
 
                 if (tarName != null) {
@@ -51,7 +54,7 @@ open class ExtractArchiveUseCase(
                 actualArchivePath = archivePath
             }
 
-            val contents = archiveRepository.getArchiveContents(actualArchivePath)
+            val contents = archiveRepository.getArchiveContents(actualArchivePath, password)
             val strategy = determineExtractionStrategy(contents)
 
             // Check disk space
@@ -89,15 +92,17 @@ open class ExtractArchiveUseCase(
             if (strategy == ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER) {
                 finalPath = generateUniquePath(targetPath)
                 fileSystemRepository.createDirectory(finalPath)
+                createdDir = finalPath
 
-                archiveRepository.extractArchive(actualArchivePath, finalPath)
+                archiveRepository.extractArchive(actualArchivePath, finalPath, password)
                     .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
             } else if (hasConflict) {
                 // Single file or folder with conflict: use temp folder
                 val tempFolder = createTempFolder(parentDir)
                 fileSystemRepository.createDirectory(tempFolder)
+                createdDir = tempFolder
 
-                archiveRepository.extractArchive(actualArchivePath, tempFolder)
+                archiveRepository.extractArchive(actualArchivePath, tempFolder, password)
                     .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
 
                 // Move to final location
@@ -110,10 +115,11 @@ open class ExtractArchiveUseCase(
 
                 fileSystemRepository.moveFile(extractedItem, finalPath)
                 fileSystemRepository.deleteDirectory(tempFolder)
+                createdDir = null // Temp folder cleaned up successfully
             } else {
                 // No conflict: extract directly
                 finalPath = targetPath
-                archiveRepository.extractArchive(actualArchivePath, parentDir)
+                archiveRepository.extractArchive(actualArchivePath, parentDir, password)
                     .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
             }
 
@@ -153,6 +159,15 @@ open class ExtractArchiveUseCase(
             ))
 
         } catch (error: ExtractionError) {
+            // Clean up any directory we created before the failure
+            if (createdDir != null) {
+                try { fileSystemRepository.deleteDirectory(createdDir) } catch (_: Throwable) {}
+            }
+            // Don't show notification or emit FAILED for password errors —
+            // the ViewModel will re-prompt for the password
+            if (error is ExtractionError.PasswordRequired) {
+                throw error
+            }
             notificationRepository.showErrorNotification(
                 title = "Extraction Failed",
                 message = error.message
@@ -160,6 +175,10 @@ open class ExtractArchiveUseCase(
             emit(ExtractionProgress(archivePath = archivePath, stage = ExtractionStage.FAILED))
             throw error
         } catch (throwable: Throwable) {
+            // Clean up any directory we created before the failure
+            if (createdDir != null) {
+                try { fileSystemRepository.deleteDirectory(createdDir) } catch (_: Throwable) {}
+            }
             val error = ExtractionError.UnknownError(
                 message = throwable.message ?: "Unknown error occurred",
                 cause = throwable

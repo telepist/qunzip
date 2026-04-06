@@ -470,6 +470,47 @@ class ExtractArchiveUseCaseTest {
         assertTrue(mockNotificationRepository.errorNotificationShown)
     }
 
+    // ========== Password Tests ==========
+
+    @Test
+    fun `extraction with password passes password to repository`() = runTest {
+        val archivePath = "/test/encrypted.zip"
+        val archive = Archive(archivePath, "encrypted.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("secret.txt", "secret.txt", false, 1024L)),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        val options = ExtractionOptions(password = "mypassword")
+        val progressList = useCase(archivePath, options).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        assertEquals("mypassword", mockArchiveRepository.lastPassword)
+    }
+
+    @Test
+    fun `extraction without password passes null to repository`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("document.pdf", "document.pdf", false, 1024L)),
+            totalSize = 1024L
+        )
+
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        val progressList = useCase(archivePath).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        assertNull(mockArchiveRepository.lastPassword)
+    }
+
     // ========== Progress Tests ==========
 
     @Test
@@ -506,18 +547,20 @@ class ExtractArchiveUseCaseTest {
         val archiveContentsMap = mutableMapOf<String, ArchiveContents>()
         var extractCallCount = 0
         var lastExtractionPath: String? = null
+        var lastPassword: String? = null
 
         override suspend fun getArchiveInfo(archivePath: String) =
             archiveInfoMap[archivePath] ?: archiveInfo
-        override suspend fun getArchiveContents(archivePath: String) =
+        override suspend fun getArchiveContents(archivePath: String, password: String?) =
             archiveContentsMap[archivePath] ?: archiveContents
-        override suspend fun testArchive(archivePath: String) = true
+        override suspend fun testArchive(archivePath: String, password: String?) = true
 
-        override suspend fun extractArchive(archivePath: String, destinationPath: String): Flow<ExtractionProgress> {
+        override suspend fun extractArchive(archivePath: String, destinationPath: String, password: String?): Flow<ExtractionProgress> {
             extractCalled = true
             extractionPath = destinationPath
             extractCallCount++
             lastExtractionPath = destinationPath
+            lastPassword = password
             val contents = archiveContentsMap[archivePath] ?: archiveContents
             return flowOf(
                 ExtractionProgress(archivePath, stage = ExtractionStage.EXTRACTING),
@@ -535,8 +578,6 @@ class ExtractArchiveUseCaseTest {
         override fun isFormatSupported(format: ArchiveFormat) = true
         override fun getSupportedFormats() = ArchiveFormat.values().toList()
         override suspend fun isPasswordRequired(archivePath: String) = false
-        override suspend fun extractPasswordProtectedArchive(archivePath: String, destinationPath: String, password: String) =
-            flowOf(ExtractionProgress(archivePath))
     }
 
     private class MockFileSystemRepository : FileSystemRepository {

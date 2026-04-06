@@ -57,6 +57,11 @@ open class ValidateArchiveUseCase(
             // Test archive integrity using 7zip
             val isValid = archiveRepository.testArchive(archivePath)
             if (!isValid) {
+                // Check if the failure is because a password is required
+                if (archiveRepository.isPasswordRequired(archivePath)) {
+                    logger.i { "Archive requires a password: ${archive.name}" }
+                    return ValidationResult.PasswordRequired(archive)
+                }
                 return ValidationResult.Invalid(
                     error = ExtractionError.CorruptedArchive("Archive integrity check failed")
                 )
@@ -84,6 +89,7 @@ open class ValidateArchiveUseCase(
 sealed class ValidationResult {
     data class Valid(val archive: Archive) : ValidationResult()
     data class Invalid(val error: ExtractionError) : ValidationResult()
+    data class PasswordRequired(val archive: Archive) : ValidationResult()
 }
 
 data class FileInfo(

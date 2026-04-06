@@ -41,6 +41,7 @@ data class ExtractionProgress(
 enum class ExtractionStage {
     STARTING,
     ANALYZING,
+    WAITING_FOR_PASSWORD,
     EXTRACTING,
     FINALIZING,
     COMPLETED,
@@ -67,7 +68,13 @@ data class ExtractionOptions(
      * Whether to show a completion dialog when extraction completes.
      * When false (default), the application silently closes after extraction.
      */
-    val showCompletionDialog: Boolean = false
+    val showCompletionDialog: Boolean = false,
+
+    /**
+     * Password for extracting password-protected archives.
+     * When null, no password is used.
+     */
+    val password: String? = null
 )
 
 sealed class ExtractionError(override val message: String, override val cause: Throwable? = null) : Throwable(message, cause) {

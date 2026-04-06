@@ -6,11 +6,12 @@ import qunzip.domain.entities.ExtractionStage
 import qunzip.presentation.ui.tui.MosaicApp
 import qunzip.exitProcess
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.withContext
 import com.jakewharton.mosaic.NonInteractivePolicy
 import com.jakewharton.mosaic.runMosaic
 import com.jakewharton.mosaic.terminal.AnsiLevel
@@ -62,6 +63,13 @@ class MosaicTuiRenderer(
                 ) {
                     MosaicApp(viewModel)
 
+                    // In standalone mode, Mosaic's NonInteractiveTerminal doesn't process
+                    // keyboard events. Handle password input by reading directly from the
+                    // console using platform APIs.
+                    LaunchedEffect(Unit) {
+                        handleStandalonePasswordInput(viewModel)
+                    }
+
                     // Monitor extraction completion directly via the ExtractionViewModel's
                     // state. This avoids the ApplicationViewModel event chain which has race
                     // conditions with multiple layers of scope.launch on Dispatchers.Default.
@@ -106,4 +114,28 @@ private suspend fun awaitExtractionDone(viewModel: ApplicationViewModel) {
         .mapNotNull { it.progress?.stage }
         .filter { it == ExtractionStage.COMPLETED || it == ExtractionStage.FAILED }
         .first()
+}
+
+/**
+ * Handle password input in standalone mode by monitoring the ViewModel state
+ * and reading from the console directly when a password is needed.
+ * Loops to handle wrong password retries.
+ */
+private suspend fun handleStandalonePasswordInput(viewModel: ApplicationViewModel) {
+    val extractionVm = viewModel.extractionViewModel
+    // Wait for password-required state, then read from console
+    extractionVm.uiState
+        .filter { it.isWaitingForPassword }
+        .collect {
+            // Read password on a background thread to avoid blocking the composition
+            val password = withContext(Dispatchers.Default) {
+                readLineFromConsole()
+            }
+            if (password != null && password.isNotEmpty()) {
+                extractionVm.submitPassword(password)
+            } else {
+                // Escape or empty input — cancel
+                extractionVm.cancelExtraction()
+            }
+        }
 }
