@@ -3,6 +3,7 @@ package qunzip
 import co.touchlab.kermit.Logger
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.posix.exit
+import qunzip.presentation.ui.UiRenderer
 
 /**
  * Linux-specific dependency initialization
@@ -31,4 +32,8 @@ internal actual fun exitProcess(code: Int): Nothing {
 internal actual fun getCurrentExecutablePath(): String {
     // TODO: Implement using readlink on /proc/self/exe
     return "/usr/local/bin/qunzip"
+}
+
+internal actual fun createGuiRenderer(): UiRenderer {
+    throw UnsupportedOperationException("GUI mode is only available on Windows")
 }

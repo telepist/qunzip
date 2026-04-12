@@ -1,0 +1,8 @@
+package = cimgui
+headers = cimgui.h imgui_app.h
+
+headerFilter = cimgui.h imgui_app.h
+
+compilerOpts = -DCIMGUI_DEFINE_ENUMS_AND_STRUCTS
+
+linkerOpts = -ld3d11 -ldxgi -ld3dcompiler

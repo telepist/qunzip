@@ -23,3 +23,7 @@ actual fun configureStandaloneConsole() {
 actual fun readLineFromConsole(): String? {
     return readLine()
 }
+
+actual fun hideConsole() {
+    // No-op on this platform
+}

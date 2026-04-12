@@ -12,6 +12,16 @@ import co.touchlab.kermit.Severity
  * Main entry point for the Qunzip application
  */
 fun main(args: Array<String>) {
+    // With GUI subsystem (-mwindows), no console exists at startup.
+    // Detect launch mode early: standalone (drag-drop) vs CLI (shell).
+    val earlyStandalone = isStandaloneLaunch()
+    val useGui = args.contains("--gui") || earlyStandalone
+
+    // For CLI mode, reattach to the parent shell's console for stdio.
+    if (!useGui) {
+        configureStandaloneConsole()
+    }
+
     // Suppress logging to keep the TUI display clean
     Logger.setMinSeverity(Severity.Assert)
     UiConfig.enableTuiMode()
@@ -174,10 +184,7 @@ fun main(args: Array<String>) {
         try {
             val dependencies = initializeDependencies()
 
-            val isStandalone = forceStandalone || isStandaloneLaunch()
-            if (isStandalone) {
-                configureStandaloneConsole()
-            }
+            val isStandalone = forceStandalone || earlyStandalone
 
             val applicationViewModel = ApplicationViewModel(
                 extractArchiveUseCase = dependencies.extractArchiveUseCase,
@@ -189,12 +196,19 @@ fun main(args: Array<String>) {
                 isStandaloneLaunch = isStandalone
             )
 
-            val appArgs = args.toList().filterNot { it == "--force-standalone" }
+            val appArgs = args.toList().filterNot { it == "--force-standalone" || it == "--gui" }
             applicationViewModel.handleApplicationStart(appArgs)
 
-            // Always use TUI renderer
-            val renderer = MosaicTuiRenderer(isStandaloneLaunch = isStandalone)
+            // GUI for standalone (drag-drop) or --gui flag, otherwise TUI
+            val renderer: UiRenderer = if (useGui) {
+                createGuiRenderer()
+            } else {
+                MosaicTuiRenderer(isStandaloneLaunch = false)
+            }
             renderer.render(applicationViewModel)
+            if (useGui) {
+                exitProcess(0)
+            }
         } catch (e: Exception) {
             logger.e(e) { "Fatal error during application startup" }
             exitProcess(1)
@@ -264,4 +278,9 @@ internal expect fun getCurrentExecutablePath(): String
  * Platform-specific implementation
  */
 internal expect fun exitProcess(code: Int): Nothing
+
+/**
+ * Create platform-specific GUI renderer (experimental)
+ */
+internal expect fun createGuiRenderer(): UiRenderer
 

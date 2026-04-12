@@ -4,6 +4,10 @@ import kotlinx.cinterop.*
 import platform.windows.*
 import platform.posix.getenv
 
+// With -mwindows (GUI subsystem), the process starts with no console.
+// CLI mode must attach to the parent shell's console to get stdio.
+private val ATTACH_PARENT_PROCESS_ID = 0xFFFFFFFF.toUInt()
+
 /**
  * Check if running in a terminal on Windows
  * Returns true if stdout is attached to a console or we're in MSYS2/Cygwin
@@ -34,15 +38,24 @@ actual fun isTerminal(): Boolean {
 
 /**
  * Detect if launched standalone (double-click / file association) on Windows.
- * Uses GetConsoleProcessList: if only 1 process is attached to the console,
- * it means Windows created the console for us (standalone launch).
- * If >1 processes, we're sharing with a shell (CLI launch).
+ *
+ * With GUI subsystem (-mwindows), the process starts with no console.
+ * We try to attach to the parent's console: if it succeeds, we were launched
+ * from a shell (CLI). If it fails, there is no parent console (standalone).
+ *
+ * After detection, we immediately detach again — the caller decides
+ * whether to reattach (CLI mode) or stay detached (GUI mode).
  */
 @OptIn(ExperimentalForeignApi::class)
-actual fun isStandaloneLaunch(): Boolean = memScoped {
-    val processList = allocArray<UIntVar>(1)
-    val count = GetConsoleProcessList(processList, 1u)
-    count <= 1u
+actual fun isStandaloneLaunch(): Boolean {
+    val attached = AttachConsole(ATTACH_PARENT_PROCESS_ID)
+    if (attached != 0) {
+        // Successfully attached — launched from a shell. Detach for now.
+        FreeConsole()
+        return false
+    }
+    // Could not attach — no parent console, standalone launch.
+    return true
 }
 
 /**
@@ -93,13 +106,28 @@ actual fun readLineFromConsole(): String? = memScoped {
     result.toString()
 }
 
+/**
+ * No-op for GUI subsystem — there's no console to hide.
+ */
+actual fun hideConsole() {
+    // With -mwindows, there is no console to hide.
+}
+
+/**
+ * Attach to the parent shell's console for CLI mode.
+ * Reattaches stdio so print/println work in the terminal.
+ */
 @OptIn(ExperimentalForeignApi::class)
 actual fun configureStandaloneConsole() {
-    SetConsoleTitleA("Qunzip")
+    // For CLI mode: reattach to parent console
+    AttachConsole(ATTACH_PARENT_PROCESS_ID)
 
-    // Enable ANSI/VT100 escape sequences on the stdout handle.
-    // Needed for legacy conhost.exe; Windows Terminal handles ANSI natively.
-    // Mosaic's NonInteractiveTerminal writes via print() which goes to this handle.
+    // Reopen stdio to point to the attached console
+    platform.posix.freopen("CONOUT$", "w", platform.posix.stdout)
+    platform.posix.freopen("CONOUT$", "w", platform.posix.stderr)
+    platform.posix.freopen("CONIN$", "r", platform.posix.stdin)
+
+    // Enable ANSI/VT100 escape sequences on the stdout handle
     val handle = GetStdHandle(STD_OUTPUT_HANDLE)
     if (handle != INVALID_HANDLE_VALUE) {
         memScoped {

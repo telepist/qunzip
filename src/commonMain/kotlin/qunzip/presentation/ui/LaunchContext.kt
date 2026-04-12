@@ -47,3 +47,9 @@ expect fun configureStandaloneConsole()
  * Returns null if reading fails.
  */
 expect fun readLineFromConsole(): String?
+
+/**
+ * Hide/detach the console window for GUI mode.
+ * On Windows, calls FreeConsole(). No-op on other platforms.
+ */
+expect fun hideConsole()

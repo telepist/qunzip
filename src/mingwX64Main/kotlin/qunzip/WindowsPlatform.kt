@@ -2,6 +2,8 @@ package qunzip
 
 import qunzip.domain.usecases.*
 import qunzip.platform.*
+import qunzip.presentation.ui.ImGuiRenderer
+import qunzip.presentation.ui.UiRenderer
 import co.touchlab.kermit.Logger
 import kotlinx.cinterop.*
 import platform.windows.ExitProcess
@@ -73,3 +75,5 @@ internal actual fun exitProcess(code: Int): Nothing {
     ExitProcess(code.toUInt())
     throw RuntimeException("ExitProcess() should not return")
 }
+
+internal actual fun createGuiRenderer(): UiRenderer = ImGuiRenderer()

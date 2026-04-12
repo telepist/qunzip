@@ -34,6 +34,15 @@ kotlin {
         }
     }
     mingwX64 {
+        compilations["main"].cinterops {
+            val cimgui by creating {
+                defFile(project.file("src/nativeInterop/cinterop/cimgui.def"))
+                includeDirs(
+                    project.file("libs/cimgui"),
+                    project.file("libs/imgui-backend")
+                )
+            }
+        }
         binaries {
             executable {
                 baseName = "qunzip"
@@ -41,6 +50,18 @@ kotlin {
                 // Link the compiled Windows resource file (contains icon and version info)
                 // The resource file is compiled by the compileWindowsResources task
                 linkerOpts(file("build/resources/qunzip.res").absolutePath)
+                // GUI subsystem: no console window on launch.
+                // CLI mode reattaches via AttachConsole(ATTACH_PARENT_PROCESS).
+                linkerOpts("-mwindows")
+                // Link cimgui static library (ImGui + Win32/DX11 backend)
+                linkerOpts(
+                    "-L${project.file("libs/imgui-backend/build").absolutePath}",
+                    "-lcimgui",
+                    "-ld3d11", "-ldxgi", "-ld3dcompiler",
+                    "-limm32",
+                    "-ldwmapi",
+                    "-Wl,-Bstatic", "-lstdc++", "-Wl,-Bdynamic"
+                )
             }
         }
     }
@@ -182,9 +203,45 @@ tasks.register<Exec>("compileWindowsResources") {
     description = "Compile Windows resource file (icon and version info)"
 }
 
+// Build cimgui static library (ImGui + Win32/DX11 backend)
+tasks.register<Exec>("buildCimgui") {
+    val buildScript = file("libs/imgui-backend/build.sh")
+    val outputLib = file("libs/imgui-backend/build/libcimgui.a")
+
+    inputs.files(buildScript)
+    inputs.files(fileTree("libs/imgui-backend") { exclude("build") })
+    inputs.files(
+        "libs/cimgui/cimgui.cpp",
+        "libs/cimgui/cimgui.h",
+        "libs/cimgui/imgui/imgui.cpp",
+        "libs/cimgui/imgui/imgui.h",
+        "libs/cimgui/imgui/imgui_draw.cpp",
+        "libs/cimgui/imgui/imgui_tables.cpp",
+        "libs/cimgui/imgui/imgui_widgets.cpp",
+        "libs/cimgui/imgui/imgui_demo.cpp",
+        "libs/cimgui/imgui/backends/imgui_impl_win32.cpp",
+        "libs/cimgui/imgui/backends/imgui_impl_win32.h",
+        "libs/cimgui/imgui/backends/imgui_impl_dx11.cpp",
+        "libs/cimgui/imgui/backends/imgui_impl_dx11.h",
+    )
+    outputs.file(outputLib)
+
+    workingDir = file("libs/imgui-backend")
+    commandLine("bash", buildScript.absolutePath)
+
+    group = "build"
+    description = "Build cimgui static library for ImGui + Win32/DX11"
+}
+
+// Make cinterop depend on cimgui build
+tasks.named("cinteropCimguiMingwX64") {
+    dependsOn("buildCimgui")
+}
+
 // Make link tasks depend on resource compilation
 tasks.named("compileKotlinMingwX64") {
     dependsOn("compileWindowsResources")
+    dependsOn("buildCimgui")
 }
 
 // ============================================================================
