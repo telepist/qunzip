@@ -208,22 +208,11 @@ tasks.register<Exec>("buildCimgui") {
     val buildScript = file("libs/imgui-backend/build.sh")
     val outputLib = file("libs/imgui-backend/build/libcimgui.a")
 
-    inputs.files(buildScript)
     inputs.files(fileTree("libs/imgui-backend") { exclude("build") })
-    inputs.files(
-        "libs/cimgui/cimgui.cpp",
-        "libs/cimgui/cimgui.h",
-        "libs/cimgui/imgui/imgui.cpp",
-        "libs/cimgui/imgui/imgui.h",
-        "libs/cimgui/imgui/imgui_draw.cpp",
-        "libs/cimgui/imgui/imgui_tables.cpp",
-        "libs/cimgui/imgui/imgui_widgets.cpp",
-        "libs/cimgui/imgui/imgui_demo.cpp",
-        "libs/cimgui/imgui/backends/imgui_impl_win32.cpp",
-        "libs/cimgui/imgui/backends/imgui_impl_win32.h",
-        "libs/cimgui/imgui/backends/imgui_impl_dx11.cpp",
-        "libs/cimgui/imgui/backends/imgui_impl_dx11.h",
-    )
+    inputs.files(fileTree("libs/cimgui") {
+        include("*.cpp", "*.h", "imgui/*.cpp", "imgui/*.h",
+                "imgui/backends/imgui_impl_win32.*", "imgui/backends/imgui_impl_dx11.*")
+    })
     outputs.file(outputLib)
 
     workingDir = file("libs/imgui-backend")

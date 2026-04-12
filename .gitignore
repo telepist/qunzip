@@ -38,6 +38,7 @@ out/
 ### Kotlin Native ###
 .konan/
 *.def
+!src/nativeInterop/cinterop/*.def
 *.bc
 *.o.d
 

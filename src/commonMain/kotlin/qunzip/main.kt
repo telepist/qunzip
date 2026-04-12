@@ -15,9 +15,13 @@ fun main(args: Array<String>) {
     // With GUI subsystem (-mwindows), no console exists at startup.
     // Detect launch mode early: standalone (drag-drop) vs CLI (shell).
     val earlyStandalone = isStandaloneLaunch()
-    val useGui = args.contains("--gui") || earlyStandalone
 
-    // For CLI mode, reattach to the parent shell's console for stdio.
+    // GUI mode only when there's a file to extract (not for settings/help).
+    // Check if any arg looks like a file path (not a --flag).
+    val hasFileArg = args.any { !it.startsWith("-") }
+    val useGui = hasFileArg && (args.contains("--gui") || earlyStandalone)
+
+    // For non-GUI mode, we need a console for TUI/CLI output.
     if (!useGui) {
         configureStandaloneConsole()
     }

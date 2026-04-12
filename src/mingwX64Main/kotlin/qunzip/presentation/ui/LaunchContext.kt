@@ -114,13 +114,18 @@ actual fun hideConsole() {
 }
 
 /**
- * Attach to the parent shell's console for CLI mode.
- * Reattaches stdio so print/println work in the terminal.
+ * Ensure a console is available for TUI/CLI output.
+ * Tries to attach to the parent shell's console first.
+ * If that fails (standalone launch), allocates a new console.
  */
 @OptIn(ExperimentalForeignApi::class)
 actual fun configureStandaloneConsole() {
-    // For CLI mode: reattach to parent console
-    AttachConsole(ATTACH_PARENT_PROCESS_ID)
+    // Try to attach to parent console (CLI launch from shell)
+    if (AttachConsole(ATTACH_PARENT_PROCESS_ID) == 0) {
+        // No parent console (standalone) — allocate one for settings/TUI
+        AllocConsole()
+        SetConsoleTitleA("Qunzip")
+    }
 
     // Reopen stdio to point to the attached console
     platform.posix.freopen("CONOUT$", "w", platform.posix.stdout)

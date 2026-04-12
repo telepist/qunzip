@@ -6,6 +6,7 @@
 #include <d3d11.h>
 #include <windows.h>
 #include <dwmapi.h>
+#include <shellscalingapi.h>
 
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
@@ -27,13 +28,14 @@ struct ImGuiApp {
 
 static ImGuiApp* g_app = nullptr;
 
-static void CreateRenderTarget(ImGuiApp* app) {
+static bool CreateRenderTarget(ImGuiApp* app) {
     ID3D11Texture2D* back_buffer = nullptr;
-    app->swap_chain->GetBuffer(0, IID_ID3D11Texture2D, (void**)&back_buffer);
-    if (back_buffer) {
-        app->device->CreateRenderTargetView(back_buffer, nullptr, &app->render_target_view);
-        back_buffer->Release();
-    }
+    HRESULT hr = app->swap_chain->GetBuffer(0, IID_ID3D11Texture2D, (void**)&back_buffer);
+    if (FAILED(hr) || !back_buffer)
+        return false;
+    hr = app->device->CreateRenderTargetView(back_buffer, nullptr, &app->render_target_view);
+    back_buffer->Release();
+    return SUCCEEDED(hr) && app->render_target_view != nullptr;
 }
 
 static void CleanupRenderTarget(ImGuiApp* app) {
@@ -41,6 +43,21 @@ static void CleanupRenderTarget(ImGuiApp* app) {
         app->render_target_view->Release();
         app->render_target_view = nullptr;
     }
+}
+
+static void CleanupDevice(ImGuiApp* app) {
+    CleanupRenderTarget(app);
+    if (app->swap_chain)      { app->swap_chain->Release();      app->swap_chain = nullptr; }
+    if (app->device_context)  { app->device_context->Release();  app->device_context = nullptr; }
+    if (app->device)          { app->device->Release();          app->device = nullptr; }
+}
+
+static void CleanupWindow(ImGuiApp* app) {
+    if (app->hwnd) {
+        DestroyWindow(app->hwnd);
+        app->hwnd = nullptr;
+    }
+    UnregisterClassW(app->wc.lpszClassName, app->wc.hInstance);
 }
 
 static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -62,6 +79,17 @@ static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 }
 
 extern "C" ImGuiApp* imgui_app_create(const char* title, int width, int height) {
+    // DPI awareness — avoid blurry rendering on scaled displays.
+    // Loaded dynamically since shcore.dll isn't available in MinGW link libraries.
+    {
+        typedef BOOL (WINAPI *SetProcessDpiAwarenessContextFn)(HANDLE);
+        HMODULE user32 = GetModuleHandleW(L"user32.dll");
+        if (user32) {
+            auto fn = (SetProcessDpiAwarenessContextFn)GetProcAddress(user32, "SetProcessDpiAwarenessContext");
+            if (fn) fn(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        }
+    }
+
     ImGuiApp* app = new ImGuiApp();
     memset(app, 0, sizeof(ImGuiApp));
     g_app = app;
@@ -83,8 +111,14 @@ extern "C" ImGuiApp* imgui_app_create(const char* title, int width, int height) 
         nullptr, nullptr, app->wc.hInstance, nullptr);
     delete[] wtitle;
 
-    // Match title bar to ImGui dark/light theme.
-    // Uses the system "apps use dark theme" setting.
+    if (!app->hwnd) {
+        CleanupWindow(app);
+        g_app = nullptr;
+        delete app;
+        return nullptr;
+    }
+
+    // Match title bar to system dark/light theme setting
     {
         HKEY hkey;
         BOOL use_dark = TRUE;  // default to dark (matches ImGui::StyleColorsDark)
@@ -125,12 +159,20 @@ extern "C" ImGuiApp* imgui_app_create(const char* title, int width, int height) 
         nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0,
         feature_levels, 2, D3D11_SDK_VERSION,
         &sd, &app->swap_chain, &app->device, &feature_level, &app->device_context);
-    if (hr != S_OK) {
+    if (FAILED(hr)) {
+        CleanupWindow(app);
+        g_app = nullptr;
         delete app;
         return nullptr;
     }
 
-    CreateRenderTarget(app);
+    if (!CreateRenderTarget(app)) {
+        CleanupDevice(app);
+        CleanupWindow(app);
+        g_app = nullptr;
+        delete app;
+        return nullptr;
+    }
 
     // Show window
     ShowWindow(app->hwnd, SW_SHOWDEFAULT);
@@ -157,12 +199,8 @@ extern "C" void imgui_app_destroy(ImGuiApp* app) {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    CleanupRenderTarget(app);
-    if (app->swap_chain) app->swap_chain->Release();
-    if (app->device_context) app->device_context->Release();
-    if (app->device) app->device->Release();
-    DestroyWindow(app->hwnd);
-    UnregisterClassW(app->wc.lpszClassName, app->wc.hInstance);
+    CleanupDevice(app);
+    CleanupWindow(app);
 
     g_app = nullptr;
     delete app;
@@ -197,10 +235,12 @@ extern "C" int imgui_app_begin_frame(ImGuiApp* app) {
 extern "C" void imgui_app_end_frame(ImGuiApp* app) {
     ImGui::Render();
 
-    const float clear_color[] = { 0.1f, 0.1f, 0.1f, 1.0f };
-    app->device_context->OMSetRenderTargets(1, &app->render_target_view, nullptr);
-    app->device_context->ClearRenderTargetView(app->render_target_view, clear_color);
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    if (app->render_target_view) {
+        const float clear_color[] = { 0.1f, 0.1f, 0.1f, 1.0f };
+        app->device_context->OMSetRenderTargets(1, &app->render_target_view, nullptr);
+        app->device_context->ClearRenderTargetView(app->render_target_view, clear_color);
+        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    }
 
     app->swap_chain->Present(1, 0);  // vsync
 }

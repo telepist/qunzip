@@ -239,17 +239,4 @@ private fun truncatePath(path: String, maxLen: Int): String {
     return "..." + path.takeLast(maxLen - 3)
 }
 
-private fun formatBytes(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${formatDecimal(bytes / 1024.0)} KB"
-        bytes < 1024 * 1024 * 1024 -> "${formatDecimal(bytes / (1024.0 * 1024.0))} MB"
-        else -> "${formatDecimal(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
-    }
-}
-
-private fun formatDecimal(value: Double): String {
-    val whole = value.toLong()
-    val frac = ((value - whole) * 10).toLong().coerceIn(0, 9)
-    return "$whole.$frac"
-}
+private fun formatBytes(bytes: Long) = qunzip.presentation.ui.formatBytes(bytes)
