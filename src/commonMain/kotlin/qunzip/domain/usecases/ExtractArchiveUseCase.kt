@@ -141,7 +141,7 @@ open class ExtractArchiveUseCase(
                 fileSystemRepository.moveToTrash(archivePath)
             }
 
-            if (options.showCompletionDialog) {
+            if (!options.autoCloseAfterExtraction) {
                 notificationRepository.showSuccessNotification(
                     title = "Extraction Complete",
                     message = "${archive.name} extracted successfully",

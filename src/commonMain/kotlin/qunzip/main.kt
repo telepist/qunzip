@@ -16,10 +16,11 @@ fun main(args: Array<String>) {
     // Detect launch mode early: standalone (drag-drop) vs CLI (shell).
     val earlyStandalone = isStandaloneLaunch()
 
-    // GUI mode only when there's a file to extract (not for settings/help).
-    // Check if any arg looks like a file path (not a --flag).
-    val hasFileArg = args.any { !it.startsWith("-") }
-    val useGui = hasFileArg && (args.contains("--gui") || earlyStandalone)
+    // GUI for standalone launches (double-click, drag-drop) or --gui flag.
+    // CLI flags (--help, --register-associations, etc.) skip GUI even if standalone,
+    // since they need console output and exit immediately.
+    val hasCLIFlag = args.any { it.startsWith("--") || it.startsWith("-") }
+    val useGui = args.contains("--gui") || (earlyStandalone && !hasCLIFlag)
 
     // For non-GUI mode, we need a console for TUI/CLI output.
     if (!useGui) {
@@ -132,9 +133,9 @@ fun main(args: Array<String>) {
                 try {
                     val dependencies = initializeDependencies()
                     val currentPrefs = dependencies.preferencesRepository.loadPreferences()
-                    val newPrefs = currentPrefs.copy(showCompletionDialog = true)
+                    val newPrefs = currentPrefs.copy(autoCloseAfterExtraction = false)
                     if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
-                        println("Setting updated: Show completion dialog = ON")
+                        println("Setting updated: Auto-close after extraction = OFF (dialog stays open)")
                         exitProcess(0)
                     } else {
                         println("Error: Failed to save preferences")
@@ -152,9 +153,9 @@ fun main(args: Array<String>) {
                 try {
                     val dependencies = initializeDependencies()
                     val currentPrefs = dependencies.preferencesRepository.loadPreferences()
-                    val newPrefs = currentPrefs.copy(showCompletionDialog = false)
+                    val newPrefs = currentPrefs.copy(autoCloseAfterExtraction = true)
                     if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
-                        println("Setting updated: Show completion dialog = OFF")
+                        println("Setting updated: Auto-close after extraction = ON (default)")
                         exitProcess(0)
                     } else {
                         println("Error: Failed to save preferences")

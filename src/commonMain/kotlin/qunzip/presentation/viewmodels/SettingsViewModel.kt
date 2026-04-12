@@ -50,8 +50,8 @@ class SettingsViewModel(
         updatePreference { it.copy(moveToTrashAfterExtraction = enabled) }
     }
 
-    fun setShowCompletionDialog(enabled: Boolean) {
-        updatePreference { it.copy(showCompletionDialog = enabled) }
+    fun setAutoCloseAfterExtraction(enabled: Boolean) {
+        updatePreference { it.copy(autoCloseAfterExtraction = enabled) }
     }
 
     fun resetToDefaults() {

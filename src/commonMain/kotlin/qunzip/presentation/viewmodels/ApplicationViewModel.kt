@@ -90,8 +90,8 @@ class ApplicationViewModel(
     /**
      * Decide whether to auto-exit after extraction finishes.
      * - CLI launch: always exit (user gets their shell back, output stays in scrollback)
-     * - Standalone launch (double-click): exit only if showCompletionDialog is false.
-     *   When true, keep the window open so the user can see the result.
+     * - Standalone launch (double-click): exit if autoCloseAfterExtraction is true (default).
+     *   When false, keeps the window open so the user can see the result.
      */
     private fun handleExtractionFinished() {
         if (!isStandaloneLaunch) {
@@ -101,10 +101,10 @@ class ApplicationViewModel(
             // Standalone (double-click): check user preference
             scope.launch {
                 val prefs = preferencesRepository.loadPreferences()
-                if (!prefs.showCompletionDialog) {
+                if (prefs.autoCloseAfterExtraction) {
                     _uiState.value = _uiState.value.copy(shouldExit = true)
                 } else {
-                    // Keep TUI visible, show hint to close the window
+                    // Keep window visible, show hint to close
                     _uiState.value = _uiState.value.copy(showCloseHint = true)
                 }
             }

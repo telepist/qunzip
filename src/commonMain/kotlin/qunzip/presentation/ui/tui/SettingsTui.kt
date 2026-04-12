@@ -12,7 +12,7 @@ private const val BOX_WIDTH = 52
 
 private enum class MenuItem(val label: String) {
     MOVE_TO_TRASH("Move archive to trash after extraction"),
-    SHOW_COMPLETION_DIALOG("Show completion dialog"),
+    AUTO_CLOSE("Close automatically after extraction"),
     QUIT("Quit")
 }
 
@@ -45,8 +45,8 @@ fun SettingsTui(
                         MenuItem.MOVE_TO_TRASH -> {
                             settingsViewModel.setMoveToTrashAfterExtraction(!prefs.moveToTrashAfterExtraction)
                         }
-                        MenuItem.SHOW_COMPLETION_DIALOG -> {
-                            settingsViewModel.setShowCompletionDialog(!prefs.showCompletionDialog)
+                        MenuItem.AUTO_CLOSE -> {
+                            settingsViewModel.setAutoCloseAfterExtraction(!prefs.autoCloseAfterExtraction)
                         }
                         MenuItem.QUIT -> {
                             onExit()
@@ -84,10 +84,10 @@ fun SettingsTui(
                         selected = isSelected
                     )
                 }
-                MenuItem.SHOW_COMPLETION_DIALOG -> {
+                MenuItem.AUTO_CLOSE -> {
                     ToggleRow(
                         label = item.label,
-                        enabled = prefs.showCompletionDialog,
+                        enabled = prefs.autoCloseAfterExtraction,
                         selected = isSelected
                     )
                 }
