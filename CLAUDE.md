@@ -28,7 +28,9 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 ### Running the Application
 - **Extract an archive**: `./build/bin/<platform>/debugExecutable/qunzip.kexe <archive-file>`
 - **Settings mode**: `./build/bin/<platform>/debugExecutable/qunzip.kexe` (no file argument)
-- The application uses Mosaic TUI for all rendering (both CLI and double-click launches)
+- **GUI mode** (Windows, standalone/drag-drop): ImGui renderer with DX11, native window
+- **TUI mode** (CLI): Mosaic terminal UI with progress bars and colors
+- The renderer is selected automatically: GUI for standalone launches, TUI for CLI
 
 ### CLI Arguments
 | Argument | Description |
@@ -39,8 +41,9 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 | `--unregister-associations` | Unregister file associations |
 | `--set-trash-on` | Enable moving archives to trash after extraction |
 | `--set-trash-off` | Disable moving archives to trash after extraction |
-| `--set-dialog-on` | Enable completion dialog after extraction |
-| `--set-dialog-off` | Disable completion dialog (silent exit, default) |
+| `--set-dialog-on` | Keep window open after extraction (disable auto-close) |
+| `--set-dialog-off` | Close window automatically after extraction (default) |
+| `--gui` | Force GUI mode (ImGui renderer, Windows only) |
 | `--force-standalone` | Force standalone mode (for testing standalone exit behavior) |
 
 ### Windows Installer Commands
@@ -79,10 +82,12 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 #### Presentation Layer (`src/commonMain/kotlin/qunzip/presentation/`)
 - **ViewModels**: `ExtractionViewModel`, `FileAssociationViewModel`, `ApplicationViewModel`, `SettingsViewModel`
 - **State Management**: Kotlin Flow with StateFlow/SharedFlow patterns
-- **UI Layer**: Mosaic TUI for all platforms
-  - **Mosaic TUI**: Terminal UI with progress bars, colors, and real-time updates
-  - **Standalone detection**: On Windows, detects double-click vs CLI launch via `GetConsoleProcessList`
-  - **Standalone mode**: Uses Mosaic's `NonInteractiveTerminal` with truecolor to avoid raw mode issues
+- **UI Layer**: Dual renderer system
+  - **ImGui GUI** (Windows): Native DX11 window via cimgui/Dear ImGui, used for standalone launches
+  - **Mosaic TUI** (cross-platform): Terminal UI with progress bars, colors, used for CLI mode
+  - **`UiRenderer` interface**: Common abstraction; `ImGuiRenderer` and `MosaicTuiRenderer` implementations
+  - **Standalone detection**: On Windows, uses `AttachConsole` probe (GUI subsystem has no console)
+  - **GUI subsystem** (`-mwindows`): No console window on startup; CLI mode reattaches via `AttachConsole`
 
 ### MVVM with Kotlin Flow
 - ViewModels expose `StateFlow` for UI state
@@ -111,6 +116,8 @@ Common interfaces in domain layer, platform-specific implementations:
 - **Kotlinx DateTime**: `0.5.0` - Date/time handling
 - **Kermit**: `2.0.3` - Multiplatform logging
 - **Mosaic**: `0.19.0-SNAPSHOT` - Terminal UI framework for Kotlin/Native (local build with AnsiLevel support)
+- **cimgui/Dear ImGui**: C bindings for immediate-mode GUI (submodule at `libs/cimgui`)
+- **DX11/Win32**: DirectX 11 rendering backend for ImGui on Windows (via `libs/imgui-backend` wrapper)
 - **Turbine**: `1.0.0` - Flow testing (test only)
 
 ### Build Configuration
@@ -118,6 +125,8 @@ Common interfaces in domain layer, platform-specific implementations:
 - Debug builds: `build/bin/<platform>/debugExecutable/`
 - Release builds: `build/bin/<platform>/releaseExecutable/`
 - Entry point: `qunzip.main`
+- Windows uses GUI subsystem (`-mwindows`): no console on startup, DX11 + ImGui for GUI
+- cimgui static library built via `./gradlew buildCimgui` (automatic during Windows build)
 
 ## Project Structure
 
@@ -131,8 +140,9 @@ src/
 │   ├── presentation/
 │   │   ├── viewmodels/        # State management
 │   │   └── ui/                # UI layer
-│   │       ├── UiRenderer.kt       # Mosaic TUI renderer
-│   │       ├── LaunchContext.kt    # Launch mode detection
+│   │       ├── UiRenderer.kt       # Renderer interface + MosaicTuiRenderer
+│   │       ├── LaunchContext.kt    # Launch mode detection (expect)
+│   │       ├── FormatUtils.kt      # Shared formatting utilities
 │   │       └── tui/                # Mosaic Terminal UI
 │   │           ├── MosaicApp.kt         # Root Mosaic composable
 │   │           ├── ExtractionTui.kt     # Extraction progress TUI
@@ -147,7 +157,8 @@ src/
 │   │   ├── WindowsFileAssociationRepository.kt
 │   │   └── WindowsPreferencesRepository.kt
 │   ├── presentation/ui/
-│   │   └── LaunchContext.kt        # Windows standalone launch detection
+│   │   ├── LaunchContext.kt        # Windows standalone detection (AttachConsole)
+│   │   └── ImGuiRenderer.kt       # ImGui GUI renderer (DX11)
 │   ├── resources/                  # Windows resources
 │   │   ├── qunzip.rc               # Resource file (icon, version info)
 │   │   └── qunzip.exe.manifest     # Windows manifest
@@ -199,7 +210,7 @@ When extracting would overwrite an existing file or folder, the application hand
 ### User Preferences
 Stored in JSON format at `~/.qunzip/preferences.json`:
 - `moveToTrashAfterExtraction` - Move archive to trash after successful extraction (default: false)
-- `showCompletionDialog` - Show completion dialog after extraction; when false, app silently closes (default: false)
+- `autoCloseAfterExtraction` - Automatically close window after extraction (default: true); when false, window stays open to show result
 
 ## Development Notes
 
@@ -278,8 +289,8 @@ When a feature like "avoid overwriting files" is added, tests must cover:
 
 ## Current Development Status
 
-**Phase**: TUI-Only Redesign
-**Progress**: Core architecture complete, Windows platform functional, Mosaic TUI is the sole UI
+**Phase**: Dual UI (ImGui GUI + Mosaic TUI)
+**Progress**: Core architecture complete, Windows platform functional with ImGui GUI and Mosaic TUI
 
 ### ✅ Completed
 - Clean Architecture with MVVM setup (100%)
@@ -296,14 +307,21 @@ When a feature like "avoid overwriting files" is added, tests must cover:
   - WindowsPreferencesRepository (JSON file-based settings storage)
   - WindowsPlatform.kt (DI and platform utilities)
   - Embedded application icon in executable
-- **Mosaic Terminal UI (100%)**
+- **ImGui GUI Renderer (100%) — Windows**
+  - Native DX11 window via cimgui/Dear ImGui
+  - Extraction progress: archive info, progress bar, file count, current file
+  - Settings UI: preference checkboxes
+  - Dark title bar follows Windows theme (`DwmSetWindowAttribute`)
+  - DPI-aware rendering (`SetProcessDpiAwarenessContext`)
+  - GUI subsystem (`-mwindows`): no console flash on launch
+  - Auto-close respects `autoCloseAfterExtraction` preference
+  - Falls back to TUI if DX11 init fails
+- **Mosaic Terminal UI (100%) — Cross-platform**
   - TUI with real-time progress updates
   - Progress bars, colors for visual feedback
   - Extraction progress display (stages, files, bytes)
   - Settings/file associations display
-  - Standalone launch detection (Windows: `GetConsoleProcessList`)
-  - Standalone mode uses `NonInteractiveTerminal` with truecolor
-  - CLI mode uses full interactive `TtyTerminal`
+  - Used for CLI mode; standalone CLI uses `AttachConsole` + `AllocConsole`
 - **Black Box E2E Test Scripts**
   - Windows, Linux, and macOS test scripts created
   - Test fixtures prepared (single-file.zip, multiple-files.zip, nested-folder.zip)

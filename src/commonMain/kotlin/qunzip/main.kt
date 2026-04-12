@@ -238,8 +238,9 @@ fun printHelp() {
         Options:
           --set-trash-on              Enable moving archive to trash after extraction
           --set-trash-off             Disable moving archive to trash (default)
-          --set-dialog-on             Enable completion dialog after extraction
-          --set-dialog-off            Disable completion dialog (silent exit, default)
+          --set-dialog-on             Keep window open after extraction
+          --set-dialog-off            Close window automatically after extraction (default)
+          --gui                       Force GUI mode (ImGui renderer, Windows only)
           --register-associations     Register file associations for supported formats
           --unregister-associations   Remove file associations
           --help, -h                  Show this help message
