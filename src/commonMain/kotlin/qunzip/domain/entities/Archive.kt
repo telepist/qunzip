@@ -1,6 +1,6 @@
 package qunzip.domain.entities
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 data class Archive(
     val path: String,
@@ -32,7 +32,7 @@ enum class ArchiveFormat(val extensions: List<String>, val displayName: String) 
     companion object {
         fun fromExtension(extension: String): ArchiveFormat? {
             val lowerExt = extension.lowercase()
-            return values().find { format ->
+            return entries.find { format ->
                 format.extensions.any { it == lowerExt }
             }
         }

@@ -9,7 +9,7 @@ open class ManageFileAssociationsUseCase(
     private val logger: Logger = Logger.withTag("FileAssociations")
 ) {
     suspend fun registerAssociations(applicationPath: String): List<AssociationResult> {
-        val supportedFormats = ArchiveFormat.values()
+        val supportedFormats = ArchiveFormat.entries
         val results = mutableListOf<AssociationResult>()
 
         for (format in supportedFormats) {
@@ -44,7 +44,7 @@ open class ManageFileAssociationsUseCase(
     }
 
     suspend fun unregisterAssociations(): List<AssociationResult> {
-        val supportedFormats = ArchiveFormat.values()
+        val supportedFormats = ArchiveFormat.entries
         val results = mutableListOf<AssociationResult>()
 
         for (format in supportedFormats) {
@@ -73,7 +73,7 @@ open class ManageFileAssociationsUseCase(
     }
 
     suspend fun checkAssociations(): List<FileAssociation> {
-        val supportedFormats = ArchiveFormat.values()
+        val supportedFormats = ArchiveFormat.entries
         val associations = mutableListOf<FileAssociation>()
 
         for (format in supportedFormats) {

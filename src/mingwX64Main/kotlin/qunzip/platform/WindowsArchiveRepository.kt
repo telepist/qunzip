@@ -10,6 +10,7 @@ import kotlinx.cinterop.*
 import platform.posix.*
 import platform.windows.*
 import co.touchlab.kermit.Logger
+import kotlin.time.Instant
 
 // Substrings 7-Zip prints (case-insensitive) when an archive is encrypted
 // or the supplied password is wrong. Used to translate exit-code failures
@@ -197,7 +198,7 @@ class WindowsArchiveRepository(
     }
 
     override fun getSupportedFormats(): List<ArchiveFormat> {
-        return ArchiveFormat.values().toList()
+        return ArchiveFormat.entries
     }
 
     override suspend fun isPasswordRequired(archivePath: String): Boolean {
@@ -224,7 +225,7 @@ class WindowsArchiveRepository(
         FileInfo(
             path = path,
             size = statBuf.st_size.toLong(),
-            lastModified = kotlinx.datetime.Instant.fromEpochSeconds(statBuf.st_mtime),
+            lastModified = Instant.fromEpochSeconds(statBuf.st_mtime),
             isReadable = true,
             isDirectory = (statBuf.st_mode.toInt() and S_IFDIR) != 0
         )

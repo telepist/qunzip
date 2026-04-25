@@ -124,16 +124,16 @@ Common interfaces in domain layer, platform-specific implementations:
 - Linux ARM64
 
 ### Dependencies
-- **Kotlin Multiplatform**: `2.3.10`
-- **Kotlin Compose Compiler Plugin**: `2.3.10` - Required for Mosaic composables
-- **Kotlinx Coroutines**: `1.8.0` - Async operations
-- **Kotlinx Serialization**: `1.6.3` - Data serialization
-- **Kotlinx DateTime**: `0.5.0` - Date/time handling
-- **Kermit**: `2.0.3` - Multiplatform logging
+- **Kotlin Multiplatform**: `2.3.21`
+- **Kotlin Compose Compiler Plugin**: `2.3.21` - Required for Mosaic composables
+- **Kotlinx Coroutines**: `1.10.2` - Async operations
+- **Kotlinx Serialization**: `1.11.0` - Data serialization
+- **Kotlinx DateTime**: `0.7.1` - Date/time handling (uses `kotlin.time.Instant` from stdlib)
+- **Kermit**: `2.1.0` - Multiplatform logging
 - **Mosaic**: `0.19.0-SNAPSHOT` - Terminal UI framework for Kotlin/Native (local build with AnsiLevel support)
 - **cimgui/Dear ImGui**: C bindings for immediate-mode GUI (submodule at `libs/cimgui`)
 - **DX11/Win32**: DirectX 11 rendering backend for ImGui on Windows (via `libs/imgui-backend` wrapper)
-- **Turbine**: `1.0.0` - Flow testing (test only)
+- **Turbine**: `1.2.1` - Flow testing (test only)
 
 ### Build Configuration
 - Windows: two named executable targets (`cli` → `qunzip.exe`, `gui` → `QuickUnzip.exe`)

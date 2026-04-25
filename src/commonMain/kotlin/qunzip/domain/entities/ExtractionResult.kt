@@ -1,6 +1,6 @@
 package qunzip.domain.entities
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 sealed class ExtractionResult {
     data class Success(

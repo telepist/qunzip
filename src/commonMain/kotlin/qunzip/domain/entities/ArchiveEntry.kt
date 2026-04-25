@@ -1,6 +1,6 @@
 package qunzip.domain.entities
 
-import kotlinx.datetime.Instant
+import kotlin.time.Instant
 
 data class ArchiveEntry(
     val path: String,

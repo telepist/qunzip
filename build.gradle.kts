@@ -1,8 +1,8 @@
 plugins {
-    kotlin("multiplatform") version "2.3.10"
-    kotlin("plugin.serialization") version "2.3.10"
-    kotlin("plugin.compose") version "2.3.10"
-    id("io.gitlab.arturbosch.detekt") version "1.23.7"
+    kotlin("multiplatform") version "2.3.21"
+    kotlin("plugin.serialization") version "2.3.21"
+    kotlin("plugin.compose") version "2.3.21"
+    id("io.gitlab.arturbosch.detekt") version "1.23.8"
 }
 
 detekt {
@@ -107,10 +107,10 @@ kotlin {
     sourceSets {
         commonMain {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.5.0")
-                implementation("co.touchlab:kermit:2.0.3") // Logging
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.7.1")
+                implementation("co.touchlab:kermit:2.1.0") // Logging
 
                 // Mosaic for TUI (local build with AnsiLevel support for NonInteractiveTerminal)
                 implementation("com.jakewharton.mosaic:mosaic-runtime:0.19.0-SNAPSHOT")
@@ -120,8 +120,8 @@ kotlin {
         commonTest {
             dependencies {
                 implementation(kotlin("test"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
-                implementation("app.cash.turbine:turbine:1.0.0") // Flow testing
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+                implementation("app.cash.turbine:turbine:1.2.1") // Flow testing
             }
         }
 

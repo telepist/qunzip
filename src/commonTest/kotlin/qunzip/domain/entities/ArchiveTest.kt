@@ -98,7 +98,7 @@ class ArchiveFormatTest {
 
     @Test
     fun `all formats have non-empty extensions list`() {
-        ArchiveFormat.values().forEach { format ->
+        ArchiveFormat.entries.forEach { format ->
             assertTrue(format.extensions.isNotEmpty(), "Format ${format.name} should have at least one extension")
             format.extensions.forEach { ext ->
                 assertFalse(ext.isEmpty(), "Extension should not be empty for format ${format.name}")
@@ -109,7 +109,7 @@ class ArchiveFormatTest {
 
     @Test
     fun `all formats have non-empty display names`() {
-        ArchiveFormat.values().forEach { format ->
+        ArchiveFormat.entries.forEach { format ->
             assertTrue(format.displayName.isNotEmpty(), "Format ${format.name} should have a display name")
         }
     }

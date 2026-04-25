@@ -95,7 +95,7 @@ sealed class ValidationResult {
 data class FileInfo(
     val path: String,
     val size: Long,
-    val lastModified: kotlinx.datetime.Instant? = null,
+    val lastModified: kotlin.time.Instant? = null,
     val isReadable: Boolean = true,
     val isDirectory: Boolean = false
 )

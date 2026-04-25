@@ -6,6 +6,7 @@ import kotlinx.cinterop.*
 import platform.posix.*
 import platform.windows.*
 import co.touchlab.kermit.Logger
+import kotlin.time.Instant
 
 /**
  * Windows implementation of FileSystemRepository
@@ -37,7 +38,7 @@ class WindowsFileSystemRepository(
         FileInfo(
             path = path,
             size = statBuf.st_size.toLong(),
-            lastModified = kotlinx.datetime.Instant.fromEpochSeconds(statBuf.st_mtime),
+            lastModified = Instant.fromEpochSeconds(statBuf.st_mtime),
             isReadable = isReadable(path),
             isDirectory = (statBuf.st_mode.toInt() and S_IFDIR) != 0
         )

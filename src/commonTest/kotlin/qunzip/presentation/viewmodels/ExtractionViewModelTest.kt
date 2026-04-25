@@ -347,7 +347,7 @@ class ExtractionViewModelTest {
             override suspend fun extractArchive(archivePath: String, destinationPath: String, password: String?) = flowOf<ExtractionProgress>()
             override suspend fun testArchive(archivePath: String, password: String?) = true
             override fun isFormatSupported(format: ArchiveFormat) = true
-            override fun getSupportedFormats() = ArchiveFormat.values().toList()
+            override fun getSupportedFormats() = ArchiveFormat.entries
             override suspend fun isPasswordRequired(archivePath: String) = false
         },
         fileSystemRepository = fileSystemRepository ?: object : qunzip.domain.repositories.FileSystemRepository {
@@ -411,7 +411,7 @@ class ExtractionViewModelTest {
             override suspend fun extractArchive(archivePath: String, destinationPath: String, password: String?) = flowOf<ExtractionProgress>()
             override suspend fun testArchive(archivePath: String, password: String?) = true
             override fun isFormatSupported(format: ArchiveFormat) = true
-            override fun getSupportedFormats() = ArchiveFormat.values().toList()
+            override fun getSupportedFormats() = ArchiveFormat.entries
             override suspend fun isPasswordRequired(archivePath: String) = false
         },
         fileSystemRepository = fileSystemRepository ?: object : qunzip.domain.repositories.FileSystemRepository {

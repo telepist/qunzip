@@ -687,7 +687,7 @@ class ExtractArchiveUseCaseTest {
         }
 
         override fun isFormatSupported(format: ArchiveFormat) = true
-        override fun getSupportedFormats() = ArchiveFormat.values().toList()
+        override fun getSupportedFormats() = ArchiveFormat.entries
         override suspend fun isPasswordRequired(archivePath: String) = false
     }
 

@@ -187,7 +187,7 @@ data class FileAssociationUiState(
     val error: String? = null
 ) {
     val supportedExtensions: List<String>
-        get() = ArchiveFormat.values().flatMap { it.extensions }
+        get() = ArchiveFormat.entries.flatMap { it.extensions }
 
     val registeredExtensions: List<String>
         get() = qunzipAssociations.map { it.extension }
