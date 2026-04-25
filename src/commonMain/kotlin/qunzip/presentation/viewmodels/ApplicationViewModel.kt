@@ -1,5 +1,6 @@
 package qunzip.presentation.viewmodels
 
+import qunzip.domain.entities.ExtractionStage
 import qunzip.domain.usecases.ExtractArchiveUseCase
 import qunzip.domain.usecases.ManageFileAssociationsUseCase
 import qunzip.domain.usecases.ValidateArchiveUseCase
@@ -75,15 +76,25 @@ class ApplicationViewModel(
                 when (event) {
                     is ExtractionEvent.ExtractionCompleted -> {
                         _events.tryEmit(ApplicationEvent.ExtractionCompleted)
-                        handleExtractionFinished()
                     }
                     is ExtractionEvent.ExtractionFailed -> {
                         _events.tryEmit(ApplicationEvent.ExtractionFailed(event.throwable))
-                        handleExtractionFinished()
                     }
                     else -> { /* Forward other extraction events if needed */ }
                 }
             }
+        }
+
+        // Drive auto-exit off the StateFlow rather than the event SharedFlow.
+        // Events use tryEmit with extraBufferCapacity=1, so for small/fast extractions
+        // ExtractionCompleted can be dropped when emissions outpace the collector.
+        // StateFlow conflates the latest value, so observing the COMPLETED/FAILED stage
+        // here is reliable regardless of how fast the extraction finished.
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            extractionViewModel.uiState
+                .mapNotNull { it.progress?.stage }
+                .filter { it == ExtractionStage.COMPLETED || it == ExtractionStage.FAILED }
+                .collect { handleExtractionFinished() }
         }
     }
 
@@ -96,16 +107,16 @@ class ApplicationViewModel(
     private fun handleExtractionFinished() {
         if (!isStandaloneLaunch) {
             // CLI: always exit
-            _uiState.value = _uiState.value.copy(shouldExit = true)
+            _uiState.update { it.copy(shouldExit = true) }
         } else {
             // Standalone (double-click): check user preference
             scope.launch {
                 val prefs = preferencesRepository.loadPreferences()
                 if (prefs.autoCloseAfterExtraction) {
-                    _uiState.value = _uiState.value.copy(shouldExit = true)
+                    _uiState.update { it.copy(shouldExit = true) }
                 } else {
                     // Keep window visible, show hint to close
-                    _uiState.value = _uiState.value.copy(showCloseHint = true)
+                    _uiState.update { it.copy(showCloseHint = true) }
                 }
             }
         }
@@ -114,7 +125,7 @@ class ApplicationViewModel(
     fun handleApplicationStart(args: List<String>) {
         logger.i { "Application started with args: $args" }
 
-        _uiState.value = _uiState.value.copy(isStarting = true)
+        _uiState.update { it.copy(isStarting = true) }
 
         scope.launch {
             try {
@@ -124,25 +135,31 @@ class ApplicationViewModel(
                 if (filePath != null) {
                     logger.i { "Started with file argument: $filePath" }
                     fileAssociationViewModel.handleFileOpened(filePath)
-                    _uiState.value = _uiState.value.copy(
-                        isStarting = false,
-                        mode = ApplicationMode.EXTRACTION,
-                        targetFile = filePath
-                    )
+                    _uiState.update {
+                        it.copy(
+                            isStarting = false,
+                            mode = ApplicationMode.EXTRACTION,
+                            targetFile = filePath
+                        )
+                    }
                 } else {
                     logger.i { "Started without file argument, checking associations" }
-                    _uiState.value = _uiState.value.copy(
-                        isStarting = false,
-                        mode = ApplicationMode.SETUP
-                    )
+                    _uiState.update {
+                        it.copy(
+                            isStarting = false,
+                            mode = ApplicationMode.SETUP
+                        )
+                    }
                 }
 
             } catch (e: Exception) {
                 logger.e(e) { "Error during application startup" }
-                _uiState.value = _uiState.value.copy(
-                    isStarting = false,
-                    error = e.message ?: "Startup error"
-                )
+                _uiState.update {
+                    it.copy(
+                        isStarting = false,
+                        error = e.message ?: "Startup error"
+                    )
+                }
                 _events.tryEmit(ApplicationEvent.StartupError(e))
             }
         }
@@ -154,18 +171,18 @@ class ApplicationViewModel(
         // Cancel any ongoing operations
         extractionViewModel.cancelExtraction()
 
-        _uiState.value = _uiState.value.copy(shouldExit = true)
+        _uiState.update { it.copy(shouldExit = true) }
         _events.tryEmit(ApplicationEvent.ApplicationExit)
     }
 
     fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.update { it.copy(error = null) }
         extractionViewModel.clearError()
         fileAssociationViewModel.clearError()
     }
 
     fun setMode(mode: ApplicationMode) {
-        _uiState.value = _uiState.value.copy(mode = mode)
+        _uiState.update { it.copy(mode = mode) }
     }
 
 }
