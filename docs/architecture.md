@@ -18,9 +18,9 @@ This project implements a cross-platform unzip application using Clean Architect
 
 ### 3. Presentation Layer
 - **ViewModels**: State management with Kotlin Flow
-- **UI Layer**: Mosaic TUI for all platforms
-  - **Mosaic TUI**: Terminal UI with progress bars, colors, and real-time updates
-  - **UI Renderer**: `MosaicTuiRenderer` with standalone/CLI mode support
+- **UI Layer**: Dual renderer architecture via `UiRenderer` interface
+  - **ImGui GUI** (`ImGuiRenderer`): Native Windows GUI using Dear ImGui with DX11 backend, used for standalone/drag-drop launches
+  - **Mosaic TUI** (`MosaicTuiRenderer`): Cross-platform terminal UI with progress bars, colors, and real-time updates, used for CLI launches
 - **Mappers**: Convert between domain and presentation models
 
 ## MVVM with Kotlin Flow
@@ -29,70 +29,78 @@ This project implements a cross-platform unzip application using Clean Architect
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   View/UI       │◄──►│   ViewModel     │◄──►│   Repository    │
 │                 │    │                 │    │                 │
-│ - TUI (Mosaic)  │    │ - State Flow    │    │ - File Ops      │
-│ - Notifications │    │ - Commands      │    │ - 7zip Calls    │
-│                 │    │ - Error Handle  │    │ - OS Integration│
+│ - GUI (ImGui)   │    │ - State Flow    │    │ - File Ops      │
+│ - TUI (Mosaic)  │    │ - Commands      │    │ - 7zip Calls    │
+│ - Notifications │    │ - Error Handle  │    │ - OS Integration│
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
 ## UI Architecture
 
-### MosaicTuiRenderer
+### Dual Renderer Design
 
-The application uses a single `MosaicTuiRenderer` that adapts its behavior based on how the application was launched:
+The application has two UI renderers that implement the common `UiRenderer` interface, selected based on the launch context:
 
-- **CLI mode** (launched from terminal): Uses Mosaic's full interactive `TtyTerminal` with auto-detected ANSI capabilities. Exits cleanly when extraction completes, returning control to the shell.
-- **Standalone mode** (double-click / file association): Uses Mosaic's `NonInteractiveTerminal` with truecolor ANSI level. This avoids raw mode and blocking stdin reads that would prevent clean process exit. Console VT processing is enabled via `SetConsoleMode` on Windows.
+- **`ImGuiRenderer`** (Windows, standalone/drag-drop): Native GUI window using Dear ImGui with a DirectX 11 backend. Used when the application is launched by double-clicking an archive or via file association. The Windows executable is built with the GUI subsystem (`-mwindows`), so no console window appears at startup.
+- **`MosaicTuiRenderer`** (cross-platform, CLI): Terminal UI using Mosaic. Used when the application is invoked from a terminal/shell. On Windows, CLI mode reattaches to the parent console via `AttachConsole(ATTACH_PARENT_PROCESS)` since the GUI subsystem detaches from it by default.
 
 ```kotlin
-class MosaicTuiRenderer(
-    private val isStandaloneLaunch: Boolean = false,
-) : UiRenderer {
-    // Standalone: runMosaic(onNonInteractive = AssumeAndIgnore, ansiLevel = TRUECOLOR)
-    // CLI: runMosaic { ... } (full interactive terminal)
+interface UiRenderer {
+    suspend fun render(viewModel: ApplicationViewModel)
 }
+
+class ImGuiRenderer : UiRenderer       // Windows GUI (Dear ImGui + DX11)
+class MosaicTuiRenderer : UiRenderer   // Cross-platform TUI (Mosaic)
 ```
+
+### ImGui Native Stack (Windows)
+
+The ImGui GUI renderer is backed by a native C/C++ stack integrated via Kotlin/Native cinterop:
+
+- **cimgui** (`libs/cimgui/` submodule): C bindings to Dear ImGui, providing a C-compatible API surface for Kotlin/Native interop.
+- **Win32/DX11 wrapper** (`libs/imgui-backend/imgui_app.cpp`): Custom application wrapper that manages the Win32 window, DirectX 11 device, and ImGui render loop.
+- **cinterop definition** (`src/nativeInterop/cinterop/cimgui.def`): Kotlin/Native `.def` file that generates Kotlin bindings from the C headers.
 
 ### Launch Context Detection
 
-The application detects how it was launched to select the appropriate terminal mode:
+The application detects how it was launched to select the appropriate renderer:
 
-- **Windows**: Uses `GetConsoleProcessList` — if only 1 process is attached to the console, it means Windows created the console for this process (standalone launch). If >1 processes, we're sharing a console with a shell (CLI launch).
-- **macOS/Linux**: Uses `isatty()` — if stdout is not a TTY, it's a standalone launch.
-
-For standalone launches on Windows, `configureStandaloneConsole()` sets the console title and enables ANSI/VT100 escape sequence processing via `ENABLE_VIRTUAL_TERMINAL_PROCESSING`.
+- **Windows**: The executable uses the GUI subsystem (`-mwindows`), so it has no console by default. CLI mode is detected by attempting `AttachConsole(ATTACH_PARENT_PROCESS)` -- success means a parent shell exists (CLI launch), and the Mosaic TUI renderer is used. Failure means standalone launch, and the ImGui GUI renderer is used.
+- **macOS/Linux**: Uses `isatty()` -- if stdout is a TTY, it's a CLI launch (Mosaic TUI). Otherwise, it's a standalone launch.
 
 ### UI Flow
 
 ```
-Application Start
+Application Start (GUI subsystem, no console)
        ↓
 ┌──────────────┐
 │ Parse Args   │
 └──────┬───────┘
        ↓
-┌──────────────────┐
-│ Detect Launch    │
-│ Mode (standalone │
-│ vs CLI)          │
-└──────┬───────────┘
-       ↓
 ┌──────────────────────┐
-│ MosaicTuiRenderer    │
-│ - NonInteractive     │
-│   (standalone)       │
-│ - Interactive (CLI)  │
+│ Detect Launch Mode   │
+│ (AttachConsole on    │
+│  Windows, isatty on  │
+│  macOS/Linux)        │
 └──────┬───────────────┘
        ↓
-┌──────────────────────┐
-│ renderer.render()    │
-│ - Observe ViewModel  │
-│ - Update TUI         │
-│ - Handle exit        │
-└──────────────────────┘
+┌──────────────────────────────────────────┐
+│              UiRenderer                  │
+├──────────────────┬───────────────────────┤
+│ Standalone/GUI   │ CLI/Terminal          │
+│ → ImGuiRenderer  │ → MosaicTuiRenderer  │
+│   (DX11 window)  │   (interactive TUI)  │
+└──────┬───────────┴───────────┬───────────┘
+       ↓                       ↓
+┌──────────────────┐  ┌──────────────────────┐
+│ renderer.render()│  │ renderer.render()    │
+│ - ImGui loop     │  │ - Mosaic composables │
+│ - Observe VM     │  │ - Observe VM         │
+│ - Native window  │  │ - Terminal output    │
+└──────────────────┘  └──────────────────────┘
 ```
 
-### Mosaic Composables Structure
+### Mosaic Composables Structure (TUI)
 
 ```
 @Composable
@@ -104,7 +112,7 @@ MosaicApp(viewModel)
     │   │   │   ├── Archive info (name, format, size)
     │   │   │   ├── Progress Bar (━━━━━━━━ 67%)
     │   │   │   ├── Status (stage, file counts, bytes)
-    │   │   │   └── Close hint (standalone + completion dialog)
+    │   │   │   └── Close hint (standalone + auto-close)
     │   │
     │   └── SETUP → SettingsTui
     │       ├── Column
@@ -171,6 +179,8 @@ File Double-Click → OS Handler → Application Entry Point
 - **Kotlin Compose Compiler Plugin**: Required for Mosaic composables
 - **Kotlin Coroutines**: Async operations
 - **Kotlin Flow**: Reactive state management
+- **Dear ImGui** (via cimgui C bindings): Native GUI for Windows standalone mode
+- **DirectX 11**: GPU-accelerated rendering backend for ImGui on Windows
 - **Mosaic**: Terminal UI framework for Kotlin/Native (0.19.0-SNAPSHOT with AnsiLevel support)
 - **7zip**: Archive handling (via executable or library)
 - **Platform APIs**: File system, trash, associations
@@ -188,7 +198,14 @@ Run selectively with `--tests` filter: `./gradlew mingwX64Test --tests "qunzip.e
 ## File Structure
 
 ```
+libs/
+├── cimgui/                    # Git submodule: C bindings to Dear ImGui
+└── imgui-backend/
+    └── imgui_app.cpp          # Custom Win32/DX11 wrapper for ImGui
+
 src/
+├── nativeInterop/cinterop/
+│   └── cimgui.def             # Kotlin/Native cinterop definition for cimgui
 ├── commonMain/kotlin/qunzip/
 │   ├── domain/
 │   │   ├── entities/          # Core business objects
@@ -197,7 +214,7 @@ src/
 │   ├── presentation/
 │   │   ├── viewmodels/        # State management
 │   │   └── ui/                # UI layer
-│   │       ├── UiRenderer.kt       # Mosaic TUI renderer
+│   │       ├── UiRenderer.kt       # UiRenderer interface
 │   │       ├── LaunchContext.kt    # Launch mode detection
 │   │       └── tui/                # Mosaic Terminal UI
 │   │           ├── MosaicApp.kt         # Root composable
@@ -208,7 +225,8 @@ src/
 ├── mingwX64Main/kotlin/qunzip/
 │   ├── platform/              # Windows repository implementations
 │   ├── presentation/ui/
-│   │   └── LaunchContext.kt   # Windows standalone detection (GetConsoleProcessList)
+│   │   ├── LaunchContext.kt   # Windows launch detection (AttachConsole)
+│   │   └── ImGuiRenderer.kt  # ImGui GUI renderer (DX11)
 │   └── WindowsPlatform.kt     # DI and platform utilities
 ├── linuxX64Main/kotlin/qunzip/
 │   ├── platform/              # Linux repository implementations

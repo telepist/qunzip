@@ -3,6 +3,7 @@ package qunzip
 import co.touchlab.kermit.Logger
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.posix.exit
+import qunzip.presentation.ui.UiRenderer
 
 /**
  * macOS ARM64-specific dependency initialization
@@ -32,3 +33,9 @@ internal actual fun getCurrentExecutablePath(): String {
     // TODO: Implement using _NSGetExecutablePath
     return "/usr/local/bin/qunzip"
 }
+
+internal actual fun createGuiRenderer(): UiRenderer {
+    throw UnsupportedOperationException("GUI mode is only available on Windows")
+}
+
+internal actual fun getGuiExecutablePath(): String = getCurrentExecutablePath()

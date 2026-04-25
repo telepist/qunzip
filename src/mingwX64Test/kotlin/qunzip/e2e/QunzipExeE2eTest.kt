@@ -41,7 +41,7 @@ class QunzipExeE2eTest {
 
         assertFalse(result.timedOut, "Process timed out")
         assertEquals(0, result.exitCode, "Expected exit code 0")
-        assertTrue(result.stdout.contains("Qunzip", ignoreCase = true),
+        assertTrue(result.stdout.contains("Quick Unzip", ignoreCase = true),
             "Expected version text in stdout")
     }
 
@@ -60,7 +60,7 @@ class QunzipExeE2eTest {
 
         assertFalse(result.timedOut, "Process timed out")
         assertEquals(0, result.exitCode)
-        assertTrue(result.stdout.contains("Qunzip", ignoreCase = true))
+        assertTrue(result.stdout.contains("Quick Unzip", ignoreCase = true))
     }
 
     // --- Extraction exit tests ---

@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package qunzip.presentation.viewmodels
 
 import qunzip.domain.entities.*
@@ -67,6 +69,10 @@ class ExtractionViewModelTest {
         val finalState = viewModel.uiState.value
         assertFalse(finalState.isLoading)
         assertEquals(archive, finalState.archive)
+        // The final stage must be COMPLETED — this is what drives the
+        // ApplicationViewModel auto-exit observer. Without this assertion a
+        // regression dropping the COMPLETED emission would silently pass.
+        assertEquals(ExtractionStage.COMPLETED, finalState.progress?.stage)
     }
 
     @Test
@@ -77,24 +83,79 @@ class ExtractionViewModelTest {
 
         mockValidateUseCase.result = ValidationResult.Invalid(error)
 
-        // Act & Assert
+        // Act
+        viewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        // Assert: error surfaced AND progress.stage = FAILED so the
+        // auto-exit observer in ApplicationViewModel actually fires.
+        val finalState = viewModel.uiState.value
+        assertFalse(finalState.isLoading)
+        assertEquals(error.message, finalState.error)
+        assertEquals(ExtractionStage.FAILED, finalState.progress?.stage)
+    }
+
+    @Test
+    fun `unexpected exception during extraction sets FAILED stage`() = testScope.runTest {
+        // The catch-Exception arm in extractArchive must mark progress as
+        // FAILED, otherwise the GUI dialog hangs after a generic mid-stream
+        // failure (e.g. file system error).
+        val archivePath = "/test/broken.zip"
+        val archive = Archive(archivePath, "broken.zip", ArchiveFormat.ZIP, 1024L)
+
+        mockValidateUseCase.result = ValidationResult.Valid(archive)
+        mockExtractUseCase.throwOnInvoke = RuntimeException("disk full")
+
+        viewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        val finalState = viewModel.uiState.value
+        assertFalse(finalState.isLoading)
+        assertFalse(finalState.isExtracting)
+        assertEquals("disk full", finalState.error)
+        assertEquals(ExtractionStage.FAILED, finalState.progress?.stage)
+    }
+
+    @Test
+    fun `retry after FAILED clears stale progress before re-running`() = testScope.runTest {
+        // First attempt fails with FAILED stage. The ApplicationViewModel
+        // auto-exit observer would otherwise immediately fire on retry from
+        // the leftover FAILED, before the new extraction has a chance to
+        // emit STARTING. extractArchive() must reset progress = null first.
+        val archivePath = "/test/retry.zip"
+        val archive = Archive(archivePath, "retry.zip", ArchiveFormat.ZIP, 1024L)
+
+        // First attempt: validation fails (sets progress = FAILED)
+        mockValidateUseCase.result = ValidationResult.Invalid(ExtractionError.CorruptedArchive())
+        viewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+        assertEquals(ExtractionStage.FAILED, viewModel.uiState.value.progress?.stage)
+
+        // Retry: validation now succeeds. The validate use case is suspending
+        // (it's a `suspend operator fun` per the mock), so the very first
+        // _uiState.update {} at the top of extractArchive() runs eagerly and
+        // is observable before any subsequent progress is emitted. We use
+        // Turbine to capture that intermediate state and verify that
+        // progress was reset to null.
+        mockValidateUseCase.result = ValidationResult.Valid(archive)
+        mockExtractUseCase.progressFlow = flowOf(
+            ExtractionProgress(archivePath, stage = ExtractionStage.STARTING),
+            ExtractionProgress(archivePath, stage = ExtractionStage.COMPLETED)
+        )
         viewModel.uiState.test {
-            awaitItem() // Initial state
-
+            // Skip the FAILED state from the first attempt.
+            awaitItem()
             viewModel.extractArchive(archivePath)
-
-            awaitItem() // Loading state
-
-            val errorState = awaitItem()
-            assertFalse(errorState.isLoading)
-            assertEquals(error.message, errorState.error)
-
+            // First emission after the call: leading update {} reset progress.
+            val resetState = awaitItem()
+            assertNull(resetState.progress)
+            assertTrue(resetState.isLoading)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `cancellation stops extraction`() = testScope.runTest {
+    fun `cancellation stops extraction and marks FAILED`() = testScope.runTest {
         // Arrange
         val archivePath = "/test/large.zip"
         val archive = Archive(archivePath, "large.zip", ArchiveFormat.ZIP, 1024L)
@@ -108,17 +169,15 @@ class ExtractionViewModelTest {
         // Act
         viewModel.extractArchive(archivePath)
         advanceUntilIdle()
-
         viewModel.cancelExtraction()
+        advanceUntilIdle()
 
-        // Assert
-        viewModel.uiState.test {
-            val state = awaitItem()
-            assertFalse(state.isLoading)
-            assertFalse(state.isExtracting)
-
-            cancelAndIgnoreRemainingEvents()
-        }
+        // Assert: cancel marks FAILED so the auto-exit observer fires.
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading)
+        assertFalse(state.isExtracting)
+        assertEquals(ExtractionStage.FAILED, state.progress?.stage)
+        assertEquals(archivePath, state.progress?.archivePath)
     }
 
     @Test
@@ -296,10 +355,10 @@ class ExtractionViewModelTest {
             override suspend fun isReadable(path: String) = true
             override suspend fun isWritable(path: String) = true
             override suspend fun getFileInfo(path: String) = FileInfo(path, 1024L)
-            override fun getParentDirectory(path: String) = ""
-            override fun joinPath(vararg parts: String) = parts.joinToString("/")
+            override fun getParentDirectory(filePath: String) = ""
+            override fun joinPath(vararg components: String) = components.joinToString("/")
             override suspend fun createDirectory(path: String) = true
-            override suspend fun moveToTrash(path: String) = true
+            override suspend fun moveToTrash(filePath: String) = true
             override suspend fun getAvailableSpace(path: String) = 1024L * 1024L * 1024L
             override suspend fun getTrashPath() = "/trash"
             override suspend fun listFiles(directoryPath: String) = emptyList<FileInfo>()
@@ -360,10 +419,10 @@ class ExtractionViewModelTest {
             override suspend fun isReadable(path: String) = true
             override suspend fun isWritable(path: String) = true
             override suspend fun getFileInfo(path: String) = FileInfo(path, 1024L)
-            override fun getParentDirectory(path: String) = ""
-            override fun joinPath(vararg parts: String) = parts.joinToString("/")
+            override fun getParentDirectory(filePath: String) = ""
+            override fun joinPath(vararg components: String) = components.joinToString("/")
             override suspend fun createDirectory(path: String) = true
-            override suspend fun moveToTrash(path: String) = true
+            override suspend fun moveToTrash(filePath: String) = true
             override suspend fun getAvailableSpace(path: String) = 1024L * 1024L * 1024L
             override suspend fun getTrashPath() = "/trash"
             override suspend fun listFiles(directoryPath: String) = emptyList<FileInfo>()

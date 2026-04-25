@@ -37,7 +37,7 @@ class WindowsFileSystemRepository(
         FileInfo(
             path = path,
             size = statBuf.st_size.toLong(),
-            lastModified = kotlinx.datetime.Instant.fromEpochSeconds(statBuf.st_mtime.toLong()),
+            lastModified = kotlinx.datetime.Instant.fromEpochSeconds(statBuf.st_mtime),
             isReadable = isReadable(path),
             isDirectory = (statBuf.st_mode.toInt() and S_IFDIR) != 0
         )

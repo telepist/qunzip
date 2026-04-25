@@ -65,10 +65,10 @@ data class ExtractionOptions(
     val moveToTrashAfterExtraction: Boolean = false,
 
     /**
-     * Whether to show a completion dialog when extraction completes.
-     * When false (default), the application silently closes after extraction.
+     * Whether to automatically close after extraction completes.
+     * Default is true - the window closes after extraction.
      */
-    val showCompletionDialog: Boolean = false,
+    val autoCloseAfterExtraction: Boolean = true,
 
     /**
      * Password for extracting password-protected archives.

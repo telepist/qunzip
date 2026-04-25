@@ -1,10 +1,10 @@
 # User Manual
 
-> **Note**: This manual describes the functionality of Qunzip. The project is currently under active development. **Windows is functional** with Mosaic TUI. Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
+> **Note**: This manual describes the functionality of Quick Unzip. The project is currently under active development. **Windows is functional** with native GUI (ImGui/DX11) for double-click usage and Mosaic TUI for terminal usage. Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
 
 ## Overview
 
-**Qunzip** is a cross-platform archive extraction utility that provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives. Inspired by macOS simplicity, it works intelligently to extract your files exactly where you expect them.
+**Quick Unzip** is a cross-platform archive extraction utility that provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives. Inspired by macOS simplicity, it works intelligently to extract your files exactly where you expect them.
 
 ## Installation
 
@@ -33,9 +33,17 @@
 
 ## Basic Usage
 
-### Terminal UI
+### User Interface
 
-Qunzip uses a Mosaic-based terminal UI for all interactions. The same TUI renders in both terminal and double-click launch scenarios.
+Quick Unzip provides two UI modes depending on how you launch it:
+
+- **GUI mode** (Windows): A native ImGui/DX11 window appears when you double-click or drag-drop an archive onto `qunzip.exe`. This provides a polished graphical experience with progress bars, archive info, and status indicators.
+- **TUI mode**: When you run `qunzip` from a terminal, it uses a Mosaic-based terminal UI with real-time progress updates, colors, and inline rendering.
+
+You can force GUI mode from the terminal with the `--gui` flag:
+```bash
+qunzip --gui archive.zip
+```
 
 ### Extracting Archives
 
@@ -58,7 +66,7 @@ You'll see a progress display:
     45 / 67 files  ·  10.2 MB
 ```
 
-The TUI shows:
+Both the GUI and TUI show:
 - Real-time progress bar with percentage
 - Archive info (name, format, size)
 - File count and data statistics
@@ -72,13 +80,15 @@ The TUI shows:
 **Simply double-click any supported archive file.**
 
 The application will:
-1. Open a console window with the TUI
+1. Open a native GUI window (on Windows) showing extraction progress
 2. Analyze the archive contents
 3. Extract files intelligently:
    - **Single file**: Extracts directly to the same folder
    - **Multiple files**: Creates a new folder named after the archive
 4. Optionally move the original archive to trash (if enabled in settings)
-5. Exit when complete (or stay open if completion dialog is enabled)
+5. Close automatically when complete (default), or stay open if configured
+
+You can also drag and drop archive files onto `qunzip.exe` for the same GUI experience.
 
 ### Example Scenarios
 
@@ -151,14 +161,19 @@ qunzip --set-trash-on
 # Disable moving archives to trash (default)
 qunzip --set-trash-off
 
-# Enable completion dialog after extraction
+# Keep window open after extraction (wait for user to close)
 qunzip --set-dialog-on
 
-# Disable completion dialog - silent exit (default)
+# Close window automatically after extraction (default)
 qunzip --set-dialog-off
+
+# Force GUI mode from terminal
+qunzip --gui archive.zip
 ```
 
-Preferences are stored in `~/.qunzip/preferences.json`.
+Preferences are stored in `~/.qunzip/preferences.json`:
+- `moveToTrashAfterExtraction` - Move archive to trash after successful extraction (default: false)
+- `autoCloseAfterExtraction` - Automatically close the window after extraction completes (default: true)
 
 ### File Associations
 The application automatically registers itself for supported file types during installation. To manually manage associations:
@@ -169,8 +184,8 @@ qunzip --unregister-associations  # Unregister all formats
 ```
 
 **Manual Configuration**:
-- **Windows**: Right-click archive → "Open with" → "Choose another app" → Select Qunzip
-- **macOS**: Right-click archive → "Get Info" → "Open with" → Select Qunzip → "Change All"
+- **Windows**: Right-click archive → "Open with" → "Choose another app" → Select Quick Unzip
+- **macOS**: Right-click archive → "Get Info" → "Open with" → Select Quick Unzip → "Change All"
 - **Linux**: Depends on desktop environment (usually in file manager preferences)
 
 ## Troubleshooting
@@ -187,12 +202,12 @@ qunzip --unregister-associations  # Unregister all formats
 **Possible causes**:
 - Corrupted archive file
 - Unsupported archive format
-- Password-protected archive (not yet supported)
+- Incorrect password for a password-protected archive
 
 **Solutions**:
 - Try extracting with another tool to verify the archive
 - Check if the file extension matches the actual format
-- Ensure the archive isn't password-protected
+- For password-protected archives, you will be prompted to enter the password
 
 #### Original Archive Not Moved to Trash
 This happens when:

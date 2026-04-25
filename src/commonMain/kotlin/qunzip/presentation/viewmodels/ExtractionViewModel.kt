@@ -34,12 +34,18 @@ class ExtractionViewModel(
             try {
                 logger.i { "Starting extraction process for: $archivePath" }
 
-                _uiState.value = _uiState.value.copy(
-                    isLoading = true,
-                    error = null,
-                    currentArchive = archivePath,
-                    isWaitingForPassword = false
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = true,
+                        error = null,
+                        currentArchive = archivePath,
+                        isWaitingForPassword = false,
+                        // Clear any FAILED progress from a previous attempt so the
+                        // ApplicationViewModel auto-exit observer doesn't fire
+                        // immediately on a retry.
+                        progress = null
+                    )
+                }
 
                 // Skip validation when retrying with a password (already validated)
                 if (password == null) {
@@ -47,26 +53,35 @@ class ExtractionViewModel(
                     when (val validationResult = validateArchiveUseCase(archivePath)) {
                         is ValidationResult.Invalid -> {
                             logger.e { "Archive validation failed: ${validationResult.error.message}" }
-                            _uiState.value = _uiState.value.copy(
-                                isLoading = false,
-                                error = validationResult.error.message
-                            )
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    error = validationResult.error.message,
+                                    // Mark progress as FAILED so the auto-exit observer
+                                    // in ApplicationViewModel triggers; otherwise the GUI
+                                    // dialog would hang on a fast validation failure.
+                                    progress = ExtractionProgress(
+                                        archivePath = archivePath,
+                                        stage = ExtractionStage.FAILED
+                                    )
+                                )
+                            }
                             _events.tryEmit(ExtractionEvent.ValidationFailed(validationResult.error))
                             return@launch
                         }
                         is ValidationResult.Valid -> {
                             logger.i { "Archive validation successful: ${validationResult.archive.name}" }
-                            _uiState.value = _uiState.value.copy(
-                                archive = validationResult.archive
-                            )
+                            _uiState.update { it.copy(archive = validationResult.archive) }
                         }
                         is ValidationResult.PasswordRequired -> {
                             logger.i { "Archive requires password: ${validationResult.archive.name}" }
-                            _uiState.value = _uiState.value.copy(
-                                isLoading = false,
-                                archive = validationResult.archive,
-                                isWaitingForPassword = true
-                            )
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    archive = validationResult.archive,
+                                    isWaitingForPassword = true
+                                )
+                            }
                             _events.tryEmit(ExtractionEvent.PasswordRequired)
                             return@launch
                         }
@@ -85,7 +100,7 @@ class ExtractionViewModel(
                         _events.tryEmit(ExtractionEvent.ExtractionStarted)
                     }
                     .onCompletion { throwable ->
-                        _uiState.value = _uiState.value.copy(isLoading = false)
+                        _uiState.update { it.copy(isLoading = false) }
 
                         if (throwable != null) {
                             logger.e(throwable) { "Extraction completed with error" }
@@ -96,10 +111,12 @@ class ExtractionViewModel(
                         }
                     }
                     .collect { progress ->
-                        _uiState.value = _uiState.value.copy(
-                            progress = progress,
-                            isExtracting = progress.stage == ExtractionStage.EXTRACTING
-                        )
+                        _uiState.update {
+                            it.copy(
+                                progress = progress,
+                                isExtracting = progress.stage == ExtractionStage.EXTRACTING
+                            )
+                        }
 
                         // Emit specific events based on progress stage
                         when (progress.stage) {
@@ -125,21 +142,31 @@ class ExtractionViewModel(
             } catch (e: ExtractionError.PasswordRequired) {
                 // Wrong password - go back to password prompt
                 logger.w { "Wrong password, prompting again" }
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isExtracting = false,
-                    isWaitingForPassword = true,
-                    error = e.message
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isExtracting = false,
+                        isWaitingForPassword = true,
+                        error = e.message
+                    )
+                }
                 _events.tryEmit(ExtractionEvent.PasswordRequired)
             } catch (e: Exception) {
                 logger.e(e) { "Unexpected error during extraction" }
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isExtracting = false,
-                    isWaitingForPassword = false,
-                    error = e.message ?: "Unknown error occurred"
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isExtracting = false,
+                        isWaitingForPassword = false,
+                        error = e.message ?: "Unknown error occurred",
+                        // Mark FAILED so the auto-exit observer fires for thrown
+                        // errors too (e.g., file system issues mid-extraction).
+                        progress = ExtractionProgress(
+                            archivePath = archivePath,
+                            stage = ExtractionStage.FAILED
+                        )
+                    )
+                }
                 _events.tryEmit(ExtractionEvent.ExtractionFailed(e))
             }
         }
@@ -154,19 +181,23 @@ class ExtractionViewModel(
     fun cancelExtraction() {
         logger.i { "Cancelling extraction" }
         currentExtractionJob?.cancel()
-        val archivePath = _uiState.value.currentArchive ?: ""
-        _uiState.value = _uiState.value.copy(
-            isLoading = false,
-            isExtracting = false,
-            isWaitingForPassword = false,
-            progress = ExtractionProgress(archivePath = archivePath, stage = ExtractionStage.FAILED),
-            error = "Cancelled"
-        )
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                isExtracting = false,
+                isWaitingForPassword = false,
+                progress = ExtractionProgress(
+                    archivePath = it.currentArchive ?: "",
+                    stage = ExtractionStage.FAILED
+                ),
+                error = "Cancelled"
+            )
+        }
         _events.tryEmit(ExtractionEvent.ExtractionCancelled)
     }
 
     fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.update { it.copy(error = null) }
     }
 
     fun reset() {
@@ -176,7 +207,7 @@ class ExtractionViewModel(
     }
 
     fun clearPasswordError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.update { it.copy(error = null) }
     }
 }
 

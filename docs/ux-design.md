@@ -9,7 +9,7 @@ This application follows macOS-inspired design principles while maintaining cros
 ### 1. Zero-Configuration Extraction
 - **Double-click to extract**: Primary interaction method
 - **Smart extraction logic**: Automatically determines best extraction strategy
-- **Minimal UI**: Clean TUI with only essential information
+- **Minimal UI**: ImGui GUI for standalone/double-click launches (Windows, DX11), Mosaic TUI for CLI
 
 ### 2. Intelligent Behavior
 - **Single file archives**: Extract directly to same directory
@@ -19,7 +19,7 @@ This application follows macOS-inspired design principles while maintaining cros
 ### 3. Seamless Integration
 - **Native file associations**: Registers as default handler for supported formats
 - **Trash integration**: Uses platform-appropriate trash/recycle bin
-- **Terminal-native**: Works in any terminal emulator with ANSI color support
+- **Dual UI**: Native ImGui GUI window on standalone launch, terminal TUI in CLI mode
 
 ## User Interaction Flows
 
@@ -28,7 +28,7 @@ This application follows macOS-inspired design principles while maintaining cros
 ```
 User double-clicks archive.zip
         ↓
-Console window opens with TUI
+ImGui GUI window opens (Windows, DX11)
         ↓
 Analysis: archive.zip contains multiple files
         ↓
@@ -36,11 +36,11 @@ Creates directory: archive/
         ↓
 Extracts all files to archive/
         ↓
-Shows progress in TUI (progress bar, file count)
+Shows progress in GUI (progress bar, file count)
         ↓
 Moves archive.zip to trash (if enabled)
         ↓
-Application exits (or stays open if completion dialog enabled)
+Application closes automatically (or stays open if auto-close disabled)
 ```
 
 ### Alternative Flow: CLI Extraction
@@ -59,9 +59,16 @@ Moves document.zip to trash (if enabled)
 TUI exits, user returns to shell prompt
 ```
 
-## TUI Design
+## UI Design
 
-### Extraction Screen
+### UI Renderers
+
+The application uses two UI renderers depending on launch context:
+
+- **ImGui GUI (Windows, DX11)**: Used for standalone/double-click launches. Renders a native window with graphical progress display.
+- **Mosaic TUI**: Used for CLI launches. Renders in the existing terminal with ANSI colors and box-drawing characters.
+
+### Extraction Screen (TUI / CLI Mode)
 
 The extraction TUI uses a clean, modern design with box-drawing characters and color coding:
 
@@ -130,7 +137,7 @@ On successful extraction, the TUI shows:
 - Green "Done" badge
 - Total files and bytes extracted
 
-When `showCompletionDialog` is enabled (standalone mode), the TUI stays open with a "Close this window to exit." hint. When disabled (default), the application exits automatically.
+When `autoCloseAfterExtraction` is enabled (default), the application closes automatically after extraction completes. When disabled, the window stays open with a prompt to allow the user to review the results before closing.
 
 ## Accessibility
 
@@ -147,9 +154,9 @@ When `showCompletionDialog` is enabled (standalone mode), the TUI stays open wit
 ## Platform-Specific Adaptations
 
 ### Windows
-- Console window opens on double-click (CONSOLE subsystem)
-- VT processing enabled for ANSI colors in legacy conhost
-- Console title set to "Qunzip"
+- ImGui GUI window (DX11) opens on double-click (standalone mode)
+- Mosaic TUI used when launched from an existing terminal (CLI mode)
+- Standalone detection via `GetConsoleProcessList`
 
 ### macOS
 - Terminal detection via `isatty()`

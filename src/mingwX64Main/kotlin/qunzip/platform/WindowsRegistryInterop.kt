@@ -23,6 +23,7 @@ const val KEY_ALL_ACCESS = platform.windows.KEY_ALL_ACCESS
 
 // Registry value types
 const val REG_SZ = platform.windows.REG_SZ
+const val REG_EXPAND_SZ = platform.windows.REG_EXPAND_SZ
 
 // Registry options
 const val REG_OPTION_NON_VOLATILE = platform.windows.REG_OPTION_NON_VOLATILE
@@ -48,7 +49,7 @@ class RegistryHelper {
      */
     fun createKey(rootKey: HKEY?, subKey: String): HKEY? = memScoped {
         val hKeyVar = alloc<HKEYVar>()
-        val result = RegCreateKeyExA(
+        val result = RegCreateKeyExW(
             rootKey,
             subKey,
             0u,
@@ -73,7 +74,7 @@ class RegistryHelper {
      */
     fun openKey(rootKey: HKEY?, subKey: String, accessRights: UInt = KEY_READ.toUInt()): HKEY? = memScoped {
         val hKeyVar = alloc<HKEYVar>()
-        val result = RegOpenKeyExA(
+        val result = RegOpenKeyExW(
             rootKey,
             subKey,
             0u,
@@ -89,69 +90,69 @@ class RegistryHelper {
     }
 
     /**
-     * Sets a string value in the registry
+     * Sets a string value in the registry. Defaults to REG_SZ; pass
+     * REG_EXPAND_SZ for values like PATH that can contain %vars%.
+     * Uses the wide-char API so non-ASCII content (e.g. Unicode usernames
+     * in PATH) round-trips correctly.
      * Returns true on success
      */
-    fun setStringValue(hKey: HKEY?, valueName: String?, data: String): Boolean = memScoped {
-        val dataBytes = data.encodeToByteArray().toUByteArray()
-        val result = RegSetValueExA(
+    fun setStringValue(
+        hKey: HKEY?,
+        valueName: String?,
+        data: String,
+        valueType: Int = REG_SZ
+    ): Boolean = memScoped {
+        // wcstr produces a null-terminated UTF-16 buffer of (length + 1) UShorts.
+        // cbData must include the null terminator and be in BYTES.
+        val dataPtr = data.wcstr.ptr
+        val cbData = ((data.length + 1) * 2).toUInt()
+        val result = RegSetValueExW(
             hKey,
             valueName,
             0u,
-            REG_SZ.toUInt(),
-            dataBytes.refTo(0),
-            (dataBytes.size + 1).toUInt() // Include null terminator
+            valueType.toUInt(),
+            dataPtr.reinterpret(),
+            cbData
         )
 
         result == ERROR_SUCCESS
     }
 
     /**
+     * Reads a string registry value along with its type code (REG_SZ vs
+     * REG_EXPAND_SZ). Used by the PATH editor so a write preserves the
+     * original type.
+     */
+    fun getStringValueWithType(hKey: HKEY?, valueName: String?): Pair<String, Int>? = memScoped {
+        val dataSize = alloc<UIntVar>()  // bytes
+        val dataType = alloc<UIntVar>()
+        dataSize.value = 0u
+
+        var result = RegQueryValueExW(hKey, valueName, null, dataType.ptr, null, dataSize.ptr)
+        if (result != ERROR_SUCCESS || dataSize.value == 0u) return null
+
+        // Allocate UTF-16 buffer plus one extra UShort for safety null-termination.
+        val ushortCount = dataSize.value.toInt() / 2 + 1
+        val buffer = allocArray<UShortVar>(ushortCount)
+        result = RegQueryValueExW(hKey, valueName, null, dataType.ptr, buffer.reinterpret(), dataSize.ptr)
+        if (result != ERROR_SUCCESS) return null
+
+        buffer.toKStringFromUtf16() to dataType.value.toInt()
+    }
+
+    /**
      * Gets a string value from the registry
      * Returns the value or null on failure
      */
-    fun getStringValue(hKey: HKEY?, valueName: String?): String? = memScoped {
-        val dataSize = alloc<UIntVar>()
-        dataSize.value = 0u
-
-        // First call to get the size
-        var result = RegQueryValueExA(
-            hKey,
-            valueName,
-            null,
-            null,
-            null,
-            dataSize.ptr
-        )
-
-        if (result != ERROR_SUCCESS || dataSize.value == 0u) {
-            return null
-        }
-
-        // Allocate buffer and get the actual value
-        val buffer = allocArray<UByteVar>(dataSize.value.toInt())
-        result = RegQueryValueExA(
-            hKey,
-            valueName,
-            null,
-            null,
-            buffer,
-            dataSize.ptr
-        )
-
-        if (result == ERROR_SUCCESS) {
-            buffer.reinterpret<ByteVar>().toKString()
-        } else {
-            null
-        }
-    }
+    fun getStringValue(hKey: HKEY?, valueName: String?): String? =
+        getStringValueWithType(hKey, valueName)?.first
 
     /**
      * Deletes a registry key and all its subkeys
      * Returns true on success
      */
     fun deleteKey(rootKey: HKEY?, subKey: String): Boolean {
-        val result = RegDeleteKeyA(rootKey, subKey)
+        val result = RegDeleteKeyW(rootKey, subKey)
         return result == ERROR_SUCCESS
     }
 
@@ -196,10 +197,10 @@ class RegistryHelper {
     fun isRunningAsAdmin(): Boolean {
         // Try to open HKEY_CLASSES_ROOT for writing
         // If we can, we have admin privileges
-        val testKey = createKey(HKEY_CLASSES_ROOT, "Software\\Qunzip\\AdminTest")
+        val testKey = createKey(HKEY_CLASSES_ROOT, "Software\\QuickUnzip\\AdminTest")
         if (testKey != null) {
             closeKey(testKey)
-            deleteKey(HKEY_CLASSES_ROOT, "Software\\Qunzip\\AdminTest")
+            deleteKey(HKEY_CLASSES_ROOT, "Software\\QuickUnzip\\AdminTest")
             return true
         }
         return false

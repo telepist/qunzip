@@ -4,18 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Qunzip** (Quick Unzip) is a cross-platform archive extraction utility built with Kotlin Multiplatform. It provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives, inspired by macOS simplicity but targeting primarily Windows with Linux and macOS support.
+**Quick Unzip** (CLI command: `qunzip`) is a cross-platform archive extraction utility built with Kotlin Multiplatform. It provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives, inspired by macOS simplicity but targeting primarily Windows with Linux and macOS support.
 
 The application follows **Clean Architecture** principles with **MVVM pattern**, uses **Kotlin Flow** for reactive programming, and strictly implements **Test-Driven Development (TDD)** with a target of **close to 100% test coverage**.
+
+### Naming convention
+- **Display name** (window titles, installer, README, GUI): "Quick Unzip"
+- **CLI command** (binary name on PATH): `qunzip`
+- **Kotlin package**: `qunzip` (internal — keep as-is)
+
+### Windows binaries
+Windows ships TWO executables that share all Kotlin source via a single compilation:
+
+| Binary           | Subsystem  | Entry point         | Purpose |
+|------------------|------------|---------------------|---------|
+| `qunzip.exe`     | Console    | `qunzip.mainCli`    | CLI / TUI use; tests; installer admin (`--register-associations`) |
+| `QuickUnzip.exe` | Windows    | `qunzip.mainGui`    | File-association double-click and drag-drop (no console flash) |
+
+Linux/macOS still ship a single binary today; `mainGui` already exists in commonMain so adding a GUI binary later is mechanical.
 
 ## Key Development Commands
 
 ### Build Commands
-- `./gradlew buildAll` - Build debug executables for all platforms
-- `./gradlew buildAllRelease` - Build optimized release executables for all platforms
-- `./gradlew linkDebugExecutable<Platform>` - Build for specific platform (e.g., MacosArm64, LinuxX64, MingwX64)
-- `./gradlew linkReleaseExecutable<Platform>` - Build release version for specific platform
-- `./gradlew download7zip` - Download 7-Zip binaries (automatic during Windows build)
+- `make build` / `make build-release` — builds both binaries on Windows, single binary elsewhere
+- `./gradlew linkCliDebugExecutableMingwX64` — Windows CLI (qunzip.exe) only
+- `./gradlew linkGuiDebugExecutableMingwX64` — Windows GUI (QuickUnzip.exe) only
+- `./gradlew linkDebugExecutable<Platform>` — Linux/macOS single binary
+- `./gradlew buildAll` / `./gradlew buildAllRelease` — all platforms, both Windows binaries
+- `./gradlew download7zip` — download 7-Zip binaries (automatic during Windows build)
 
 ### Testing Commands (Test Pyramid)
 - `./gradlew testAll` - Run entire test pyramid (unit + integration + e2e)
@@ -26,22 +42,25 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 - `./gradlew mingwX64Test --tests "qunzip.e2e.*"` - E2E tests only (launches qunzip.exe)
 
 ### Running the Application
-- **Extract an archive**: `./build/bin/<platform>/debugExecutable/qunzip.kexe <archive-file>`
-- **Settings mode**: `./build/bin/<platform>/debugExecutable/qunzip.kexe` (no file argument)
-- The application uses Mosaic TUI for all rendering (both CLI and double-click launches)
+- **Windows CLI**: `./build/bin/mingwX64/cliDebugExecutable/qunzip.exe <archive-file>` — Mosaic TUI in current terminal
+- **Windows GUI**: `./build/bin/mingwX64/guiDebugExecutable/QuickUnzip.exe <archive-file>` — ImGui dialog (DX11)
+- **Linux/macOS**: `./build/bin/<platform>/debugExecutable/qunzip.kexe <archive-file>` — TUI only (GUI not yet implemented)
+- The two Windows binaries are physically separate; each one always renders in its mode (no runtime detection).
 
-### CLI Arguments
+### CLI Arguments (qunzip.exe)
+The GUI binary ignores all flags — only the CLI binary (`qunzip.exe` on Windows, the single binary on Linux/macOS) handles them.
+
 | Argument | Description |
 |----------|-------------|
 | `--help`, `-h` | Display help information |
 | `--version`, `-v` | Display version information |
-| `--register-associations` | Register file associations (installer integration) |
-| `--unregister-associations` | Unregister file associations |
+| `--register-associations` | Register file associations (writes to registry pointing at `QuickUnzip.exe`) |
+| `--unregister-associations` | Unregister file associations (cleans up legacy `Qunzip.*` ProgIDs too) |
 | `--set-trash-on` | Enable moving archives to trash after extraction |
 | `--set-trash-off` | Disable moving archives to trash after extraction |
-| `--set-dialog-on` | Enable completion dialog after extraction |
-| `--set-dialog-off` | Disable completion dialog (silent exit, default) |
-| `--force-standalone` | Force standalone mode (for testing standalone exit behavior) |
+| `--set-dialog-on` | Keep window open after extraction (disable auto-close) |
+| `--set-dialog-off` | Close window automatically after extraction (default) |
+| `--force-standalone` | Treat run as standalone-launch (for testing auto-exit behavior) |
 
 ### Windows Installer Commands
 - `./gradlew prepareInstallerResources` - Prepare files for installer
@@ -79,10 +98,11 @@ The application follows **Clean Architecture** principles with **MVVM pattern**,
 #### Presentation Layer (`src/commonMain/kotlin/qunzip/presentation/`)
 - **ViewModels**: `ExtractionViewModel`, `FileAssociationViewModel`, `ApplicationViewModel`, `SettingsViewModel`
 - **State Management**: Kotlin Flow with StateFlow/SharedFlow patterns
-- **UI Layer**: Mosaic TUI for all platforms
-  - **Mosaic TUI**: Terminal UI with progress bars, colors, and real-time updates
-  - **Standalone detection**: On Windows, detects double-click vs CLI launch via `GetConsoleProcessList`
-  - **Standalone mode**: Uses Mosaic's `NonInteractiveTerminal` with truecolor to avoid raw mode issues
+- **UI Layer**: Dual renderer system
+  - **ImGui GUI** (Windows): Native DX11 window via cimgui/Dear ImGui, shipped as `QuickUnzip.exe` (Windows subsystem)
+  - **Mosaic TUI** (cross-platform): Terminal UI with progress bars and colors, shipped as `qunzip.exe` (console subsystem on Windows)
+  - **`UiRenderer` interface**: Common abstraction; `ImGuiRenderer` and `MosaicTuiRenderer` implementations
+  - **No runtime mode detection on Windows**: which renderer is used is determined entirely by which binary the user launched. File associations and Start Menu shortcuts target `QuickUnzip.exe`; terminal use targets `qunzip.exe`.
 
 ### MVVM with Kotlin Flow
 - ViewModels expose `StateFlow` for UI state
@@ -111,13 +131,19 @@ Common interfaces in domain layer, platform-specific implementations:
 - **Kotlinx DateTime**: `0.5.0` - Date/time handling
 - **Kermit**: `2.0.3` - Multiplatform logging
 - **Mosaic**: `0.19.0-SNAPSHOT` - Terminal UI framework for Kotlin/Native (local build with AnsiLevel support)
+- **cimgui/Dear ImGui**: C bindings for immediate-mode GUI (submodule at `libs/cimgui`)
+- **DX11/Win32**: DirectX 11 rendering backend for ImGui on Windows (via `libs/imgui-backend` wrapper)
 - **Turbine**: `1.0.0` - Flow testing (test only)
 
 ### Build Configuration
-- Executables named `qunzip` across all platforms
-- Debug builds: `build/bin/<platform>/debugExecutable/`
-- Release builds: `build/bin/<platform>/releaseExecutable/`
-- Entry point: `qunzip.main`
+- Windows: two named executable targets (`cli` → `qunzip.exe`, `gui` → `QuickUnzip.exe`)
+  - Debug:   `build/bin/mingwX64/cliDebugExecutable/`, `build/bin/mingwX64/guiDebugExecutable/`
+  - Release: `build/bin/mingwX64/cliReleaseExecutable/`, `build/bin/mingwX64/guiReleaseExecutable/`
+  - Entry points: `qunzip.mainCli` (console subsystem), `qunzip.mainGui` (Windows subsystem via `-Wl,--subsystem,windows`)
+- Linux/macOS: single unnamed executable
+  - `build/bin/<platform>/debugExecutable/qunzip.kexe`, `build/bin/<platform>/releaseExecutable/qunzip.kexe`
+  - Entry point: `qunzip.main` (delegates to `mainCli`)
+- cimgui static library built via `./gradlew buildCimgui` (automatic during Windows build)
 
 ## Project Structure
 
@@ -131,8 +157,9 @@ src/
 │   ├── presentation/
 │   │   ├── viewmodels/        # State management
 │   │   └── ui/                # UI layer
-│   │       ├── UiRenderer.kt       # Mosaic TUI renderer
-│   │       ├── LaunchContext.kt    # Launch mode detection
+│   │       ├── UiRenderer.kt       # Renderer interface + MosaicTuiRenderer
+│   │       ├── LaunchContext.kt    # Launch mode detection (expect)
+│   │       ├── FormatUtils.kt      # Shared formatting utilities
 │   │       └── tui/                # Mosaic Terminal UI
 │   │           ├── MosaicApp.kt         # Root Mosaic composable
 │   │           ├── ExtractionTui.kt     # Extraction progress TUI
@@ -147,7 +174,8 @@ src/
 │   │   ├── WindowsFileAssociationRepository.kt
 │   │   └── WindowsPreferencesRepository.kt
 │   ├── presentation/ui/
-│   │   └── LaunchContext.kt        # Windows standalone launch detection
+│   │   ├── LaunchContext.kt        # Console + VT-mode setup
+│   │   └── ImGuiRenderer.kt       # ImGui GUI renderer (DX11)
 │   ├── resources/                  # Windows resources
 │   │   ├── qunzip.rc               # Resource file (icon, version info)
 │   │   └── qunzip.exe.manifest     # Windows manifest
@@ -197,9 +225,9 @@ When extracting would overwrite an existing file or folder, the application hand
 - Platform-specific registry/launch services management
 
 ### User Preferences
-Stored in JSON format at `~/.qunzip/preferences.json`:
+Stored as `settings.json` next to the executable on Windows (CLI and GUI binaries share the file when installed in the same directory):
 - `moveToTrashAfterExtraction` - Move archive to trash after successful extraction (default: false)
-- `showCompletionDialog` - Show completion dialog after extraction; when false, app silently closes (default: false)
+- `autoCloseAfterExtraction` - Automatically close window after extraction (default: true); when false, window stays open to show result
 
 ## Development Notes
 
@@ -278,8 +306,8 @@ When a feature like "avoid overwriting files" is added, tests must cover:
 
 ## Current Development Status
 
-**Phase**: TUI-Only Redesign
-**Progress**: Core architecture complete, Windows platform functional, Mosaic TUI is the sole UI
+**Phase**: Dual UI (ImGui GUI + Mosaic TUI)
+**Progress**: Core architecture complete, Windows platform functional with ImGui GUI and Mosaic TUI
 
 ### ✅ Completed
 - Clean Architecture with MVVM setup (100%)
@@ -296,14 +324,19 @@ When a feature like "avoid overwriting files" is added, tests must cover:
   - WindowsPreferencesRepository (JSON file-based settings storage)
   - WindowsPlatform.kt (DI and platform utilities)
   - Embedded application icon in executable
-- **Mosaic Terminal UI (100%)**
-  - TUI with real-time progress updates
-  - Progress bars, colors for visual feedback
+- **ImGui GUI — `QuickUnzip.exe` (Windows subsystem)**
+  - Native DX11 window via cimgui/Dear ImGui
+  - Extraction progress: archive info, progress bar, file count, current file
+  - Settings UI: preference checkboxes
+  - Dark title bar follows Windows theme (`DwmSetWindowAttribute`)
+  - DPI-aware rendering (`SetProcessDpiAwarenessContext`)
+  - No console window — Windows subsystem (`-Wl,--subsystem,windows`) means file-association double-click and drag-drop never flash a console
+  - Auto-close respects `autoCloseAfterExtraction` preference
+- **Mosaic TUI — `qunzip.exe` (Windows console subsystem) and the single binary on Linux/macOS**
+  - TUI with real-time progress updates, progress bars, colors
   - Extraction progress display (stages, files, bytes)
   - Settings/file associations display
-  - Standalone launch detection (Windows: `GetConsoleProcessList`)
-  - Standalone mode uses `NonInteractiveTerminal` with truecolor
-  - CLI mode uses full interactive `TtyTerminal`
+  - Renders directly in the parent terminal — `cmd.exe`/PowerShell wait normally because the binary is console subsystem
 - **Black Box E2E Test Scripts**
   - Windows, Linux, and macOS test scripts created
   - Test fixtures prepared (single-file.zip, multiple-files.zip, nested-folder.zip)

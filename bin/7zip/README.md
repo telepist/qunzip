@@ -1,6 +1,6 @@
 # 7-Zip Dependencies
 
-This directory contains the official 7-Zip command-line tools bundled with Qunzip.
+This directory contains the official 7-Zip command-line tools bundled with Quick Unzip.
 
 ## Files
 
@@ -31,7 +31,7 @@ Downloaded from the official 7-Zip website: https://www.7-zip.org/
 
 ## Format Support
 
-With 7z.exe + 7z.dll, Qunzip supports **all** archive formats:
+With 7z.exe + 7z.dll, Quick Unzip supports **all** archive formats:
 
 ✅ ZIP, 7Z, RAR (Rar5), TAR
 ✅ GZIP (.gz, .tgz), BZIP2 (.bz2, .tbz2), XZ (.xz, .txz)
@@ -44,7 +44,7 @@ During build, these files are automatically copied to the output directory:
 - **Debug**: `build/bin/mingwX64/debugExecutable/`
 - **Release**: `build/bin/mingwX64/releaseExecutable/`
 
-This creates a **self-contained distribution** - the Qunzip executable and 7-Zip tools can run from anywhere without installation.
+This creates a **self-contained distribution** - the Quick Unzip executable and 7-Zip tools can run from anywhere without installation.
 
 ## License
 

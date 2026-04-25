@@ -1,4 +1,4 @@
-# Makefile for Qunzip - Cross-platform Archive Extraction Utility
+# Makefile for Quick Unzip - Cross-platform Archive Extraction Utility
 # Automatically detects current platform and builds accordingly
 
 .PHONY: help build run clean build-all build-release run-release test \
@@ -59,8 +59,20 @@ else
 endif
 
 # Build directories
-BUILD_DIR := build/bin/$(PLATFORM_LOWER)/debugExecutable
-RELEASE_BUILD_DIR := build/bin/$(PLATFORM_LOWER)/releaseExecutable
+# Windows ships two binaries (CLI qunzip.exe + GUI QuickUnzip.exe) in
+# separate output dirs. Other platforms have a single unnamed executable.
+ifeq ($(PLATFORM),MingwX64)
+    BUILD_DIR := build/bin/$(PLATFORM_LOWER)/cliDebugExecutable
+    RELEASE_BUILD_DIR := build/bin/$(PLATFORM_LOWER)/cliReleaseExecutable
+    GUI_BUILD_DIR := build/bin/$(PLATFORM_LOWER)/guiDebugExecutable
+    GUI_RELEASE_BUILD_DIR := build/bin/$(PLATFORM_LOWER)/guiReleaseExecutable
+    GUI_EXECUTABLE := QuickUnzip.exe
+    GUI_BUILD_PATH := $(GUI_BUILD_DIR)/$(GUI_EXECUTABLE)
+    GUI_RELEASE_BUILD_PATH := $(GUI_RELEASE_BUILD_DIR)/$(GUI_EXECUTABLE)
+else
+    BUILD_DIR := build/bin/$(PLATFORM_LOWER)/debugExecutable
+    RELEASE_BUILD_DIR := build/bin/$(PLATFORM_LOWER)/releaseExecutable
+endif
 BUILD_PATH := $(BUILD_DIR)/$(EXECUTABLE)
 RELEASE_BUILD_PATH := $(RELEASE_BUILD_DIR)/$(EXECUTABLE)
 INSTALLER_STAGE_DIR := build/installer-staging/windows
@@ -77,7 +89,7 @@ endif
 # Default target - show help
 help:
 	@echo "=================================="
-	@echo "Qunzip Build System"
+	@echo "Quick Unzip Build System"
 	@echo "=================================="
 	@echo ""
 	@echo "Detected Platform: $(PLATFORM) ($(UNAME_S) $(UNAME_M))"
@@ -109,17 +121,25 @@ help:
 	@echo "  make clean-installer        - Remove installer artifacts"
 	@echo ""
 
-# Build debug executable for current platform
+# Build debug executable(s) for current platform.
+# Windows builds both CLI and GUI binaries.
 build:
-	@echo "Building Qunzip for $(PLATFORM)..."
+	@echo "Building Quick Unzip for $(PLATFORM)..."
+ifeq ($(PLATFORM),MingwX64)
+	$(GRADLEW) linkCliDebugExecutableMingwX64 linkGuiDebugExecutableMingwX64
+	@echo ""
+	@echo "CLI: $(BUILD_PATH)"
+	@echo "GUI: $(GUI_BUILD_PATH)"
+else
 	$(GRADLEW) linkDebugExecutable$(PLATFORM)
 	@echo ""
 	@echo "Build complete: $(BUILD_PATH)"
+endif
 	@echo ""
 
 # Build and run the application
 run: build
-	@echo "Running Qunzip..."
+	@echo "Running Quick Unzip..."
 	@echo ""
 	$(BUILD_PATH)
 
@@ -131,39 +151,48 @@ test:
 
 # Build debug executables for all platforms
 build-all:
-	@echo "Building Qunzip for all platforms..."
+	@echo "Building Quick Unzip for all platforms..."
 	$(GRADLEW) buildAll
 	@echo ""
 	@echo "All builds complete!"
 	@echo ""
 
-# Build release executable for current platform
+# Build release executable(s) for current platform.
+# Windows builds both CLI and GUI binaries.
 build-release:
-	@echo "Building Qunzip RELEASE for $(PLATFORM)..."
+	@echo "Building Quick Unzip RELEASE for $(PLATFORM)..."
+ifeq ($(PLATFORM),MingwX64)
+	$(GRADLEW) linkCliReleaseExecutableMingwX64 linkGuiReleaseExecutableMingwX64
+	@echo ""
+	@echo "CLI: $(RELEASE_BUILD_PATH)"
+	@echo "GUI: $(GUI_RELEASE_BUILD_PATH)"
+else
 	$(GRADLEW) linkReleaseExecutable$(PLATFORM)
 	@echo ""
 	@echo "Release build complete: $(RELEASE_BUILD_PATH)"
+endif
 	@echo ""
 
 # Build and run release version
 run-release: build-release
-	@echo "Running Qunzip (RELEASE)..."
+	@echo "Running Quick Unzip (RELEASE)..."
 	@echo ""
 	$(RELEASE_BUILD_PATH)
 
 # Platform-specific build targets
 build-windows:
-	@echo "Building Qunzip for Windows x64..."
-	$(GRADLEW) linkDebugExecutableMingwX64
-	@echo "Build complete: build/bin/mingwX64/debugExecutable/qunzip.exe"
+	@echo "Building Quick Unzip for Windows x64..."
+	$(GRADLEW) linkCliDebugExecutableMingwX64 linkGuiDebugExecutableMingwX64
+	@echo "CLI: build/bin/mingwX64/cliDebugExecutable/qunzip.exe"
+	@echo "GUI: build/bin/mingwX64/guiDebugExecutable/QuickUnzip.exe"
 
 build-linux:
-	@echo "Building Qunzip for Linux x64..."
+	@echo "Building Quick Unzip for Linux x64..."
 	$(GRADLEW) linkDebugExecutableLinuxX64
 	@echo "Build complete: build/bin/linuxX64/debugExecutable/qunzip.kexe"
 
 build-macos:
-	@echo "Building Qunzip for macOS ARM64..."
+	@echo "Building Quick Unzip for macOS ARM64..."
 	$(GRADLEW) linkDebugExecutableMacosArm64
 	@echo "Build complete: build/bin/macosArm64/debugExecutable/qunzip.kexe"
 
@@ -195,7 +224,7 @@ build-windows-installer:
 
 run-windows-installer: build-windows-installer
 	@echo "Running Windows installer..."
-	@INSTALLER=$$(ls -t $(INSTALLER_OUTPUT_DIR)/qunzip-setup-*.exe 2>/dev/null | head -1); \
+	@INSTALLER=$$(ls -t $(INSTALLER_OUTPUT_DIR)/quick-unzip-setup-*.exe 2>/dev/null | head -1); \
 	if [ -z "$$INSTALLER" ]; then \
 		echo "Error: No installer found in $(INSTALLER_OUTPUT_DIR)"; \
 		exit 1; \
@@ -224,24 +253,29 @@ clean-installer:
 install: build-release
 ifeq ($(PLATFORM),MingwX64)
 	@INSTALL_DIR=""; \
-	if [ -f "$(LOCALAPPDATA)/Programs/Qunzip/qunzip.exe" ]; then \
-		INSTALL_DIR="$(LOCALAPPDATA)/Programs/Qunzip"; \
-	elif [ -f "/c/Program Files/Qunzip/qunzip.exe" ]; then \
-		INSTALL_DIR="/c/Program Files/Qunzip"; \
-	elif [ -f "/c/Program Files (x86)/Qunzip/qunzip.exe" ]; then \
-		INSTALL_DIR="/c/Program Files (x86)/Qunzip"; \
-	fi; \
+	for D in \
+		"$(LOCALAPPDATA)/Programs/Quick Unzip" \
+		"$(LOCALAPPDATA)/Programs/QuickUnzip" \
+		"$(LOCALAPPDATA)/Programs/Qunzip" \
+		"/c/Program Files/Quick Unzip" \
+		"/c/Program Files/QuickUnzip" \
+		"/c/Program Files/Qunzip" \
+		"/c/Program Files (x86)/Quick Unzip" \
+		"/c/Program Files (x86)/QuickUnzip" \
+		"/c/Program Files (x86)/Qunzip"; do \
+		if [ -f "$$D/qunzip.exe" ] || [ -f "$$D/QuickUnzip.exe" ]; then \
+			INSTALL_DIR="$$D"; \
+			break; \
+		fi; \
+	done; \
 	if [ -z "$$INSTALL_DIR" ]; then \
-		echo "Error: No existing qunzip installation found."; \
-		echo "Checked:"; \
-		echo "  $(LOCALAPPDATA)/Programs/Qunzip/"; \
-		echo "  C:/Program Files/Qunzip/"; \
-		echo "  C:/Program Files (x86)/Qunzip/"; \
+		echo "Error: No existing Quick Unzip installation found."; \
 		exit 1; \
 	fi; \
-	echo "Updating $$INSTALL_DIR/qunzip.exe ..."; \
+	echo "Updating $$INSTALL_DIR/qunzip.exe and QuickUnzip.exe ..."; \
 	cp "$(RELEASE_BUILD_PATH)" "$$INSTALL_DIR/qunzip.exe" && \
-	echo "Done. Updated qunzip at $$INSTALL_DIR/"
+	cp "$(GUI_RELEASE_BUILD_PATH)" "$$INSTALL_DIR/QuickUnzip.exe" && \
+	echo "Done. Updated Quick Unzip at $$INSTALL_DIR/"
 else ifeq ($(findstring Linux,$(UNAME_S)),Linux)
 	@INSTALL_DIR=""; \
 	if [ -f "/usr/local/bin/qunzip" ]; then \

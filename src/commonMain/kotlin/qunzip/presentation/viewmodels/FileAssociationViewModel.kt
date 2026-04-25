@@ -26,10 +26,7 @@ class FileAssociationViewModel(
             try {
                 logger.i { "Registering file associations for: $applicationPath" }
 
-                _uiState.value = _uiState.value.copy(
-                    isLoading = true,
-                    error = null
-                )
+                _uiState.update { it.copy(isLoading = true, error = null) }
 
                 val results = manageFileAssociationsUseCase.registerAssociations(applicationPath)
 
@@ -38,11 +35,13 @@ class FileAssociationViewModel(
 
                 logger.i { "Association registration completed: $successCount/$totalCount successful" }
 
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    registrationResults = results,
-                    isRegistered = successCount > 0
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        registrationResults = results,
+                        isRegistered = successCount > 0
+                    )
+                }
 
                 if (successCount == totalCount) {
                     _events.tryEmit(FileAssociationEvent.RegistrationCompleted(successCount))
@@ -60,10 +59,12 @@ class FileAssociationViewModel(
 
             } catch (e: Exception) {
                 logger.e(e) { "Error during association registration" }
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message ?: "Unknown error occurred"
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = e.message ?: "Unknown error occurred"
+                    )
+                }
                 _events.tryEmit(FileAssociationEvent.RegistrationFailed(e))
             }
         }
@@ -74,10 +75,7 @@ class FileAssociationViewModel(
             try {
                 logger.i { "Unregistering file associations" }
 
-                _uiState.value = _uiState.value.copy(
-                    isLoading = true,
-                    error = null
-                )
+                _uiState.update { it.copy(isLoading = true, error = null) }
 
                 val results = manageFileAssociationsUseCase.unregisterAssociations()
 
@@ -86,11 +84,13 @@ class FileAssociationViewModel(
 
                 logger.i { "Association unregistration completed: $successCount/$totalCount successful" }
 
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    unregistrationResults = results,
-                    isRegistered = false
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        unregistrationResults = results,
+                        isRegistered = false
+                    )
+                }
 
                 if (successCount == totalCount) {
                     _events.tryEmit(FileAssociationEvent.UnregistrationCompleted(successCount))
@@ -108,10 +108,12 @@ class FileAssociationViewModel(
 
             } catch (e: Exception) {
                 logger.e(e) { "Error during association unregistration" }
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message ?: "Unknown error occurred"
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = e.message ?: "Unknown error occurred"
+                    )
+                }
                 _events.tryEmit(FileAssociationEvent.UnregistrationFailed(e))
             }
         }
@@ -122,22 +124,26 @@ class FileAssociationViewModel(
             try {
                 val associations = manageFileAssociationsUseCase.checkAssociations()
                 val qunzipAssociations = associations.filter {
-                    it.applicationName.contains("Qunzip", ignoreCase = true)
+                    val name = it.applicationName
+                    // Accept both the current display name and the pre-rename name
+                    // so existing installs aren't seen as foreign after upgrade.
+                    name.contains("Quick Unzip", ignoreCase = true) ||
+                        name.contains("Qunzip", ignoreCase = true)
                 }
 
-                _uiState.value = _uiState.value.copy(
-                    currentAssociations = associations,
-                    qunzipAssociations = qunzipAssociations,
-                    isRegistered = qunzipAssociations.isNotEmpty()
-                )
+                _uiState.update {
+                    it.copy(
+                        currentAssociations = associations,
+                        qunzipAssociations = qunzipAssociations,
+                        isRegistered = qunzipAssociations.isNotEmpty()
+                    )
+                }
 
-                logger.i { "Found ${qunzipAssociations.size} Qunzip associations out of ${associations.size} total" }
+                logger.i { "Found ${qunzipAssociations.size} Quick Unzip associations out of ${associations.size} total" }
 
             } catch (e: Exception) {
                 logger.e(e) { "Error checking current associations" }
-                _uiState.value = _uiState.value.copy(
-                    error = e.message ?: "Error checking associations"
-                )
+                _uiState.update { it.copy(error = e.message ?: "Error checking associations") }
             }
         }
     }
@@ -163,7 +169,7 @@ class FileAssociationViewModel(
     }
 
     fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.update { it.copy(error = null) }
     }
 
     fun refreshAssociations() {

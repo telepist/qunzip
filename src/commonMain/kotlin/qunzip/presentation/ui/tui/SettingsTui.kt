@@ -12,7 +12,8 @@ private const val BOX_WIDTH = 52
 
 private enum class MenuItem(val label: String) {
     MOVE_TO_TRASH("Move archive to trash after extraction"),
-    SHOW_COMPLETION_DIALOG("Show completion dialog"),
+    AUTO_CLOSE("Close automatically after extraction"),
+    CLI_SHIM("Add `qunzip` command to PATH"),
     QUIT("Quit")
 }
 
@@ -27,7 +28,11 @@ fun SettingsTui(
     val prefs = settingsState.preferences
 
     var selectedIndex by remember { mutableStateOf(0) }
-    val menuItems = MenuItem.entries
+    // Hide the CLI shim row on platforms where install/uninstall is a no-op,
+    // so we don't offer a switch that does nothing.
+    val menuItems = MenuItem.entries.filter { item ->
+        item != MenuItem.CLI_SHIM || settingsState.cliShimSupported
+    }
 
     Column(
         modifier = Modifier.onKeyEvent { event ->
@@ -45,8 +50,16 @@ fun SettingsTui(
                         MenuItem.MOVE_TO_TRASH -> {
                             settingsViewModel.setMoveToTrashAfterExtraction(!prefs.moveToTrashAfterExtraction)
                         }
-                        MenuItem.SHOW_COMPLETION_DIALOG -> {
-                            settingsViewModel.setShowCompletionDialog(!prefs.showCompletionDialog)
+                        MenuItem.AUTO_CLOSE -> {
+                            settingsViewModel.setAutoCloseAfterExtraction(!prefs.autoCloseAfterExtraction)
+                        }
+                        MenuItem.CLI_SHIM -> {
+                            // Ignore rapid space-presses while a previous toggle
+                            // is still writing to the registry — otherwise we
+                            // can issue concurrent registry writes that race.
+                            if (!settingsState.isCliShimWorking) {
+                                settingsViewModel.setCliShimInstalled(!settingsState.cliShimInstalled)
+                            }
                         }
                         MenuItem.QUIT -> {
                             onExit()
@@ -65,7 +78,7 @@ fun SettingsTui(
         Text("")
 
         // Header
-        SettingsHeader("qunzip settings")
+        SettingsHeader("Quick Unzip Settings")
         Text("")
 
         // Preferences section
@@ -84,10 +97,17 @@ fun SettingsTui(
                         selected = isSelected
                     )
                 }
-                MenuItem.SHOW_COMPLETION_DIALOG -> {
+                MenuItem.AUTO_CLOSE -> {
                     ToggleRow(
                         label = item.label,
-                        enabled = prefs.showCompletionDialog,
+                        enabled = prefs.autoCloseAfterExtraction,
+                        selected = isSelected
+                    )
+                }
+                MenuItem.CLI_SHIM -> {
+                    ToggleRow(
+                        label = item.label,
+                        enabled = settingsState.cliShimInstalled,
                         selected = isSelected
                     )
                 }

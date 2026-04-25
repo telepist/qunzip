@@ -4,6 +4,11 @@ import kotlinx.cinterop.*
 import platform.windows.*
 import platform.posix.getenv
 
+// Subsystem differs between build types (see build.gradle.kts):
+//   Release → Windows subsystem: no console at startup; attach to parent for CLI.
+//   Debug   → console subsystem: a console always exists; hide it for GUI launches.
+// All detection here keys off GetConsoleWindow() so the same code handles both.
+
 /**
  * Check if running in a terminal on Windows
  * Returns true if stdout is attached to a console or we're in MSYS2/Cygwin
@@ -32,17 +37,35 @@ actual fun isTerminal(): Boolean {
     return false
 }
 
+private const val ATTACH_PARENT_PROCESS_ID: UInt = 0xFFFFFFFFu
+
+// Win32 console mode flag — not exposed by the K/N MinGW headers we use.
+private const val ENABLE_VIRTUAL_TERMINAL_PROCESSING: UInt = 0x0004u
+
 /**
  * Detect if launched standalone (double-click / file association) on Windows.
- * Uses GetConsoleProcessList: if only 1 process is attached to the console,
- * it means Windows created the console for us (standalone launch).
- * If >1 processes, we're sharing with a shell (CLI launch).
+ *
+ * Release (Windows subsystem) — no console at startup:
+ *   AttachConsole(parent) succeeds → CLI launch from a shell. Detach again.
+ *   AttachConsole(parent) fails    → no parent console, standalone launch.
+ *
+ * Debug (console subsystem) — a console always exists:
+ *   GetConsoleProcessList count == 1 → Windows created it for us (standalone).
+ *   count >= 2                       → sharing with a shell (CLI launch).
  */
 @OptIn(ExperimentalForeignApi::class)
 actual fun isStandaloneLaunch(): Boolean = memScoped {
-    val processList = allocArray<UIntVar>(1)
-    val count = GetConsoleProcessList(processList, 1u)
-    count <= 1u
+    if (GetConsoleWindow() == null) {
+        val attached = AttachConsole(ATTACH_PARENT_PROCESS_ID)
+        if (attached != 0) {
+            FreeConsole()
+            return@memScoped false
+        }
+        return@memScoped true
+    }
+    val pids = allocArray<UIntVar>(16)
+    val count = GetConsoleProcessList(pids.reinterpret(), 16u)
+    count == 1u
 }
 
 /**
@@ -93,19 +116,46 @@ actual fun readLineFromConsole(): String? = memScoped {
     result.toString()
 }
 
+/**
+ * Hide and detach the console window for GUI mode.
+ * Hides the window first (fast, avoids visible flash), then detaches.
+ */
+@OptIn(ExperimentalForeignApi::class)
+actual fun hideConsole() {
+    val consoleWindow = GetConsoleWindow()
+    if (consoleWindow != null) {
+        ShowWindow(consoleWindow, SW_HIDE)
+    }
+    FreeConsole()
+}
+
+/**
+ * Ensure a console is available and stdio points to it.
+ *
+ * Debug (console subsystem): a console already exists, just enable VT processing.
+ * Release (Windows subsystem) CLI: attach to the parent shell's console and
+ * reopen stdio so the TUI renders in the user's terminal.
+ * Release standalone TUI (rare): no parent console — allocate a fresh one.
+ */
 @OptIn(ExperimentalForeignApi::class)
 actual fun configureStandaloneConsole() {
-    SetConsoleTitleA("Qunzip")
+    if (GetConsoleWindow() == null) {
+        // No console — try parent first (CLI), fall back to a fresh window.
+        if (AttachConsole(ATTACH_PARENT_PROCESS_ID) == 0) {
+            AllocConsole()
+            SetConsoleTitleA("Quick Unzip")
+        }
+        platform.posix.freopen("CONOUT$", "w", platform.posix.stdout)
+        platform.posix.freopen("CONOUT$", "w", platform.posix.stderr)
+        platform.posix.freopen("CONIN$", "r", platform.posix.stdin)
+    }
 
-    // Enable ANSI/VT100 escape sequences on the stdout handle.
-    // Needed for legacy conhost.exe; Windows Terminal handles ANSI natively.
-    // Mosaic's NonInteractiveTerminal writes via print() which goes to this handle.
+    // Enable ANSI/VT100 escape sequences
     val handle = GetStdHandle(STD_OUTPUT_HANDLE)
-    if (handle != INVALID_HANDLE_VALUE) {
+    if (handle != null && handle != INVALID_HANDLE_VALUE) {
         memScoped {
             val mode = alloc<UIntVar>()
             if (GetConsoleMode(handle, mode.ptr) != 0) {
-                val ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004u
                 SetConsoleMode(handle, mode.value or ENABLE_VIRTUAL_TERMINAL_PROCESSING)
             }
         }

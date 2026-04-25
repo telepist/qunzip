@@ -3,198 +3,114 @@ package qunzip
 import qunzip.presentation.viewmodels.ApplicationViewModel
 import qunzip.presentation.ui.*
 import qunzip.domain.usecases.*
+import qunzip.domain.repositories.CliShimRepository
 import qunzip.domain.repositories.PreferencesRepository
 import kotlinx.coroutines.*
 import co.touchlab.kermit.Logger
 import co.touchlab.kermit.Severity
 
 /**
- * Main entry point for the Qunzip application
+ * CLI entry point — used by qunzip.exe (console subsystem on Windows; the
+ * single binary on Linux/macOS) and by debug/test builds.
+ *
+ * Always renders the Mosaic TUI in the current terminal. Handles all
+ * settings/admin flags (--register-associations, --set-trash-on, etc.).
  */
-fun main(args: Array<String>) {
-    // Suppress logging to keep the TUI display clean
+fun mainCli(args: Array<String>) {
     Logger.setMinSeverity(Severity.Assert)
     UiConfig.enableTuiMode()
+    val logger = Logger.withTag("MainCli")
 
-    val logger = Logger.withTag("Main")
-
-    // Handle special CLI arguments for installer integration
-    // --force-standalone: test standalone exit behavior from CLI
+    // --force-standalone: simulate the GUI exe's auto-close behavior from CLI for testing.
     val forceStandalone = args.contains("--force-standalone")
 
     when {
-        args.contains("--register-associations") -> {
-            runBlocking {
-                try {
-                    val dependencies = initializeDependencies()
-                    val appPath = getCurrentExecutablePath()
-                    val results = dependencies.manageFileAssociationsUseCase.registerAssociations(appPath)
-
-                    val allSuccess = results.all { it.success }
-                    val successCount = results.count { it.success }
-                    val totalCount = results.size
-
-                    if (allSuccess) {
-                        println("Successfully registered all $totalCount file associations")
-                        exitProcess(0)
-                    } else {
-                        results.filter { !it.success }.forEach {
-                            println("Error: .${it.extension}: ${it.message}")
-                        }
-                        exitProcess(1)
-                    }
-                } catch (e: Exception) {
-                    println("Error: ${e.message}")
-                    exitProcess(1)
-                }
-            }
-        }
-
-        args.contains("--unregister-associations") -> {
-            runBlocking {
-                try {
-                    val dependencies = initializeDependencies()
-                    val results = dependencies.manageFileAssociationsUseCase.unregisterAssociations()
-
-                    val allSuccess = results.all { it.success }
-                    val successCount = results.count { it.success }
-                    val totalCount = results.size
-
-                    if (allSuccess) {
-                        println("Successfully unregistered all $totalCount file associations")
-                        exitProcess(0)
-                    } else {
-                        exitProcess(0)
-                    }
-                } catch (e: Exception) {
-                    println("Error: ${e.message}")
-                    exitProcess(1)
-                }
-            }
-        }
-
-        args.contains("--set-trash-on") -> {
-            runBlocking {
-                try {
-                    val dependencies = initializeDependencies()
-                    val currentPrefs = dependencies.preferencesRepository.loadPreferences()
-                    val newPrefs = currentPrefs.copy(moveToTrashAfterExtraction = true)
-                    if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
-                        println("Setting updated: Move archive to trash after extraction = ON")
-                        exitProcess(0)
-                    } else {
-                        println("Error: Failed to save preferences")
-                        exitProcess(1)
-                    }
-                } catch (e: Exception) {
-                    println("Error: ${e.message}")
-                    exitProcess(1)
-                }
-            }
-        }
-
-        args.contains("--set-trash-off") -> {
-            runBlocking {
-                try {
-                    val dependencies = initializeDependencies()
-                    val currentPrefs = dependencies.preferencesRepository.loadPreferences()
-                    val newPrefs = currentPrefs.copy(moveToTrashAfterExtraction = false)
-                    if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
-                        println("Setting updated: Move archive to trash after extraction = OFF")
-                        exitProcess(0)
-                    } else {
-                        println("Error: Failed to save preferences")
-                        exitProcess(1)
-                    }
-                } catch (e: Exception) {
-                    println("Error: ${e.message}")
-                    exitProcess(1)
-                }
-            }
-        }
-
-        args.contains("--set-dialog-on") -> {
-            runBlocking {
-                try {
-                    val dependencies = initializeDependencies()
-                    val currentPrefs = dependencies.preferencesRepository.loadPreferences()
-                    val newPrefs = currentPrefs.copy(showCompletionDialog = true)
-                    if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
-                        println("Setting updated: Show completion dialog = ON")
-                        exitProcess(0)
-                    } else {
-                        println("Error: Failed to save preferences")
-                        exitProcess(1)
-                    }
-                } catch (e: Exception) {
-                    println("Error: ${e.message}")
-                    exitProcess(1)
-                }
-            }
-        }
-
-        args.contains("--set-dialog-off") -> {
-            runBlocking {
-                try {
-                    val dependencies = initializeDependencies()
-                    val currentPrefs = dependencies.preferencesRepository.loadPreferences()
-                    val newPrefs = currentPrefs.copy(showCompletionDialog = false)
-                    if (dependencies.preferencesRepository.savePreferences(newPrefs)) {
-                        println("Setting updated: Show completion dialog = OFF")
-                        exitProcess(0)
-                    } else {
-                        println("Error: Failed to save preferences")
-                        exitProcess(1)
-                    }
-                } catch (e: Exception) {
-                    println("Error: ${e.message}")
-                    exitProcess(1)
-                }
-            }
-        }
-
+        args.contains("--register-associations") -> handleRegisterAssociations()
+        args.contains("--unregister-associations") -> handleUnregisterAssociations()
+        args.contains("--set-trash-on") -> handleSetTrash(true)
+        args.contains("--set-trash-off") -> handleSetTrash(false)
+        args.contains("--set-dialog-on") -> handleSetAutoClose(false)
+        args.contains("--set-dialog-off") -> handleSetAutoClose(true)
         args.contains("--help") || args.contains("-h") -> {
             printHelp()
             exitProcess(0)
         }
-
         args.contains("--version") || args.contains("-v") -> {
-            println("Qunzip version 1.0.0")
+            println("Quick Unzip version 1.0.0")
             println("Archive extraction utility for Windows, macOS, and Linux")
             exitProcess(0)
         }
     }
 
-    // Create application scope
-    val applicationScope = CoroutineScope(
-        SupervisorJob() + Dispatchers.Default
-    )
+    val cleanedArgs = args.filterNot { it == "--force-standalone" }
+    runApp(cleanedArgs, useGui = false, isStandalone = forceStandalone, logger = logger)
+}
+
+/**
+ * GUI entry point — used by QuickUnzip.exe (Windows subsystem). Always
+ * renders the ImGui dialog. No console flash, no CLI-flag handling.
+ */
+fun mainGui(args: Array<String>) {
+    Logger.setMinSeverity(Severity.Assert)
+    // UiConfig.enableTuiMode() suppresses println-based notifications that
+    // would otherwise interleave with the TUI display. The GUI binary
+    // doesn't render a TUI, but extraction code still emits those println
+    // notifications, and the GUI has no console to print them to anyway —
+    // suppressing keeps stderr clean if a parent shell is somehow attached.
+    UiConfig.enableTuiMode()
+    val logger = Logger.withTag("MainGui")
+
+    // The GUI exe ignores any flags — it only consumes a file path. CLI flags
+    // belong to qunzip.exe.
+    val cleanedArgs = args.filterNot { it.startsWith("-") }
+    runApp(cleanedArgs, useGui = true, isStandalone = true, logger = logger)
+}
+
+/**
+ * Backwards-compatible entry for build configurations that still reference
+ * `qunzip.main`. Behaves like `mainCli`.
+ */
+fun main(args: Array<String>) = mainCli(args)
+
+private fun runApp(
+    args: List<String>,
+    useGui: Boolean,
+    isStandalone: Boolean,
+    logger: Logger
+) {
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     runBlocking {
         try {
             val dependencies = initializeDependencies()
-
-            val isStandalone = forceStandalone || isStandaloneLaunch()
-            if (isStandalone) {
-                configureStandaloneConsole()
-            }
-
             val applicationViewModel = ApplicationViewModel(
                 extractArchiveUseCase = dependencies.extractArchiveUseCase,
                 validateArchiveUseCase = dependencies.validateArchiveUseCase,
                 manageFileAssociationsUseCase = dependencies.manageFileAssociationsUseCase,
                 preferencesRepository = dependencies.preferencesRepository,
+                cliShimRepository = dependencies.cliShimRepository,
                 scope = applicationScope,
                 logger = logger,
                 isStandaloneLaunch = isStandalone
             )
 
-            val appArgs = args.toList().filterNot { it == "--force-standalone" }
-            applicationViewModel.handleApplicationStart(appArgs)
+            applicationViewModel.handleApplicationStart(args)
 
-            // Always use TUI renderer
-            val renderer = MosaicTuiRenderer(isStandaloneLaunch = isStandalone)
+            val renderer: UiRenderer = if (useGui) {
+                createGuiRenderer()
+            } else {
+                if (isTerminal()) {
+                    configureStandaloneConsole()
+                    MosaicTuiRenderer(isStandaloneLaunch = false)
+                } else {
+                    // Piped output (test harness, redirected) — non-interactive
+                    MosaicTuiRenderer(isStandaloneLaunch = true)
+                }
+            }
             renderer.render(applicationViewModel)
+            if (useGui) {
+                exitProcess(0)
+            }
         } catch (e: Exception) {
             logger.e(e) { "Fatal error during application startup" }
             exitProcess(1)
@@ -204,12 +120,97 @@ fun main(args: Array<String>) {
     }
 }
 
+private fun handleRegisterAssociations() {
+    runBlocking {
+        try {
+            val dependencies = initializeDependencies()
+            val results = dependencies.manageFileAssociationsUseCase
+                .registerAssociations(getGuiExecutablePath())
+
+            val allSuccess = results.all { it.success }
+            val totalCount = results.size
+
+            if (allSuccess) {
+                println("Successfully registered all $totalCount file associations")
+                exitProcess(0)
+            } else {
+                results.filter { !it.success }.forEach {
+                    println("Error: .${it.extension}: ${it.message}")
+                }
+                exitProcess(1)
+            }
+        } catch (e: Exception) {
+            println("Error: ${e.message}")
+            exitProcess(1)
+        }
+    }
+}
+
+private fun handleUnregisterAssociations() {
+    runBlocking {
+        try {
+            val dependencies = initializeDependencies()
+            val results = dependencies.manageFileAssociationsUseCase.unregisterAssociations()
+            val allSuccess = results.all { it.success }
+            val totalCount = results.size
+            if (allSuccess) {
+                println("Successfully unregistered all $totalCount file associations")
+            }
+            exitProcess(0)
+        } catch (e: Exception) {
+            println("Error: ${e.message}")
+            exitProcess(1)
+        }
+    }
+}
+
+private fun handleSetTrash(enabled: Boolean) {
+    runBlocking {
+        try {
+            val dependencies = initializeDependencies()
+            val current = dependencies.preferencesRepository.loadPreferences()
+            val updated = current.copy(moveToTrashAfterExtraction = enabled)
+            if (dependencies.preferencesRepository.savePreferences(updated)) {
+                println("Setting updated: Move archive to trash after extraction = ${if (enabled) "ON" else "OFF"}")
+                exitProcess(0)
+            } else {
+                println("Error: Failed to save preferences")
+                exitProcess(1)
+            }
+        } catch (e: Exception) {
+            println("Error: ${e.message}")
+            exitProcess(1)
+        }
+    }
+}
+
+private fun handleSetAutoClose(autoClose: Boolean) {
+    runBlocking {
+        try {
+            val dependencies = initializeDependencies()
+            val current = dependencies.preferencesRepository.loadPreferences()
+            val updated = current.copy(autoCloseAfterExtraction = autoClose)
+            if (dependencies.preferencesRepository.savePreferences(updated)) {
+                val label = if (autoClose) "ON (default)" else "OFF (dialog stays open)"
+                println("Setting updated: Auto-close after extraction = $label")
+                exitProcess(0)
+            } else {
+                println("Error: Failed to save preferences")
+                exitProcess(1)
+            }
+        } catch (e: Exception) {
+            println("Error: ${e.message}")
+            exitProcess(1)
+        }
+    }
+}
+
 /**
  * Print help message
  */
 fun printHelp() {
     println("""
-        Qunzip - Quick Unzip - Archive Extraction Utility
+        Quick Unzip - Archive Extraction Utility
 
         Usage: qunzip [OPTIONS] <archive-file>
 
@@ -219,8 +220,8 @@ fun printHelp() {
         Options:
           --set-trash-on              Enable moving archive to trash after extraction
           --set-trash-off             Disable moving archive to trash (default)
-          --set-dialog-on             Enable completion dialog after extraction
-          --set-dialog-off            Disable completion dialog (silent exit, default)
+          --set-dialog-on             Keep window open after extraction
+          --set-dialog-off            Close window automatically after extraction (default)
           --register-associations     Register file associations for supported formats
           --unregister-associations   Remove file associations
           --help, -h                  Show this help message
@@ -244,7 +245,8 @@ data class ApplicationDependencies(
     val extractArchiveUseCase: ExtractArchiveUseCase,
     val validateArchiveUseCase: ValidateArchiveUseCase,
     val manageFileAssociationsUseCase: ManageFileAssociationsUseCase,
-    val preferencesRepository: PreferencesRepository
+    val preferencesRepository: PreferencesRepository,
+    val cliShimRepository: CliShimRepository
 )
 
 /**
@@ -254,10 +256,17 @@ data class ApplicationDependencies(
 internal expect fun initializeDependencies(): ApplicationDependencies
 
 /**
- * Get the current executable's full path
- * Platform-specific implementation
+ * Get the path of the current executable (e.g., the qunzip.exe that's running).
+ * Platform-specific implementation.
  */
 internal expect fun getCurrentExecutablePath(): String
+
+/**
+ * Get the path to the GUI executable (QuickUnzip.exe on Windows). On platforms
+ * that have only one binary, returns the same as `getCurrentExecutablePath()`.
+ * Used by `--register-associations` so file associations point at the GUI.
+ */
+internal expect fun getGuiExecutablePath(): String
 
 /**
  * Exit the application process
@@ -265,3 +274,7 @@ internal expect fun getCurrentExecutablePath(): String
  */
 internal expect fun exitProcess(code: Int): Nothing
 
+/**
+ * Create platform-specific GUI renderer (experimental)
+ */
+internal expect fun createGuiRenderer(): UiRenderer

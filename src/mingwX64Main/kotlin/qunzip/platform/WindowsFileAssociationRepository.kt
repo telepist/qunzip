@@ -84,16 +84,27 @@ class WindowsFileAssociationRepository(
 
         try {
             val rootKeyPair = registryHelper.getFileAssociationRootKey()
-            val progId = progIdForExtension(extension)
+            val (rootKey, prefix) = rootKeyPair
 
-            // Remove the extension association
-            if (!removeExtensionAssociation(extension, progId, rootKeyPair, registryHelper)) {
+            // Try to remove the extension association for the current ProgID
+            // and any legacy ProgID prefixes that older installs may have
+            // written. Without this, `--unregister-associations` would leave
+            // pre-rename `Qunzip.*` keys behind on standalone CLI invocations.
+            val sanitized = extension.removePrefix(".").replace('.', '_')
+            val progIds = listOf("QuickUnzip.$sanitized", "Qunzip.$sanitized")
+
+            var removedAny = false
+            for (progId in progIds) {
+                if (removeExtensionAssociation(extension, progId, rootKeyPair, registryHelper)) {
+                    removedAny = true
+                }
+                // Always best-effort delete the ProgID key tree itself —
+                // safe if it doesn't exist.
+                registryHelper.deleteKeyTree(rootKey, "${prefix}${progId}")
+            }
+            if (!removedAny) {
                 logger.w { "Could not remove association for .$extension (may not exist)" }
             }
-
-            // Also clean up the ProgID key itself
-            val (rootKey, prefix) = rootKeyPair
-            registryHelper.deleteKeyTree(rootKey, "${prefix}${progId}")
 
             // Notify Windows Shell of the change
             registryHelper.notifyShellAssociationChanged()
@@ -220,22 +231,34 @@ class WindowsFileAssociationRepository(
     }
 
     companion object {
+        private val supportedExtensions = listOf(
+            "zip", "7z", "rar", "tar", "tar.gz", "tar.bz2", "tar.xz",
+            "gz", "bz2", "xz", "tgz", "tbz2", "txz", "cab", "arj", "lzh"
+        )
+
         /**
-         * Maps a file extension to a unique ProgID so each format gets its
-         * own type name in Windows Explorer.
-         * e.g., "zip" -> "Qunzip.zip", "tar.gz" -> "Qunzip.tar_gz"
+         * Maps a file extension to its current (post-rename) ProgID.
+         * e.g., "zip" -> "QuickUnzip.zip", "tar.gz" -> "QuickUnzip.tar_gz"
          */
         fun progIdForExtension(extension: String): String {
+            val sanitized = extension.removePrefix(".").replace('.', '_')
+            return "QuickUnzip.$sanitized"
+        }
+
+        /**
+         * Pre-rename ProgID prefix; kept so we can clean up registry entries
+         * left behind by older installs during --unregister-associations.
+         */
+        private fun legacyProgIdForExtension(extension: String): String {
             val sanitized = extension.removePrefix(".").replace('.', '_')
             return "Qunzip.$sanitized"
         }
 
-        /** All ProgIDs that may have been registered, for cleanup. */
+        /** All ProgIDs that may have been registered (current + legacy), for cleanup. */
         val allProgIds: List<String>
-            get() = listOf(
-                "zip", "7z", "rar", "tar", "tar.gz", "tar.bz2", "tar.xz",
-                "gz", "bz2", "xz", "tgz", "tbz2", "txz", "cab", "arj", "lzh"
-            ).map { progIdForExtension(it) } + "Qunzip.ArchiveFile" // legacy single ProgID
+            get() = supportedExtensions.map { progIdForExtension(it) } +
+                supportedExtensions.map { legacyProgIdForExtension(it) } +
+                listOf("QuickUnzip.ArchiveFile", "Qunzip.ArchiveFile") // legacy single ProgIDs
     }
 
     override suspend fun requestElevatedPrivileges(): Boolean {

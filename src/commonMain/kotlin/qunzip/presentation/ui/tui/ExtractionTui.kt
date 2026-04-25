@@ -59,7 +59,7 @@ fun ExtractionTui(viewModel: ExtractionViewModel, showCloseHint: Boolean = false
     ) {
         Text("")
         // Header
-        Header("qunzip")
+        Header("Quick Unzip")
         Text("")
 
         // Archive info
@@ -102,12 +102,13 @@ fun ExtractionTui(viewModel: ExtractionViewModel, showCloseHint: Boolean = false
                     StatusLine("Analyzing archive...")
                 }
                 ExtractionStage.EXTRACTING -> {
-                    val currentFile = progress?.currentFile?.let { truncatePath(it, 42) } ?: ""
+                    // progress is smart-cast non-null here: stage = progress?.stage matched.
+                    val currentFile = progress.currentFile?.let { truncatePath(it, 42) } ?: ""
                     if (currentFile.isNotEmpty()) {
                         StatusLine(currentFile)
                     }
-                    val filesText = "${progress?.filesProcessed ?: 0} / ${progress?.totalFiles ?: 0} files"
-                    val bytesText = formatBytes(progress?.bytesProcessed ?: 0)
+                    val filesText = "${progress.filesProcessed} / ${progress.totalFiles} files"
+                    val bytesText = formatBytes(progress.bytesProcessed)
                     InfoRow("Progress", "$filesText  ·  $bytesText", Color.White)
                 }
                 ExtractionStage.FINALIZING -> {
@@ -118,8 +119,8 @@ fun ExtractionTui(viewModel: ExtractionViewModel, showCloseHint: Boolean = false
                         Text("  ")
                         Text(" Done ", color = Color.Black, background = Color.Green, textStyle = TextStyle.Bold)
                         Text("  ")
-                        val totalFiles = progress?.totalFiles ?: 0
-                        val totalBytes = formatBytes(progress?.totalBytes ?: 0)
+                        val totalFiles = progress.totalFiles
+                        val totalBytes = formatBytes(progress.totalBytes)
                         Text("$totalFiles files  ·  $totalBytes", color = Color.White)
                     }
                 }
@@ -239,17 +240,4 @@ private fun truncatePath(path: String, maxLen: Int): String {
     return "..." + path.takeLast(maxLen - 3)
 }
 
-private fun formatBytes(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${formatDecimal(bytes / 1024.0)} KB"
-        bytes < 1024 * 1024 * 1024 -> "${formatDecimal(bytes / (1024.0 * 1024.0))} MB"
-        else -> "${formatDecimal(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
-    }
-}
-
-private fun formatDecimal(value: Double): String {
-    val whole = value.toLong()
-    val frac = ((value - whole) * 10).toLong().coerceIn(0, 9)
-    return "$whole.$frac"
-}
+private fun formatBytes(bytes: Long) = qunzip.presentation.ui.formatBytes(bytes)

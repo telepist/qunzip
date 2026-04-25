@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+
 package qunzip.presentation.viewmodels
 
 import qunzip.domain.entities.*
@@ -15,6 +17,8 @@ class ApplicationViewModelTest {
 
     private lateinit var testScope: TestScope
     private lateinit var vmScope: CoroutineScope
+    private lateinit var mockExtract: MockExtractArchiveUseCase
+    private lateinit var mockPrefs: MockPreferencesRepository
     private lateinit var viewModel: ApplicationViewModel
 
     @BeforeTest
@@ -22,12 +26,32 @@ class ApplicationViewModelTest {
         testScope = TestScope()
         // Separate scope for the ViewModel's long-running init collectors
         vmScope = CoroutineScope(testScope.coroutineContext + SupervisorJob())
+        mockExtract = MockExtractArchiveUseCase()
+        mockPrefs = MockPreferencesRepository()
         viewModel = ApplicationViewModel(
-            extractArchiveUseCase = MockExtractArchiveUseCase(),
+            extractArchiveUseCase = mockExtract,
             validateArchiveUseCase = MockValidateArchiveUseCase(),
             manageFileAssociationsUseCase = MockManageFileAssociationsUseCase(),
-            preferencesRepository = MockPreferencesRepository(),
+            preferencesRepository = mockPrefs,
             scope = vmScope
+        )
+    }
+
+    /** Build a fresh VM with the given standalone flag. Useful for the
+     *  auto-close branch tests that need `isStandaloneLaunch = true`. */
+    private fun rebuildAsStandalone(autoCloseAfterExtraction: Boolean) {
+        vmScope.cancel()
+        vmScope = CoroutineScope(testScope.coroutineContext + SupervisorJob())
+        mockPrefs.preferences = UserPreferences.DEFAULT.copy(
+            autoCloseAfterExtraction = autoCloseAfterExtraction
+        )
+        viewModel = ApplicationViewModel(
+            extractArchiveUseCase = mockExtract,
+            validateArchiveUseCase = MockValidateArchiveUseCase(),
+            manageFileAssociationsUseCase = MockManageFileAssociationsUseCase(),
+            preferencesRepository = mockPrefs,
+            scope = vmScope,
+            isStandaloneLaunch = true
         )
     }
 
@@ -98,6 +122,77 @@ class ApplicationViewModelTest {
         }
     }
 
+    // --- Auto-exit observer (the StateFlow-based fix from commit 19b7c17) ---
+
+    @Test
+    fun `CLI extraction reaching COMPLETED sets shouldExit`() = testScope.runTest {
+        // Default: isStandaloneLaunch = false. The observer must flip
+        // shouldExit unconditionally when the extraction stage transitions
+        // to COMPLETED — this is the core fix for the "small zip never
+        // closes" race.
+        val archivePath = "/test/cli.zip"
+        mockExtract.progressFlow = flowOf(
+            ExtractionProgress(archivePath, stage = ExtractionStage.STARTING),
+            ExtractionProgress(archivePath, stage = ExtractionStage.EXTRACTING),
+            ExtractionProgress(archivePath, stage = ExtractionStage.COMPLETED)
+        )
+
+        viewModel.extractionViewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        assertTrue(
+            viewModel.uiState.value.shouldExit,
+            "shouldExit must be set when extraction completes in CLI mode"
+        )
+    }
+
+    @Test
+    fun `CLI extraction reaching FAILED sets shouldExit`() = testScope.runTest {
+        // Symmetric — failures must also unblock exit so the dialog doesn't
+        // hang after a fast validation/exception failure.
+        val archivePath = "/test/cli-fail.zip"
+        mockExtract.progressFlow = flowOf(
+            ExtractionProgress(archivePath, stage = ExtractionStage.FAILED)
+        )
+
+        viewModel.extractionViewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.shouldExit)
+    }
+
+    @Test
+    fun `standalone with autoCloseAfterExtraction true sets shouldExit`() = testScope.runTest {
+        rebuildAsStandalone(autoCloseAfterExtraction = true)
+        val archivePath = "/test/double-clicked.zip"
+        mockExtract.progressFlow = flowOf(
+            ExtractionProgress(archivePath, stage = ExtractionStage.COMPLETED)
+        )
+
+        viewModel.extractionViewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.shouldExit, "default autoCloseAfterExtraction=true must auto-exit")
+        assertFalse(state.showCloseHint)
+    }
+
+    @Test
+    fun `standalone with autoCloseAfterExtraction false sets showCloseHint`() = testScope.runTest {
+        rebuildAsStandalone(autoCloseAfterExtraction = false)
+        val archivePath = "/test/keep-open.zip"
+        mockExtract.progressFlow = flowOf(
+            ExtractionProgress(archivePath, stage = ExtractionStage.COMPLETED)
+        )
+
+        viewModel.extractionViewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.shouldExit, "autoCloseAfterExtraction=false keeps window open")
+        assertTrue(state.showCloseHint)
+    }
+
     // --- Mocks ---
 
     private class MockExtractArchiveUseCase : ExtractArchiveUseCase(
@@ -115,10 +210,10 @@ class ApplicationViewModelTest {
             override suspend fun isReadable(path: String) = true
             override suspend fun isWritable(path: String) = true
             override suspend fun getFileInfo(path: String) = FileInfo(path, 1024L)
-            override fun getParentDirectory(path: String) = ""
-            override fun joinPath(vararg parts: String) = parts.joinToString("/")
+            override fun getParentDirectory(filePath: String) = ""
+            override fun joinPath(vararg components: String) = components.joinToString("/")
             override suspend fun createDirectory(path: String) = true
-            override suspend fun moveToTrash(path: String) = true
+            override suspend fun moveToTrash(filePath: String) = true
             override suspend fun getAvailableSpace(path: String) = 1024L * 1024L * 1024L
             override suspend fun getTrashPath() = "/trash"
             override suspend fun listFiles(directoryPath: String) = emptyList<FileInfo>()
@@ -146,7 +241,10 @@ class ApplicationViewModelTest {
             override suspend fun showNotificationWithAction(title: String, message: String, actionLabel: String, actionPath: String) {}
         }
     ) {
-        override suspend operator fun invoke(archivePath: String, options: ExtractionOptions) = flowOf<ExtractionProgress>()
+        // Configurable so individual tests can drive the extraction flow.
+        var progressFlow: kotlinx.coroutines.flow.Flow<ExtractionProgress> = flowOf()
+
+        override suspend operator fun invoke(archivePath: String, options: ExtractionOptions) = progressFlow
     }
 
     private class MockValidateArchiveUseCase : ValidateArchiveUseCase(
@@ -164,10 +262,10 @@ class ApplicationViewModelTest {
             override suspend fun isReadable(path: String) = true
             override suspend fun isWritable(path: String) = true
             override suspend fun getFileInfo(path: String) = FileInfo(path, 1024L)
-            override fun getParentDirectory(path: String) = ""
-            override fun joinPath(vararg parts: String) = parts.joinToString("/")
+            override fun getParentDirectory(filePath: String) = ""
+            override fun joinPath(vararg components: String) = components.joinToString("/")
             override suspend fun createDirectory(path: String) = true
-            override suspend fun moveToTrash(path: String) = true
+            override suspend fun moveToTrash(filePath: String) = true
             override suspend fun getAvailableSpace(path: String) = 1024L * 1024L * 1024L
             override suspend fun getTrashPath() = "/trash"
             override suspend fun listFiles(directoryPath: String) = emptyList<FileInfo>()

@@ -1,8 +1,8 @@
-# Qunzip Development Progress
+# Quick Unzip Development Progress
 
 ## Current Status
 
-**Phase**: TUI-Only Redesign Complete, Windows Platform Functional
+**Phase**: Dual UI (ImGui GUI + Mosaic TUI), Windows Platform Functional
 
 ## Completed Work
 
@@ -85,9 +85,20 @@
   - Event handling
   - Application lifecycle
 
-### ✅ TUI-Only UI (Mosaic)
+### ✅ ImGui GUI (Windows)
 
-Native GUI implementations (Win32, Cocoa, GTK) have been removed. The application now uses Mosaic TUI exclusively for all platforms and launch modes.
+- ✅ **ImGui renderer with DX11 backend**
+  - cimgui static library build integrated into Gradle
+  - DX11 linking and GPU-accelerated rendering
+  - GUI subsystem (`-mwindows`) for windowless launch
+  - Dark title bar via `DwmSetWindowAttribute`
+  - DPI awareness (per-monitor DPI scaling)
+- ✅ **Settings UI in ImGui**
+  - Full preferences management in graphical interface
+
+### ✅ Mosaic TUI (CLI)
+
+Mosaic TUI is used for CLI-mode launches across all platforms.
 
 - ✅ **Mosaic Terminal UI**
   - Real-time progress bars with percentage and color coding
@@ -128,7 +139,7 @@ Native GUI implementations (Win32, Cocoa, GTK) have been removed. The applicatio
 
 ### ✅ User Preferences System
 - ✅ Move to trash after extraction (optional, default: off)
-- ✅ Show completion dialog (optional, default: off)
+- ✅ Auto-close after extraction (optional, default: on)
 - ✅ CLI flags for preference configuration
 
 ### ✅ Smart Duplicate Handling
@@ -195,12 +206,12 @@ Native GUI implementations (Win32, Cocoa, GTK) have been removed. The applicatio
 
 ## Design Decisions
 
-### TUI-Only Architecture
-- Removed all native GUI implementations (Win32Gui, CocoaGui, GtkGui)
-- Mosaic TUI is the sole rendering backend for all platforms
-- Standalone launches (double-click) use NonInteractiveTerminal to avoid raw mode issues
-- CLI launches use full interactive TtyTerminal
-- Simplifies codebase and eliminates platform-specific GUI maintenance
+### Dual UI Architecture
+- **ImGui GUI** for standalone/double-click launches on Windows (DX11 backend, dark title bar, DPI-aware)
+- **Mosaic TUI** for CLI launches across all platforms
+- Standalone launches detected via `GetConsoleProcessList` on Windows
+- GUI subsystem (`-mwindows`) used for ImGui builds to suppress console window
+- cimgui (C bindings for Dear ImGui) built as a static library and linked into the Kotlin/Native executable
 
 ### Standalone Launch Detection (Windows)
 - `GetConsoleProcessList` returns count of processes attached to console

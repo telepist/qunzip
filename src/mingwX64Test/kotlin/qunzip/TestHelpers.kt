@@ -54,7 +54,7 @@ fun executeProcess(
         lpProcessAttributes = null,
         lpThreadAttributes = null,
         bInheritHandles = TRUE,
-        dwCreationFlags = CREATE_NO_WINDOW.toUInt(),
+        dwCreationFlags = DETACHED_PROCESS.toUInt(),
         lpEnvironment = null,
         lpCurrentDirectory = workingDirectory,
         lpStartupInfo = startupInfo.ptr,
@@ -152,10 +152,10 @@ fun getFixturePath(name: String): String {
 }
 
 /**
- * Get path to the debug executable.
+ * Get path to the debug CLI executable.
  */
 fun getExecutablePath(): String {
-    return "${getProjectRoot()}\\build\\bin\\mingwX64\\debugExecutable\\qunzip.exe"
+    return "${getProjectRoot()}\\build\\bin\\mingwX64\\cliDebugExecutable\\qunzip.exe"
 }
 
 /**

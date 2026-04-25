@@ -49,7 +49,7 @@ class ExtractionPipelineIntegrationTest {
 
         val options = ExtractionOptions(
             moveToTrashAfterExtraction = false,
-            showCompletionDialog = false
+            autoCloseAfterExtraction = true
         )
 
         val progressUpdates = extractArchiveUseCase(archivePath, options).toList()
@@ -67,7 +67,7 @@ class ExtractionPipelineIntegrationTest {
 
         val options = ExtractionOptions(
             moveToTrashAfterExtraction = false,
-            showCompletionDialog = false
+            autoCloseAfterExtraction = true
         )
 
         val progressUpdates = extractArchiveUseCase(archivePath, options).toList()
@@ -84,7 +84,7 @@ class ExtractionPipelineIntegrationTest {
 
         val options = ExtractionOptions(
             moveToTrashAfterExtraction = false,
-            showCompletionDialog = false
+            autoCloseAfterExtraction = true
         )
 
         val progressUpdates = extractArchiveUseCase(archivePath, options).toList()
@@ -99,7 +99,7 @@ class ExtractionPipelineIntegrationTest {
 
         val options = ExtractionOptions(
             moveToTrashAfterExtraction = false,
-            showCompletionDialog = false
+            autoCloseAfterExtraction = true
         )
 
         var caughtException: Throwable? = null
