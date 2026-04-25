@@ -7,7 +7,7 @@ import qunzip.presentation.ui.UiRenderer
 import co.touchlab.kermit.Logger
 import kotlinx.cinterop.*
 import platform.windows.ExitProcess
-import platform.windows.GetModuleFileNameA
+import platform.windows.GetModuleFileNameW
 import platform.windows.MAX_PATH
 
 /**
@@ -64,15 +64,20 @@ private fun parentDirOf(path: String): String {
 }
 
 /**
- * Get the current executable's full path on Windows
+ * Get the current executable's full path on Windows.
+ *
+ * Uses the wide-char API so Unicode install paths (accented usernames,
+ * localized "Program Files" on some locales) survive without mojibake.
+ * The path returned here flows into file-association registration and
+ * the PATH-shim install dir, where corruption would be destructive.
  */
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun getCurrentExecutablePath(): String = memScoped {
-    val buffer = allocArray<ByteVar>(MAX_PATH)
-    val length = GetModuleFileNameA(null, buffer, MAX_PATH.toUInt())
+    val buffer = allocArray<UShortVar>(MAX_PATH)
+    val length = GetModuleFileNameW(null, buffer, MAX_PATH.toUInt())
 
     if (length > 0u) {
-        buffer.toKString()
+        buffer.toKStringFromUtf16()
     } else {
         // Fallback: return a placeholder if we can't get the path
         "qunzip.exe"
