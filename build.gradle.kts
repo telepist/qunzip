@@ -239,10 +239,28 @@ tasks.register<Exec>("compileWindowsResources") {
     description = "Compile Windows resource file (icon and version info)"
 }
 
-// Build cimgui static library (ImGui + Win32/DX11 backend)
-tasks.register<Exec>("buildCimgui") {
-    val buildScript = file("libs/imgui-backend/build.sh")
+// Build cimgui static library (ImGui + Win32/DX11 backend).
+// Calls g++ / ar directly so we don't depend on bash being on PATH —
+// IntelliJ's Gradle daemon doesn't inherit Git Bash / MSYS2's PATH the
+// way an interactive terminal does.
+tasks.register("buildCimgui") {
+    val backendDir = file("libs/imgui-backend")
+    val cimguiDir = file("libs/cimgui")
+    val imguiDir = file("libs/cimgui/imgui")
+    val buildDir = file("libs/imgui-backend/build")
     val outputLib = file("libs/imgui-backend/build/libcimgui.a")
+
+    val sources = listOf(
+        file("libs/cimgui/imgui/imgui.cpp"),
+        file("libs/cimgui/imgui/imgui_demo.cpp"),
+        file("libs/cimgui/imgui/imgui_draw.cpp"),
+        file("libs/cimgui/imgui/imgui_tables.cpp"),
+        file("libs/cimgui/imgui/imgui_widgets.cpp"),
+        file("libs/cimgui/imgui/backends/imgui_impl_win32.cpp"),
+        file("libs/cimgui/imgui/backends/imgui_impl_dx11.cpp"),
+        file("libs/cimgui/cimgui.cpp"),
+        file("libs/imgui-backend/imgui_app.cpp"),
+    )
 
     inputs.files(fileTree("libs/imgui-backend") { exclude("build") })
     inputs.files(fileTree("libs/cimgui") {
@@ -251,8 +269,31 @@ tasks.register<Exec>("buildCimgui") {
     })
     outputs.file(outputLib)
 
-    workingDir = file("libs/imgui-backend")
-    commandLine("bash", buildScript.absolutePath)
+    val cxxFlags = listOf(
+        "-O2",
+        "-I${imguiDir.absolutePath}",
+        "-I${imguiDir.absolutePath}/backends",
+        "-I${cimguiDir.absolutePath}",
+        "-I${backendDir.absolutePath}",
+    )
+
+    doLast {
+        buildDir.mkdirs()
+        val objects = mutableListOf<File>()
+        for (src in sources) {
+            val obj = File(buildDir, src.nameWithoutExtension + ".o")
+            logger.lifecycle("Compiling ${src.name}...")
+            project.exec {
+                commandLine(listOf("g++") + cxxFlags + listOf("-c", src.absolutePath, "-o", obj.absolutePath))
+            }
+            objects += obj
+        }
+        logger.lifecycle("Creating static library...")
+        project.exec {
+            commandLine(listOf("ar", "rcs", outputLib.absolutePath) + objects.map { it.absolutePath })
+        }
+        logger.lifecycle("Built: ${outputLib.absolutePath}")
+    }
 
     group = "build"
     description = "Build cimgui static library for ImGui + Win32/DX11"
