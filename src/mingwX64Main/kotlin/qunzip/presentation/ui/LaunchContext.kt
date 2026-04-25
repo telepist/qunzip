@@ -4,9 +4,10 @@ import kotlinx.cinterop.*
 import platform.windows.*
 import platform.posix.getenv
 
-// With -mwindows (GUI subsystem), the process starts with no console.
-// CLI mode must attach to the parent shell's console to get stdio.
-private val ATTACH_PARENT_PROCESS_ID = 0xFFFFFFFF.toUInt()
+// Subsystem differs between build types (see build.gradle.kts):
+//   Release → Windows subsystem: no console at startup; attach to parent for CLI.
+//   Debug   → console subsystem: a console always exists; hide it for GUI launches.
+// All detection here keys off GetConsoleWindow() so the same code handles both.
 
 /**
  * Check if running in a terminal on Windows
@@ -36,26 +37,32 @@ actual fun isTerminal(): Boolean {
     return false
 }
 
+private val ATTACH_PARENT_PROCESS_ID = 0xFFFFFFFF.toUInt()
+
 /**
  * Detect if launched standalone (double-click / file association) on Windows.
  *
- * With GUI subsystem (-mwindows), the process starts with no console.
- * We try to attach to the parent's console: if it succeeds, we were launched
- * from a shell (CLI). If it fails, there is no parent console (standalone).
+ * Release (Windows subsystem) — no console at startup:
+ *   AttachConsole(parent) succeeds → CLI launch from a shell. Detach again.
+ *   AttachConsole(parent) fails    → no parent console, standalone launch.
  *
- * After detection, we immediately detach again — the caller decides
- * whether to reattach (CLI mode) or stay detached (GUI mode).
+ * Debug (console subsystem) — a console always exists:
+ *   GetConsoleProcessList count == 1 → Windows created it for us (standalone).
+ *   count >= 2                       → sharing with a shell (CLI launch).
  */
 @OptIn(ExperimentalForeignApi::class)
-actual fun isStandaloneLaunch(): Boolean {
-    val attached = AttachConsole(ATTACH_PARENT_PROCESS_ID)
-    if (attached != 0) {
-        // Successfully attached — launched from a shell. Detach for now.
-        FreeConsole()
-        return false
+actual fun isStandaloneLaunch(): Boolean = memScoped {
+    if (GetConsoleWindow() == null) {
+        val attached = AttachConsole(ATTACH_PARENT_PROCESS_ID)
+        if (attached != 0) {
+            FreeConsole()
+            return@memScoped false
+        }
+        return@memScoped true
     }
-    // Could not attach — no parent console, standalone launch.
-    return true
+    val pids = allocArray<UIntVar>(16)
+    val count = GetConsoleProcessList(pids.reinterpret(), 16u)
+    count == 1u
 }
 
 /**
@@ -107,34 +114,42 @@ actual fun readLineFromConsole(): String? = memScoped {
 }
 
 /**
- * No-op for GUI subsystem — there's no console to hide.
+ * Hide and detach the console window for GUI mode.
+ * Hides the window first (fast, avoids visible flash), then detaches.
  */
+@OptIn(ExperimentalForeignApi::class)
 actual fun hideConsole() {
-    // With -mwindows, there is no console to hide.
+    val consoleWindow = GetConsoleWindow()
+    if (consoleWindow != null) {
+        ShowWindow(consoleWindow, SW_HIDE)
+    }
+    FreeConsole()
 }
 
 /**
- * Ensure a console is available for TUI/CLI output.
- * Tries to attach to the parent shell's console first.
- * If that fails (standalone launch), allocates a new console.
+ * Ensure a console is available and stdio points to it.
+ *
+ * Debug (console subsystem): a console already exists, just enable VT processing.
+ * Release (Windows subsystem) CLI: attach to the parent shell's console and
+ * reopen stdio so the TUI renders in the user's terminal.
+ * Release standalone TUI (rare): no parent console — allocate a fresh one.
  */
 @OptIn(ExperimentalForeignApi::class)
 actual fun configureStandaloneConsole() {
-    // Try to attach to parent console (CLI launch from shell)
-    if (AttachConsole(ATTACH_PARENT_PROCESS_ID) == 0) {
-        // No parent console (standalone) — allocate one for settings/TUI
-        AllocConsole()
-        SetConsoleTitleA("Qunzip")
+    if (GetConsoleWindow() == null) {
+        // No console — try parent first (CLI), fall back to a fresh window.
+        if (AttachConsole(ATTACH_PARENT_PROCESS_ID) == 0) {
+            AllocConsole()
+            SetConsoleTitleA("Qunzip")
+        }
+        platform.posix.freopen("CONOUT$", "w", platform.posix.stdout)
+        platform.posix.freopen("CONOUT$", "w", platform.posix.stderr)
+        platform.posix.freopen("CONIN$", "r", platform.posix.stdin)
     }
 
-    // Reopen stdio to point to the attached console
-    platform.posix.freopen("CONOUT$", "w", platform.posix.stdout)
-    platform.posix.freopen("CONOUT$", "w", platform.posix.stderr)
-    platform.posix.freopen("CONIN$", "r", platform.posix.stdin)
-
-    // Enable ANSI/VT100 escape sequences on the stdout handle
+    // Enable ANSI/VT100 escape sequences
     val handle = GetStdHandle(STD_OUTPUT_HANDLE)
-    if (handle != INVALID_HANDLE_VALUE) {
+    if (handle != null && handle != INVALID_HANDLE_VALUE) {
         memScoped {
             val mode = alloc<UIntVar>()
             if (GetConsoleMode(handle, mode.ptr) != 0) {

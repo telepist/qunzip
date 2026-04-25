@@ -68,10 +68,24 @@ internal actual fun getCurrentExecutablePath(): String = memScoped {
 }
 
 /**
- * Windows-specific process exit
+ * Path to the GUI executable (QuickUnzip.exe). Resolved as a sibling of the
+ * current executable, so this works regardless of install location.
+ */
+internal actual fun getGuiExecutablePath(): String {
+    val current = getCurrentExecutablePath()
+    val sep = if (current.contains('\\')) '\\' else '/'
+    val parent = current.substringBeforeLast(sep, missingDelimiterValue = "")
+    return if (parent.isEmpty()) "QuickUnzip.exe" else "$parent${sep}QuickUnzip.exe"
+}
+
+/**
+ * Windows-specific process exit.
+ * Flushes all stdio buffers before terminating — ExitProcess() alone
+ * would skip the flush, losing buffered output (e.g., piped/redirected stdout).
  */
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun exitProcess(code: Int): Nothing {
+    platform.posix.fflush(null) // flush all open stdio streams
     ExitProcess(code.toUInt())
     throw RuntimeException("ExitProcess() should not return")
 }

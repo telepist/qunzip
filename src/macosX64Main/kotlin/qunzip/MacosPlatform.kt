@@ -37,3 +37,5 @@ internal actual fun getCurrentExecutablePath(): String {
 internal actual fun createGuiRenderer(): UiRenderer {
     throw UnsupportedOperationException("GUI mode is only available on Windows")
 }
+
+internal actual fun getGuiExecutablePath(): String = getCurrentExecutablePath()

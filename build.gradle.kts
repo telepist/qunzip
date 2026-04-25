@@ -44,16 +44,29 @@ kotlin {
             }
         }
         binaries {
-            executable {
+            // CLI exe — console subsystem. Used from cmd.exe / PowerShell, by tests,
+            // and by the installer for `--register-associations`.
+            executable("cli") {
                 baseName = "qunzip"
-                entryPoint = "qunzip.main"
-                // Link the compiled Windows resource file (contains icon and version info)
-                // The resource file is compiled by the compileWindowsResources task
+                entryPoint = "qunzip.mainCli"
                 linkerOpts(file("build/resources/qunzip.res").absolutePath)
-                // GUI subsystem: no console window on launch.
-                // CLI mode reattaches via AttachConsole(ATTACH_PARENT_PROCESS).
-                linkerOpts("-mwindows")
-                // Link cimgui static library (ImGui + Win32/DX11 backend)
+                linkerOpts(
+                    "-L${project.file("libs/imgui-backend/build").absolutePath}",
+                    "-lcimgui",
+                    "-ld3d11", "-ldxgi", "-ld3dcompiler",
+                    "-limm32",
+                    "-ldwmapi",
+                    "-Wl,-Bstatic", "-lstdc++", "-Wl,-Bdynamic"
+                )
+            }
+
+            // GUI exe — Windows subsystem so file-association double-click and
+            // drag-drop launches show the ImGui dialog with no console flash.
+            executable("gui") {
+                baseName = "QuickUnzip"
+                entryPoint = "qunzip.mainGui"
+                linkerOpts(file("build/resources/qunzip.res").absolutePath)
+                linkerOpts("-Wl,--subsystem,windows")
                 linkerOpts(
                     "-L${project.file("libs/imgui-backend/build").absolutePath}",
                     "-lcimgui",
@@ -144,7 +157,7 @@ tasks.register("e2eTest") {
 
 // Ensure mingwX64Test has the executable and 7zip available
 tasks.named("mingwX64Test") {
-    dependsOn("linkDebugExecutableMingwX64")
+    dependsOn("linkCliDebugExecutableMingwX64", "copy7zipToCliDebugMingwX64")
     dependsOn("download7zip")
 }
 
@@ -154,7 +167,8 @@ tasks.register("buildAll") {
         "linkDebugExecutableMacosArm64",
         "linkDebugExecutableLinuxX64",
         "linkDebugExecutableLinuxArm64",
-        "linkDebugExecutableMingwX64"
+        "linkCliDebugExecutableMingwX64",
+        "linkGuiDebugExecutableMingwX64"
     )
     group = "build"
     description = "Build debug executables for all platforms"
@@ -165,7 +179,8 @@ tasks.register("buildAllRelease") {
         "linkReleaseExecutableMacosArm64",
         "linkReleaseExecutableLinuxX64",
         "linkReleaseExecutableLinuxArm64",
-        "linkReleaseExecutableMingwX64"
+        "linkCliReleaseExecutableMingwX64",
+        "linkGuiReleaseExecutableMingwX64"
     )
     group = "build"
     description = "Build release executables for all platforms"
@@ -291,53 +306,59 @@ tasks.register("download7zip") {
     }
 }
 
-// Copy 7-Zip dependencies and manifest to Windows build directories
-tasks.register<Copy>("copy7zipToDebugMingwX64") {
-    dependsOn("download7zip")
+// Copy 7-Zip dependencies and per-binary side-by-side manifest to each output dir.
+// Windows looks for `<exe>.manifest` next to the exe — so qunzip.exe.manifest for
+// the CLI binary and QuickUnzip.exe.manifest for the GUI binary.
+fun Copy.copyRuntimeResources(intoDir: String, manifestName: String) {
     from("bin/7zip") {
         include("7z.exe", "7z.dll")
     }
     from("src/mingwX64Main/resources") {
         include("qunzip.exe.manifest")
+        rename("qunzip.exe.manifest", manifestName)
     }
-    into("build/bin/mingwX64/debugExecutable")
-    dependsOn("linkDebugExecutableMingwX64")
+    into(intoDir)
 }
 
-tasks.register<Copy>("copy7zipToReleaseMingwX64") {
-    dependsOn("download7zip")
-    from("bin/7zip") {
-        include("7z.exe", "7z.dll")
-    }
-    from("src/mingwX64Main/resources") {
-        include("qunzip.exe.manifest")
-    }
-    into("build/bin/mingwX64/releaseExecutable")
-    dependsOn("linkReleaseExecutableMingwX64")
+tasks.register<Copy>("copy7zipToCliDebugMingwX64") {
+    dependsOn("download7zip", "linkCliDebugExecutableMingwX64")
+    copyRuntimeResources("build/bin/mingwX64/cliDebugExecutable", "qunzip.exe.manifest")
+}
+tasks.register<Copy>("copy7zipToCliReleaseMingwX64") {
+    dependsOn("download7zip", "linkCliReleaseExecutableMingwX64")
+    copyRuntimeResources("build/bin/mingwX64/cliReleaseExecutable", "qunzip.exe.manifest")
+}
+tasks.register<Copy>("copy7zipToGuiDebugMingwX64") {
+    dependsOn("download7zip", "linkGuiDebugExecutableMingwX64")
+    copyRuntimeResources("build/bin/mingwX64/guiDebugExecutable", "QuickUnzip.exe.manifest")
+}
+tasks.register<Copy>("copy7zipToGuiReleaseMingwX64") {
+    dependsOn("download7zip", "linkGuiReleaseExecutableMingwX64")
+    copyRuntimeResources("build/bin/mingwX64/guiReleaseExecutable", "QuickUnzip.exe.manifest")
 }
 
-// Make link tasks depend on copying 7zip files
-tasks.named("linkDebugExecutableMingwX64") {
-    finalizedBy("copy7zipToDebugMingwX64")
-}
-
-tasks.named("linkReleaseExecutableMingwX64") {
-    finalizedBy("copy7zipToReleaseMingwX64")
-}
+tasks.named("linkCliDebugExecutableMingwX64")   { finalizedBy("copy7zipToCliDebugMingwX64") }
+tasks.named("linkCliReleaseExecutableMingwX64") { finalizedBy("copy7zipToCliReleaseMingwX64") }
+tasks.named("linkGuiDebugExecutableMingwX64")   { finalizedBy("copy7zipToGuiDebugMingwX64") }
+tasks.named("linkGuiReleaseExecutableMingwX64") { finalizedBy("copy7zipToGuiReleaseMingwX64") }
 
 // ============================================================================
 // Windows Installer Tasks
 // ============================================================================
 
-// Task to prepare installer resources (staging directory)
+// Task to prepare installer resources (staging directory).
+// Both qunzip.exe (CLI) and QuickUnzip.exe (GUI) ship side-by-side.
 tasks.register<Copy>("prepareInstallerResources") {
-    dependsOn("copy7zipToReleaseMingwX64")
+    dependsOn("copy7zipToCliReleaseMingwX64", "copy7zipToGuiReleaseMingwX64")
 
-    from("build/bin/mingwX64/releaseExecutable") {
-        include("qunzip.exe", "qunzip.exe.manifest", "7z.exe", "7z.dll")
+    from("build/bin/mingwX64/cliReleaseExecutable") {
+        include("qunzip.exe", "qunzip.exe.manifest")
+    }
+    from("build/bin/mingwX64/guiReleaseExecutable") {
+        include("QuickUnzip.exe", "QuickUnzip.exe.manifest")
     }
     from("bin/7zip") {
-        include("License.txt")
+        include("7z.exe", "7z.dll", "License.txt")
     }
     into("build/installer-staging/windows")
 
@@ -385,13 +406,13 @@ tasks.register<Zip>("createPortableZip") {
     dependsOn("prepareInstallerResources")
 
     from("build/installer-staging/windows") {
-        include("qunzip.exe", "7z.exe", "7z.dll", "License.txt")
+        include("qunzip.exe", "QuickUnzip.exe", "7z.exe", "7z.dll", "License.txt")
     }
     from("installer/windows") {
         include("README.txt")
     }
 
-    archiveFileName.set("qunzip-${version}-windows-portable.zip")
+    archiveFileName.set("quick-unzip-${version}-windows-portable.zip")
     destinationDirectory.set(file("build/dist"))
 
     group = "distribution"
