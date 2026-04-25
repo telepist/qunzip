@@ -80,7 +80,8 @@ class ImGuiRenderer : UiRenderer {
 
     private fun drawExtraction(viewModel: ApplicationViewModel) {
         val state = viewModel.extractionViewModel.uiState.value
-        val stage = state.progress?.stage
+        val progress = state.progress
+        val stage = progress?.stage
 
         // Archive name
         val archiveName = state.archive?.name
@@ -101,7 +102,7 @@ class ImGuiRenderer : UiRenderer {
         igSpacing()
 
         // Progress bar — hide during early stages
-        val pct = state.progress?.progressPercentage?.coerceIn(0f, 100f) ?: 0f
+        val pct = progress?.progressPercentage?.coerceIn(0f, 100f) ?: 0f
         if (stage == null || stage == ExtractionStage.ANALYZING || stage == ExtractionStage.STARTING) {
             val msg = when (stage) {
                 ExtractionStage.STARTING -> "Starting..."
@@ -126,20 +127,22 @@ class ImGuiRenderer : UiRenderer {
 
         igSpacing()
 
-        // Status line
+        // Status line.
+        // `progress` is smart-cast non-null in branches where stage matched a
+        // specific ExtractionStage value (since stage = progress?.stage).
         when (stage) {
             ExtractionStage.EXTRACTING -> {
-                val files = "${state.progress?.filesProcessed ?: 0} / ${state.progress?.totalFiles ?: 0} files"
-                val bytes = formatBytes(state.progress?.bytesProcessed ?: 0)
+                val files = "${progress.filesProcessed} / ${progress.totalFiles} files"
+                val bytes = formatBytes(progress.bytesProcessed)
                 safeText("$files  -  $bytes")
-                state.progress?.currentFile?.let { file ->
+                progress.currentFile?.let { file ->
                     val display = if (file.length > 55) "..." + file.takeLast(52) else file
                     safeTextColored(0.5f, 0.5f, 0.5f, 1f, display)
                 }
             }
             ExtractionStage.COMPLETED -> {
-                val totalFiles = state.progress?.totalFiles ?: 0
-                val totalBytes = formatBytes(state.progress?.totalBytes ?: 0)
+                val totalFiles = progress.totalFiles
+                val totalBytes = formatBytes(progress.totalBytes)
                 safeTextColored(0.4f, 0.9f, 0.4f, 1f, "Done! $totalFiles files  -  $totalBytes")
             }
             ExtractionStage.FAILED -> {

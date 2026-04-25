@@ -115,10 +115,10 @@ class ApplicationViewModelTest {
             override suspend fun isReadable(path: String) = true
             override suspend fun isWritable(path: String) = true
             override suspend fun getFileInfo(path: String) = FileInfo(path, 1024L)
-            override fun getParentDirectory(path: String) = ""
-            override fun joinPath(vararg parts: String) = parts.joinToString("/")
+            override fun getParentDirectory(filePath: String) = ""
+            override fun joinPath(vararg components: String) = components.joinToString("/")
             override suspend fun createDirectory(path: String) = true
-            override suspend fun moveToTrash(path: String) = true
+            override suspend fun moveToTrash(filePath: String) = true
             override suspend fun getAvailableSpace(path: String) = 1024L * 1024L * 1024L
             override suspend fun getTrashPath() = "/trash"
             override suspend fun listFiles(directoryPath: String) = emptyList<FileInfo>()
@@ -164,10 +164,10 @@ class ApplicationViewModelTest {
             override suspend fun isReadable(path: String) = true
             override suspend fun isWritable(path: String) = true
             override suspend fun getFileInfo(path: String) = FileInfo(path, 1024L)
-            override fun getParentDirectory(path: String) = ""
-            override fun joinPath(vararg parts: String) = parts.joinToString("/")
+            override fun getParentDirectory(filePath: String) = ""
+            override fun joinPath(vararg components: String) = components.joinToString("/")
             override suspend fun createDirectory(path: String) = true
-            override suspend fun moveToTrash(path: String) = true
+            override suspend fun moveToTrash(filePath: String) = true
             override suspend fun getAvailableSpace(path: String) = 1024L * 1024L * 1024L
             override suspend fun getTrashPath() = "/trash"
             override suspend fun listFiles(directoryPath: String) = emptyList<FileInfo>()

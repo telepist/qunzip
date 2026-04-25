@@ -209,7 +209,7 @@ class WindowsArchiveRepository(
         FileInfo(
             path = path,
             size = statBuf.st_size.toLong(),
-            lastModified = kotlinx.datetime.Instant.fromEpochSeconds(statBuf.st_mtime.toLong()),
+            lastModified = kotlinx.datetime.Instant.fromEpochSeconds(statBuf.st_mtime),
             isReadable = true,
             isDirectory = (statBuf.st_mode.toInt() and S_IFDIR) != 0
         )
