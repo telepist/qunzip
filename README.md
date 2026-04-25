@@ -49,10 +49,10 @@ A fast, simple archive extraction utility inspired by macOS simplicity but built
 
 Windows ships two binaries that share all source code:
 
-| Binary | Subsystem | Used for |
-|--------|-----------|----------|
-| `qunzip.exe`     | Console | CLI (terminal use, `--register-associations`, tests) |
-| `QuickUnzip.exe` | Windows GUI | File-association double-click and drag-drop (no console flash) |
+| Binary           | Subsystem   | Used for                                             |
+|------------------|-------------|------------------------------------------------------|
+| `qunzip.exe`     | Console     | CLI (terminal use, `--register-associations`, tests) |
+| `QuickUnzip.exe` | Windows GUI | File-association double-click and drag-drop          |
 
 ```bash
 # Build both debug binaries
@@ -112,18 +112,18 @@ qunzip --version
 
 ## Supported Archive Formats
 
-| Format | Extensions | Compression |
-|--------|-----------|-------------|
-| **ZIP** | `.zip` | DEFLATE |
-| **7-Zip** | `.7z` | LZMA, LZMA2 |
-| **RAR** | `.rar` | RAR |
-| **TAR** | `.tar` | None (container) |
-| **TAR+GZIP** | `.tar.gz`, `.tgz` | GZIP |
-| **TAR+BZIP2** | `.tar.bz2`, `.tbz2` | BZIP2 |
-| **TAR+XZ** | `.tar.xz`, `.txz` | XZ/LZMA2 |
-| **Cabinet** | `.cab` | MSZIP, LZX |
-| **ARJ** | `.arj` | ARJ |
-| **LZH** | `.lzh` | LH |
+| Format        | Extensions          | Compression      |
+|---------------|---------------------|------------------|
+| **ZIP**       | `.zip`              | DEFLATE          |
+| **7-Zip**     | `.7z`               | LZMA, LZMA2      |
+| **RAR**       | `.rar`              | RAR              |
+| **TAR**       | `.tar`              | None (container) |
+| **TAR+GZIP**  | `.tar.gz`, `.tgz`   | GZIP             |
+| **TAR+BZIP2** | `.tar.bz2`, `.tbz2` | BZIP2            |
+| **TAR+XZ**    | `.tar.xz`, `.txz`   | XZ/LZMA2         |
+| **Cabinet**   | `.cab`              | MSZIP, LZX       |
+| **ARJ**       | `.arj`              | ARJ              |
+| **LZH**       | `.lzh`              | LH               |
 
 ## Building from Source
 
