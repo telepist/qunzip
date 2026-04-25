@@ -131,11 +131,13 @@ class WindowsCliShimRepository(
     }
 }
 
-private fun String.normalizedDir(): String =
+// Visible-for-testing: pure string helpers. Kept top-level (not class
+// members) so they can be exercised without standing up RegistryHelper.
+internal fun String.normalizedDir(): String =
     this.trim()
         .trim('"')                 // strip surrounding quotes (`"C:\Foo"` is a common PATH form)
         .trimEnd('\\', '/')
         .replace('/', '\\')
 
-private fun String.containsDir(dir: String): Boolean =
+internal fun String.containsDir(dir: String): Boolean =
     this.split(';').any { it.normalizedDir().equals(dir, ignoreCase = true) }

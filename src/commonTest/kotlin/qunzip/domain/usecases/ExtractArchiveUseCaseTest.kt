@@ -442,13 +442,109 @@ class ExtractArchiveUseCaseTest {
     // ========== Error Tests ==========
 
     @Test
-    fun `throws error when archive not found`() = runTest {
+    fun `throws error when archive not found and emits FAILED progress before throwing`() = runTest {
         mockArchiveRepository.archiveInfo = null
 
-        assertFailsWith<ExtractionError.FileNotFound> {
-            useCase("/test/nonexistent.zip").toList()
+        // Collect into a list rather than letting toList() rethrow on the
+        // last-emit boundary; we want the partial sequence including the
+        // FAILED emission that the use case's catch arm produces before
+        // re-throwing.
+        val collected = mutableListOf<ExtractionProgress>()
+        val thrown: Throwable? = try {
+            useCase("/test/nonexistent.zip").collect { collected += it }
+            null
+        } catch (e: Throwable) {
+            e
         }
+
+        assertTrue(thrown is ExtractionError.FileNotFound)
         assertTrue(mockNotificationRepository.errorNotificationShown)
+        // The fix in commit 08ed177 / the auto-exit observer relies on a
+        // FAILED stage being emitted on error paths — pin it here.
+        assertEquals(ExtractionStage.FAILED, collected.last().stage)
+    }
+
+    @Test
+    fun `multi-file extraction failure mid-stream cleans up the created directory`() = runTest {
+        // The catch arms in ExtractArchiveUseCase have a "delete createdDir on
+        // failure" branch that nothing was exercising. Force a multi-file
+        // extraction to fail mid-stream and verify the destination dir gets
+        // cleaned up so the user isn't left with an empty / partial folder.
+        val archivePath = "/test/multi.zip"
+        val archive = Archive(archivePath, "multi.zip", ArchiveFormat.ZIP, 4096L)
+        val contents = ArchiveContents(
+            entries = listOf(
+                ArchiveEntry("a.txt", "a.txt", false, 1024L),
+                ArchiveEntry("b.txt", "b.txt", false, 1024L)
+            ),
+            totalSize = 2048L
+        )
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+        mockArchiveRepository.throwInExtractFlow = RuntimeException("unplugged the disk")
+
+        try {
+            useCase(archivePath).collect {}
+        } catch (_: Throwable) {
+            // Expected — we forced it.
+        }
+
+        assertTrue(mockFileSystemRepository.createDirectoryCalled, "destination dir should have been created")
+        assertTrue(
+            mockFileSystemRepository.deleteDirectoryCalled,
+            "createdDir cleanup branch in the catch arm must delete the empty dest"
+        )
+    }
+
+    @Test
+    fun `compound tar with empty outer archive falls back to original path`() = runTest {
+        // tarName == null branch in the compound-tar handling: outer .tar.gz
+        // has no entries (degenerate case), so the use case proceeds with
+        // the original path rather than dereferencing a null intermediate
+        // tar name.
+        val archivePath = "/test/empty.tar.gz"
+        val archive = Archive(archivePath, "empty.tar.gz", ArchiveFormat.TAR_GZ, 64L)
+        val emptyOuter = ArchiveContents(entries = emptyList(), totalSize = 0L)
+
+        mockArchiveRepository.archiveInfoMap[archivePath] = archive
+        mockArchiveRepository.archiveContentsMap[archivePath] = emptyOuter
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        // Should not throw NullPointerException; should not attempt to
+        // delete a non-existent intermediate tar.
+        val progressList = useCase(archivePath).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        assertFalse(
+            mockFileSystemRepository.deletedFiles.any { it.contains(".tar") },
+            "no intermediate tar was created — nothing to delete"
+        )
+    }
+
+    @Test
+    fun `wraps non-ExtractionError throwables as UnknownError and emits FAILED`() = runTest {
+        // The catch (throwable: Throwable) arm in the use case must
+        // convert random failures into ExtractionError.UnknownError so
+        // callers can pattern-match a single error hierarchy.
+        val archivePath = "/test/boom.zip"
+        val archive = Archive(archivePath, "boom.zip", ArchiveFormat.ZIP, 1024L)
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.throwOnGetContents = IllegalStateException("repository exploded")
+
+        val collected = mutableListOf<ExtractionProgress>()
+        val thrown: Throwable? = try {
+            useCase(archivePath).collect { collected += it }
+            null
+        } catch (e: Throwable) {
+            e
+        }
+
+        assertTrue(thrown is ExtractionError.UnknownError, "expected UnknownError, got $thrown")
+        // UnknownError wraps the original message with a "Unknown error: " prefix.
+        assertEquals("Unknown error: repository exploded", thrown.message)
+        assertTrue(mockNotificationRepository.errorNotificationShown)
+        assertEquals(ExtractionStage.FAILED, collected.last().stage)
     }
 
     @Test
@@ -549,10 +645,17 @@ class ExtractArchiveUseCaseTest {
         var lastExtractionPath: String? = null
         var lastPassword: String? = null
 
+        // Optional fault injection — letting tests force the use case's
+        // catch arms (especially the generic Throwable arm).
+        var throwOnGetContents: Throwable? = null
+        var throwInExtractFlow: Throwable? = null
+
         override suspend fun getArchiveInfo(archivePath: String) =
             archiveInfoMap[archivePath] ?: archiveInfo
-        override suspend fun getArchiveContents(archivePath: String, password: String?) =
-            archiveContentsMap[archivePath] ?: archiveContents
+        override suspend fun getArchiveContents(archivePath: String, password: String?): ArchiveContents {
+            throwOnGetContents?.let { throw it }
+            return archiveContentsMap[archivePath] ?: archiveContents
+        }
         override suspend fun testArchive(archivePath: String, password: String?) = true
 
         override suspend fun extractArchive(archivePath: String, destinationPath: String, password: String?): Flow<ExtractionProgress> {
@@ -562,17 +665,25 @@ class ExtractArchiveUseCaseTest {
             lastExtractionPath = destinationPath
             lastPassword = password
             val contents = archiveContentsMap[archivePath] ?: archiveContents
-            return flowOf(
-                ExtractionProgress(archivePath, stage = ExtractionStage.EXTRACTING),
-                ExtractionProgress(
-                    archivePath,
-                    filesProcessed = contents.fileCount,
-                    totalFiles = contents.fileCount,
-                    bytesProcessed = contents.totalSize,
-                    totalBytes = contents.totalSize,
-                    stage = ExtractionStage.EXTRACTING
+            val toThrow = throwInExtractFlow
+            return if (toThrow != null) {
+                kotlinx.coroutines.flow.flow {
+                    emit(ExtractionProgress(archivePath, stage = ExtractionStage.EXTRACTING))
+                    throw toThrow
+                }
+            } else {
+                flowOf(
+                    ExtractionProgress(archivePath, stage = ExtractionStage.EXTRACTING),
+                    ExtractionProgress(
+                        archivePath,
+                        filesProcessed = contents.fileCount,
+                        totalFiles = contents.fileCount,
+                        bytesProcessed = contents.totalSize,
+                        totalBytes = contents.totalSize,
+                        stage = ExtractionStage.EXTRACTING
+                    )
                 )
-            )
+            }
         }
 
         override fun isFormatSupported(format: ArchiveFormat) = true
