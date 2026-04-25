@@ -3,6 +3,7 @@ package qunzip
 import qunzip.presentation.viewmodels.ApplicationViewModel
 import qunzip.presentation.ui.*
 import qunzip.domain.usecases.*
+import qunzip.domain.repositories.CliShimRepository
 import qunzip.domain.repositories.PreferencesRepository
 import kotlinx.coroutines.*
 import co.touchlab.kermit.Logger
@@ -82,6 +83,7 @@ private fun runApp(
                 validateArchiveUseCase = dependencies.validateArchiveUseCase,
                 manageFileAssociationsUseCase = dependencies.manageFileAssociationsUseCase,
                 preferencesRepository = dependencies.preferencesRepository,
+                cliShimRepository = dependencies.cliShimRepository,
                 scope = applicationScope,
                 logger = logger,
                 isStandaloneLaunch = isStandalone
@@ -238,7 +240,8 @@ data class ApplicationDependencies(
     val extractArchiveUseCase: ExtractArchiveUseCase,
     val validateArchiveUseCase: ValidateArchiveUseCase,
     val manageFileAssociationsUseCase: ManageFileAssociationsUseCase,
-    val preferencesRepository: PreferencesRepository
+    val preferencesRepository: PreferencesRepository,
+    val cliShimRepository: CliShimRepository
 )
 
 /**

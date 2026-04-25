@@ -31,8 +31,8 @@ class ImGuiRenderer : UiRenderer {
             "Quick Unzip"
         }
 
-        val windowWidth = if (archivePath != null) 480 else 400
-        val windowHeight = if (archivePath != null) 180 else 200
+        val windowWidth = if (archivePath != null) 480 else 460
+        val windowHeight = if (archivePath != null) 180 else 280
 
         val app = imgui_app_create(initialTitle, windowWidth, windowHeight)
         if (app == null) {
@@ -175,6 +175,20 @@ class ImGuiRenderer : UiRenderer {
         val autoClose = alloc<BooleanVar> { value = prefs.autoCloseAfterExtraction }
         if (igCheckbox("Close automatically after extraction", autoClose.ptr)) {
             settingsVm.setAutoCloseAfterExtraction(autoClose.value)
+        }
+
+        // CLI shim toggle (only shown on platforms that support it)
+        if (state.cliShimSupported) {
+            val shim = alloc<BooleanVar> { value = state.cliShimInstalled }
+            val disabled = state.isCliShimWorking
+            if (disabled) igBeginDisabled(true)
+            if (igCheckbox("Add `qunzip` command to PATH", shim.ptr)) {
+                settingsVm.setCliShimInstalled(shim.value)
+            }
+            if (disabled) igEndDisabled()
+            val hint = state.cliShimMessage
+                ?: "Lets you run `qunzip <archive>` from any terminal."
+            safeTextColored(0.55f, 0.55f, 0.55f, 1f, hint)
         }
 
         igSpacing()

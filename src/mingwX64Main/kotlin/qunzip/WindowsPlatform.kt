@@ -41,14 +41,26 @@ internal actual fun initializeDependencies(): ApplicationDependencies {
         fileAssociationRepository = fileAssociationRepository
     )
 
+    // The CLI shim adds the install directory (parent of the running .exe)
+    // to user PATH so `qunzip` is reachable from any new shell.
+    val cliShimRepository = WindowsCliShimRepository(
+        installDirProvider = { parentDirOf(getCurrentExecutablePath()) }
+    )
+
     logger.i { "Windows dependencies initialized successfully" }
 
     return ApplicationDependencies(
         extractArchiveUseCase = extractArchiveUseCase,
         validateArchiveUseCase = validateArchiveUseCase,
         manageFileAssociationsUseCase = manageFileAssociationsUseCase,
-        preferencesRepository = preferencesRepository
+        preferencesRepository = preferencesRepository,
+        cliShimRepository = cliShimRepository
     )
+}
+
+private fun parentDirOf(path: String): String {
+    val sep = if (path.contains('\\')) '\\' else '/'
+    return path.substringBeforeLast(sep, missingDelimiterValue = "")
 }
 
 /**

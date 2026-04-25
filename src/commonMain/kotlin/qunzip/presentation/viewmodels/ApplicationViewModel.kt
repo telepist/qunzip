@@ -4,6 +4,8 @@ import qunzip.domain.entities.ExtractionStage
 import qunzip.domain.usecases.ExtractArchiveUseCase
 import qunzip.domain.usecases.ManageFileAssociationsUseCase
 import qunzip.domain.usecases.ValidateArchiveUseCase
+import qunzip.domain.repositories.CliShimRepository
+import qunzip.domain.repositories.NoOpCliShimRepository
 import qunzip.domain.repositories.PreferencesRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -20,6 +22,7 @@ class ApplicationViewModel(
     private val manageFileAssociationsUseCase: ManageFileAssociationsUseCase,
     private val preferencesRepository: PreferencesRepository,
     private val scope: CoroutineScope,
+    private val cliShimRepository: CliShimRepository = NoOpCliShimRepository(),
     private val logger: Logger = Logger.withTag("ApplicationViewModel"),
     private val isStandaloneLaunch: Boolean = false
 ) {
@@ -41,6 +44,7 @@ class ApplicationViewModel(
     val settingsViewModel = SettingsViewModel(
         preferencesRepository = preferencesRepository,
         scope = scope,
+        cliShimRepository = cliShimRepository,
         logger = logger
     )
 

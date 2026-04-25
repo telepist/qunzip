@@ -23,6 +23,7 @@ const val KEY_ALL_ACCESS = platform.windows.KEY_ALL_ACCESS
 
 // Registry value types
 const val REG_SZ = platform.windows.REG_SZ
+const val REG_EXPAND_SZ = platform.windows.REG_EXPAND_SZ
 
 // Registry options
 const val REG_OPTION_NON_VOLATILE = platform.windows.REG_OPTION_NON_VOLATILE
@@ -89,21 +90,47 @@ class RegistryHelper {
     }
 
     /**
-     * Sets a string value in the registry
+     * Sets a string value in the registry. Defaults to REG_SZ; pass
+     * REG_EXPAND_SZ for values like PATH that can contain %vars%.
      * Returns true on success
      */
-    fun setStringValue(hKey: HKEY?, valueName: String?, data: String): Boolean = memScoped {
+    fun setStringValue(
+        hKey: HKEY?,
+        valueName: String?,
+        data: String,
+        valueType: Int = REG_SZ
+    ): Boolean = memScoped {
         val dataBytes = data.encodeToByteArray().toUByteArray()
         val result = RegSetValueExA(
             hKey,
             valueName,
             0u,
-            REG_SZ.toUInt(),
+            valueType.toUInt(),
             dataBytes.refTo(0),
             (dataBytes.size + 1).toUInt() // Include null terminator
         )
 
         result == ERROR_SUCCESS
+    }
+
+    /**
+     * Reads a string registry value along with its type code (REG_SZ vs
+     * REG_EXPAND_SZ). Used by the PATH editor so a write preserves the
+     * original type.
+     */
+    fun getStringValueWithType(hKey: HKEY?, valueName: String?): Pair<String, Int>? = memScoped {
+        val dataSize = alloc<UIntVar>()
+        val dataType = alloc<UIntVar>()
+        dataSize.value = 0u
+
+        var result = RegQueryValueExA(hKey, valueName, null, dataType.ptr, null, dataSize.ptr)
+        if (result != ERROR_SUCCESS || dataSize.value == 0u) return null
+
+        val buffer = allocArray<UByteVar>(dataSize.value.toInt())
+        result = RegQueryValueExA(hKey, valueName, null, dataType.ptr, buffer, dataSize.ptr)
+        if (result != ERROR_SUCCESS) return null
+
+        buffer.reinterpret<ByteVar>().toKString() to dataType.value.toInt()
     }
 
     /**
@@ -196,10 +223,10 @@ class RegistryHelper {
     fun isRunningAsAdmin(): Boolean {
         // Try to open HKEY_CLASSES_ROOT for writing
         // If we can, we have admin privileges
-        val testKey = createKey(HKEY_CLASSES_ROOT, "Software\\Qunzip\\AdminTest")
+        val testKey = createKey(HKEY_CLASSES_ROOT, "Software\\QuickUnzip\\AdminTest")
         if (testKey != null) {
             closeKey(testKey)
-            deleteKey(HKEY_CLASSES_ROOT, "Software\\Qunzip\\AdminTest")
+            deleteKey(HKEY_CLASSES_ROOT, "Software\\QuickUnzip\\AdminTest")
             return true
         }
         return false

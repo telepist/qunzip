@@ -13,6 +13,7 @@ private const val BOX_WIDTH = 52
 private enum class MenuItem(val label: String) {
     MOVE_TO_TRASH("Move archive to trash after extraction"),
     AUTO_CLOSE("Close automatically after extraction"),
+    CLI_SHIM("Add `qunzip` command to PATH"),
     QUIT("Quit")
 }
 
@@ -27,7 +28,11 @@ fun SettingsTui(
     val prefs = settingsState.preferences
 
     var selectedIndex by remember { mutableStateOf(0) }
-    val menuItems = MenuItem.entries
+    // Hide the CLI shim row on platforms where install/uninstall is a no-op,
+    // so we don't offer a switch that does nothing.
+    val menuItems = MenuItem.entries.filter { item ->
+        item != MenuItem.CLI_SHIM || settingsState.cliShimSupported
+    }
 
     Column(
         modifier = Modifier.onKeyEvent { event ->
@@ -47,6 +52,9 @@ fun SettingsTui(
                         }
                         MenuItem.AUTO_CLOSE -> {
                             settingsViewModel.setAutoCloseAfterExtraction(!prefs.autoCloseAfterExtraction)
+                        }
+                        MenuItem.CLI_SHIM -> {
+                            settingsViewModel.setCliShimInstalled(!settingsState.cliShimInstalled)
                         }
                         MenuItem.QUIT -> {
                             onExit()
@@ -88,6 +96,13 @@ fun SettingsTui(
                     ToggleRow(
                         label = item.label,
                         enabled = prefs.autoCloseAfterExtraction,
+                        selected = isSelected
+                    )
+                }
+                MenuItem.CLI_SHIM -> {
+                    ToggleRow(
+                        label = item.label,
+                        enabled = settingsState.cliShimInstalled,
                         selected = isSelected
                     )
                 }
