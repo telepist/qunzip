@@ -1,4 +1,4 @@
-# Makefile for Qunzip - Cross-platform Archive Extraction Utility
+# Makefile for Quick Unzip - Cross-platform Archive Extraction Utility
 # Automatically detects current platform and builds accordingly
 
 .PHONY: help build run clean build-all build-release run-release test \
@@ -89,7 +89,7 @@ endif
 # Default target - show help
 help:
 	@echo "=================================="
-	@echo "Qunzip Build System"
+	@echo "Quick Unzip Build System"
 	@echo "=================================="
 	@echo ""
 	@echo "Detected Platform: $(PLATFORM) ($(UNAME_S) $(UNAME_M))"
@@ -139,7 +139,7 @@ endif
 
 # Build and run the application
 run: build
-	@echo "Running Qunzip..."
+	@echo "Running Quick Unzip..."
 	@echo ""
 	$(BUILD_PATH)
 
@@ -151,7 +151,7 @@ test:
 
 # Build debug executables for all platforms
 build-all:
-	@echo "Building Qunzip for all platforms..."
+	@echo "Building Quick Unzip for all platforms..."
 	$(GRADLEW) buildAll
 	@echo ""
 	@echo "All builds complete!"
@@ -175,7 +175,7 @@ endif
 
 # Build and run release version
 run-release: build-release
-	@echo "Running Qunzip (RELEASE)..."
+	@echo "Running Quick Unzip (RELEASE)..."
 	@echo ""
 	$(RELEASE_BUILD_PATH)
 
@@ -187,12 +187,12 @@ build-windows:
 	@echo "GUI: build/bin/mingwX64/guiDebugExecutable/QuickUnzip.exe"
 
 build-linux:
-	@echo "Building Qunzip for Linux x64..."
+	@echo "Building Quick Unzip for Linux x64..."
 	$(GRADLEW) linkDebugExecutableLinuxX64
 	@echo "Build complete: build/bin/linuxX64/debugExecutable/qunzip.kexe"
 
 build-macos:
-	@echo "Building Qunzip for macOS ARM64..."
+	@echo "Building Quick Unzip for macOS ARM64..."
 	$(GRADLEW) linkDebugExecutableMacosArm64
 	@echo "Build complete: build/bin/macosArm64/debugExecutable/qunzip.kexe"
 
@@ -224,7 +224,7 @@ build-windows-installer:
 
 run-windows-installer: build-windows-installer
 	@echo "Running Windows installer..."
-	@INSTALLER=$$(ls -t $(INSTALLER_OUTPUT_DIR)/qunzip-setup-*.exe 2>/dev/null | head -1); \
+	@INSTALLER=$$(ls -t $(INSTALLER_OUTPUT_DIR)/quick-unzip-setup-*.exe 2>/dev/null | head -1); \
 	if [ -z "$$INSTALLER" ]; then \
 		echo "Error: No installer found in $(INSTALLER_OUTPUT_DIR)"; \
 		exit 1; \

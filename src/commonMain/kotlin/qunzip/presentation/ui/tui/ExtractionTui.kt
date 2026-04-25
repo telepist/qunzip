@@ -59,7 +59,7 @@ fun ExtractionTui(viewModel: ExtractionViewModel, showCloseHint: Boolean = false
     ) {
         Text("")
         // Header
-        Header("qunzip")
+        Header("Quick Unzip")
         Text("")
 
         // Archive info

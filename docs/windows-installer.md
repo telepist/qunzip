@@ -1,10 +1,10 @@
 # Windows Installer Build Guide
 
-This guide explains how to build the Windows installer for Qunzip.
+This guide explains how to build the Windows installer for Quick Unzip.
 
 ## Overview
 
-Qunzip provides two distribution formats for Windows:
+Quick Unzip provides two distribution formats for Windows:
 
 1. **Windows Installer** (`qunzip-setup-{version}.exe`) - Full installation with file associations
 2. **Portable ZIP** (`qunzip-{version}-windows-portable.zip`) - No installation required
@@ -172,7 +172,7 @@ To add/remove formats, edit the `[Registry]` section in `qunzip.iss`.
 3. Run installer on clean Windows VM (recommended) or local machine
 4. Follow installation wizard
 5. Check installation:
-   - Files at `C:\Program Files\Qunzip\`
+   - Files at `C:\Program Files\Quick Unzip\`
    - Start Menu shortcut
    - Add/Remove Programs entry
 
@@ -181,16 +181,16 @@ To add/remove formats, edit the `[Registry]` section in `qunzip.iss`.
 1. Download test archives (.zip, .7z, .rar)
 2. Double-click an archive
 3. Verify:
-   - Console window opens with Qunzip TUI
+   - Console window opens with Quick Unzip TUI
    - Archive is extracted with progress display
    - Original moved to Recycle Bin (if setting enabled)
-4. Check "Open With" context menu shows Qunzip
+4. Check "Open With" context menu shows Quick Unzip
 
 ### Uninstallation Test
 
 1. Uninstall via "Add or Remove Programs"
 2. Verify:
-   - All files removed from `C:\Program Files\Qunzip\`
+   - All files removed from `C:\Program Files\Quick Unzip\`
    - File associations removed
    - Start Menu shortcuts removed
    - Registry entries cleaned up

@@ -1,4 +1,4 @@
-# Qunzip Development Progress
+# Quick Unzip Development Progress
 
 ## Current Status
 

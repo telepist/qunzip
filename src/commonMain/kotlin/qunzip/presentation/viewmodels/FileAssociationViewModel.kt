@@ -122,7 +122,11 @@ class FileAssociationViewModel(
             try {
                 val associations = manageFileAssociationsUseCase.checkAssociations()
                 val qunzipAssociations = associations.filter {
-                    it.applicationName.contains("Qunzip", ignoreCase = true)
+                    val name = it.applicationName
+                    // Accept both the current display name and the pre-rename name
+                    // so existing installs aren't seen as foreign after upgrade.
+                    name.contains("Quick Unzip", ignoreCase = true) ||
+                        name.contains("Qunzip", ignoreCase = true)
                 }
 
                 _uiState.value = _uiState.value.copy(

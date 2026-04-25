@@ -43,13 +43,30 @@ A fast, simple archive extraction utility inspired by macOS simplicity but built
 
 ## Installation
 
-> **Note**: Pre-built releases are not yet available. To use Qunzip, you must build from source (see "Building from Source" section below).
+> **Note**: Pre-built releases are not yet available. To use Quick Unzip, you must build from source (see "Building from Source" section below).
 
 ### Windows (Build from Source)
 
-1. Build the executable: `./gradlew linkReleaseExecutableMingwX64`
-2. Executable location: `build/bin/mingwX64/releaseExecutable/qunzip.exe`
-3. (Optional) Build installer: `./gradlew packageWindows` (requires Inno Setup 6)
+Windows ships two binaries that share all source code:
+
+| Binary | Subsystem | Used for |
+|--------|-----------|----------|
+| `qunzip.exe`     | Console | CLI (terminal use, `--register-associations`, tests) |
+| `QuickUnzip.exe` | Windows GUI | File-association double-click and drag-drop (no console flash) |
+
+```bash
+# Build both debug binaries
+./gradlew linkCliDebugExecutableMingwX64 linkGuiDebugExecutableMingwX64
+
+# Or build via Make (handles both)
+make build
+```
+
+Output:
+- `build/bin/mingwX64/cliDebugExecutable/qunzip.exe`
+- `build/bin/mingwX64/guiDebugExecutable/QuickUnzip.exe`
+
+For a release build + installer, run `./gradlew packageWindows` (requires Inno Setup 6).
 
 ### macOS
 
@@ -63,28 +80,24 @@ Coming soon! Implementation pending.
 
 ### Automatic Extraction (Recommended)
 
-Simply **double-click** any supported archive file. Qunzip will:
+Simply **double-click** any supported archive file. Quick Unzip will:
 1. Extract the contents intelligently
 2. Optionally move the original archive to trash (if enabled in settings)
 
 ### Command Line
 
 ```bash
-# Extract an archive (auto-detects GUI or TUI mode)
+# Extract an archive — renders the Mosaic TUI in the terminal
 qunzip path/to/archive.zip
 
-# Force GUI or TUI mode
-qunzip --gui path/to/archive.zip
-qunzip --tui path/to/archive.zip
-
-# Open settings (run without arguments)
+# Open settings TUI (run without arguments)
 qunzip
 
 # Configure preferences
 qunzip --set-trash-on       # Move archives to trash after extraction
 qunzip --set-trash-off      # Keep archives after extraction (default)
-qunzip --set-dialog-on      # Show completion dialog
-qunzip --set-dialog-off     # Silent exit after extraction (default)
+qunzip --set-dialog-on      # Keep window open after extraction
+qunzip --set-dialog-off     # Close window automatically (default)
 
 # Register file associations (Windows, requires admin)
 qunzip --register-associations
@@ -92,10 +105,8 @@ qunzip --register-associations
 # Unregister file associations
 qunzip --unregister-associations
 
-# Show help
+# Show help / version
 qunzip --help
-
-# Show version
 qunzip --version
 ```
 
@@ -126,8 +137,8 @@ qunzip --version
 ### Build Commands
 
 ```bash
-# Build release executable for Windows
-./gradlew linkReleaseExecutableMingwX64
+# Build release executables for Windows (both binaries)
+./gradlew linkCliReleaseExecutableMingwX64 linkGuiReleaseExecutableMingwX64
 
 # Build for all platforms
 ./gradlew buildAllRelease
@@ -143,9 +154,11 @@ qunzip --version
 ```
 
 **Output locations:**
-- Executables: `build/bin/{platform}/releaseExecutable/`
-- Windows installer: `build/installer-output/qunzip-setup-{version}.exe`
-- Portable ZIP: `build/dist/qunzip-{version}-windows-portable.zip`
+- Windows CLI: `build/bin/mingwX64/cliReleaseExecutable/qunzip.exe`
+- Windows GUI: `build/bin/mingwX64/guiReleaseExecutable/QuickUnzip.exe`
+- Linux/macOS:  `build/bin/{platform}/releaseExecutable/`
+- Windows installer: `build/installer-output/quick-unzip-setup-{version}.exe`
+- Portable ZIP: `build/dist/quick-unzip-{version}-windows-portable.zip`
 
 See [docs/windows-installer.md](docs/windows-installer.md) for detailed build instructions.
 
@@ -176,7 +189,7 @@ docs/                       # Documentation
 
 ## Architecture
 
-Qunzip follows **Clean Architecture** principles:
+Quick Unzip follows **Clean Architecture** principles:
 
 - **Domain Layer**: Platform-agnostic business logic
 - **Data Layer**: Platform-specific repository implementations

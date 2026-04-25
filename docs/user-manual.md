@@ -1,10 +1,10 @@
 # User Manual
 
-> **Note**: This manual describes the functionality of Qunzip. The project is currently under active development. **Windows is functional** with native GUI (ImGui/DX11) for double-click usage and Mosaic TUI for terminal usage. Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
+> **Note**: This manual describes the functionality of Quick Unzip. The project is currently under active development. **Windows is functional** with native GUI (ImGui/DX11) for double-click usage and Mosaic TUI for terminal usage. Linux and macOS platform implementations are pending. See [development-progress.md](development-progress.md) for current status.
 
 ## Overview
 
-**Qunzip** is a cross-platform archive extraction utility that provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives. Inspired by macOS simplicity, it works intelligently to extract your files exactly where you expect them.
+**Quick Unzip** is a cross-platform archive extraction utility that provides seamless, double-click extraction for ZIP, 7Z, RAR, and TAR archives. Inspired by macOS simplicity, it works intelligently to extract your files exactly where you expect them.
 
 ## Installation
 
@@ -35,7 +35,7 @@
 
 ### User Interface
 
-Qunzip provides two UI modes depending on how you launch it:
+Quick Unzip provides two UI modes depending on how you launch it:
 
 - **GUI mode** (Windows): A native ImGui/DX11 window appears when you double-click or drag-drop an archive onto `qunzip.exe`. This provides a polished graphical experience with progress bars, archive info, and status indicators.
 - **TUI mode**: When you run `qunzip` from a terminal, it uses a Mosaic-based terminal UI with real-time progress updates, colors, and inline rendering.
@@ -184,8 +184,8 @@ qunzip --unregister-associations  # Unregister all formats
 ```
 
 **Manual Configuration**:
-- **Windows**: Right-click archive → "Open with" → "Choose another app" → Select Qunzip
-- **macOS**: Right-click archive → "Get Info" → "Open with" → Select Qunzip → "Change All"
+- **Windows**: Right-click archive → "Open with" → "Choose another app" → Select Quick Unzip
+- **macOS**: Right-click archive → "Get Info" → "Open with" → Select Quick Unzip → "Change All"
 - **Linux**: Depends on desktop environment (usually in file manager preferences)
 
 ## Troubleshooting

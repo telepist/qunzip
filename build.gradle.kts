@@ -385,7 +385,7 @@ tasks.register<Exec>("buildWindowsInstaller") {
     commandLine(
         iscc,
         "/O" + file("build/installer-output").absolutePath,
-        "/F" + "qunzip-setup-${version}",
+        "/F" + "quick-unzip-setup-${version}",
         file("installer/windows/qunzip.iss").absolutePath
     )
 

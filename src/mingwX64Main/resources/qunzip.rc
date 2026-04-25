@@ -1,12 +1,9 @@
-// Windows resource file for Qunzip executable
-// This embeds the application icon into the .exe file
+// Windows resource file for Quick Unzip — shared by both qunzip.exe (CLI)
+// and QuickUnzip.exe (GUI). The OriginalFilename is intentionally generic
+// since the same .res is linked into both binaries.
 
-// Icon resource (ID 1 is the default application icon)
-// The icon file should be created at installer/windows/icon.ico
-// windres is called with --include-dir pointing to the icon directory
 1 ICON "icon.ico"
 
-// Version information
 1 VERSIONINFO
 FILEVERSION 1,0,0,0
 PRODUCTVERSION 1,0,0,0
@@ -20,13 +17,13 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "Qunzip"
-            VALUE "FileDescription", "Qunzip Archive Extraction Utility"
+            VALUE "CompanyName", "Quick Unzip"
+            VALUE "FileDescription", "Quick Unzip - Archive Extraction Utility"
             VALUE "FileVersion", "1.0.0"
-            VALUE "InternalName", "qunzip"
+            VALUE "InternalName", "quickunzip"
             VALUE "LegalCopyright", "MIT License"
-            VALUE "OriginalFilename", "qunzip.exe"
-            VALUE "ProductName", "Qunzip"
+            VALUE "OriginalFilename", "QuickUnzip.exe"
+            VALUE "ProductName", "Quick Unzip"
             VALUE "ProductVersion", "1.0.0"
         END
     END

@@ -18,7 +18,7 @@ open class ManageFileAssociationsUseCase(
                     val result = fileAssociationRepository.registerAssociation(
                         extension = extension,
                         applicationPath = applicationPath,
-                        applicationName = "Qunzip",
+                        applicationName = "Quick Unzip",
                         description = format.displayName
                     )
 
@@ -95,9 +95,13 @@ open class ManageFileAssociationsUseCase(
     suspend fun isAssociatedWithQunzip(extension: String): Boolean {
         return try {
             val association = fileAssociationRepository.getAssociation(extension)
-            association?.applicationName?.contains("Qunzip", ignoreCase = true) == true
+            val name = association?.applicationName ?: return false
+            // Accept both the current display name and the pre-rename name so
+            // existing installs aren't seen as foreign after upgrade.
+            name.contains("Quick Unzip", ignoreCase = true) ||
+                name.contains("Qunzip", ignoreCase = true)
         } catch (e: Exception) {
-            logger.e(e) { "Error checking if .$extension is associated with Qunzip" }
+            logger.e(e) { "Error checking if .$extension is associated with Quick Unzip" }
             false
         }
     }

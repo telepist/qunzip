@@ -140,7 +140,7 @@ actual fun configureStandaloneConsole() {
         // No console — try parent first (CLI), fall back to a fresh window.
         if (AttachConsole(ATTACH_PARENT_PROCESS_ID) == 0) {
             AllocConsole()
-            SetConsoleTitleA("Qunzip")
+            SetConsoleTitleA("Quick Unzip")
         }
         platform.posix.freopen("CONOUT$", "w", platform.posix.stdout)
         platform.posix.freopen("CONOUT$", "w", platform.posix.stderr)

@@ -26,9 +26,9 @@ class ImGuiRenderer : UiRenderer {
         val archivePath = extractionVm.uiState.value.currentArchive
         val initialTitle = if (archivePath != null) {
             val name = archivePath.substringAfterLast("/").substringAfterLast("\\")
-            "qunzip - $name"
+            "Quick Unzip - $name"
         } else {
-            "qunzip settings"
+            "Quick Unzip"
         }
 
         val windowWidth = if (archivePath != null) 480 else 400

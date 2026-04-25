@@ -3,7 +3,7 @@ package qunzip.domain.entities
 import kotlinx.serialization.Serializable
 
 /**
- * User preferences for the Qunzip application.
+ * User preferences for the Quick Unzip application.
  * Persisted to a JSON file in the user's config directory.
  */
 @Serializable

@@ -65,7 +65,7 @@ fun SettingsTui(
         Text("")
 
         // Header
-        SettingsHeader("qunzip settings")
+        SettingsHeader("Quick Unzip Settings")
         Text("")
 
         // Preferences section
