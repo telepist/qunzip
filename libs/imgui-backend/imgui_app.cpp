@@ -94,10 +94,24 @@ extern "C" ImGuiApp* imgui_app_create(const char* title, int width, int height) 
     memset(app, 0, sizeof(ImGuiApp));
     g_app = app;
 
+    // Load embedded icon (resource ID 1, see qunzip.rc) at the right sizes
+    // for the title bar (small) and Alt+Tab / taskbar (big). LoadImageW
+    // returns NULL if the resource isn't compiled in (icon-less builds);
+    // assigning NULL is safe — Windows just falls back to the default.
+    HMODULE hInst = GetModuleHandleW(nullptr);
+    HICON hIconBig = (HICON)LoadImageW(
+        hInst, MAKEINTRESOURCEW(1), IMAGE_ICON,
+        GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON),
+        LR_DEFAULTCOLOR);
+    HICON hIconSmall = (HICON)LoadImageW(
+        hInst, MAKEINTRESOURCEW(1), IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
+        LR_DEFAULTCOLOR);
+
     // Register window class
     app->wc = { sizeof(WNDCLASSEXW), CS_CLASSDC, WndProc, 0L, 0L,
-                 GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr,
-                 L"ImGuiAppClass", nullptr };
+                 hInst, hIconBig, nullptr, nullptr, nullptr,
+                 L"ImGuiAppClass", hIconSmall };
     RegisterClassExW(&app->wc);
 
     // Convert title to wide string
@@ -105,9 +119,38 @@ extern "C" ImGuiApp* imgui_app_create(const char* title, int width, int height) 
     wchar_t* wtitle = new wchar_t[len];
     MultiByteToWideChar(CP_UTF8, 0, title, -1, wtitle, len);
 
-    // Create window
+    // Create window — non-resizable: drop the thick-frame resize handles
+    // and the maximize button, keep title, close, minimize. ImGui content
+    // is laid out for fixed dimensions.
+    const DWORD style = WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
+
+    // The width/height parameters are the desired CLIENT area in DPI-scaled
+    // (logical) pixels. With per-monitor V2 awareness Windows treats the
+    // values passed to CreateWindowEx as physical pixels, so we have to
+    // scale them ourselves and adjust for the title bar.
+    UINT dpi = 96;
+    {
+        typedef UINT (WINAPI *GetDpiForSystemFn)();
+        HMODULE user32 = GetModuleHandleW(L"user32.dll");
+        if (user32) {
+            auto fn = (GetDpiForSystemFn)GetProcAddress(user32, "GetDpiForSystem");
+            if (fn) dpi = fn();
+        }
+    }
+    RECT rc = { 0, 0, MulDiv(width, dpi, 96), MulDiv(height, dpi, 96) };
+    {
+        typedef BOOL (WINAPI *AdjustWindowRectExForDpiFn)(LPRECT, DWORD, BOOL, DWORD, UINT);
+        HMODULE user32 = GetModuleHandleW(L"user32.dll");
+        AdjustWindowRectExForDpiFn fn = nullptr;
+        if (user32) fn = (AdjustWindowRectExForDpiFn)GetProcAddress(user32, "AdjustWindowRectExForDpi");
+        if (fn) fn(&rc, style, FALSE, 0, dpi);
+        else AdjustWindowRectEx(&rc, style, FALSE, 0);
+    }
+    const int outerWidth = rc.right - rc.left;
+    const int outerHeight = rc.bottom - rc.top;
+
     app->hwnd = CreateWindowExW(0, app->wc.lpszClassName, wtitle,
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height,
+        style, CW_USEDEFAULT, CW_USEDEFAULT, outerWidth, outerHeight,
         nullptr, nullptr, app->wc.hInstance, nullptr);
     delete[] wtitle;
 

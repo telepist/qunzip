@@ -4,6 +4,7 @@ package qunzip.presentation.ui
 
 import cimgui.*
 import kotlinx.cinterop.*
+import kotlinx.coroutines.flow.first
 import qunzip.presentation.viewmodels.ApplicationViewModel
 import qunzip.presentation.viewmodels.ApplicationMode
 import qunzip.domain.entities.ExtractionStage
@@ -20,19 +21,28 @@ private fun safeTextColored(r: Float, g: Float, b: Float, a: Float, text: String
 
 class ImGuiRenderer : UiRenderer {
     override suspend fun render(viewModel: ApplicationViewModel) {
-        val extractionVm = viewModel.extractionViewModel
+        // Wait for the application to settle into a mode before creating the
+        // OS window — handleApplicationStart populates targetFile / mode
+        // asynchronously, so reading them synchronously here would always
+        // see the initial defaults and we'd size the window for the wrong
+        // mode (e.g. settings dimensions for an extraction launch).
+        val initialAppState = viewModel.uiState.first { !it.isStarting }
+        val isExtraction = initialAppState.mode == ApplicationMode.EXTRACTION
 
-        // Build window title from archive name or settings
-        val archivePath = extractionVm.uiState.value.currentArchive
-        val initialTitle = if (archivePath != null) {
-            val name = archivePath.substringAfterLast("/").substringAfterLast("\\")
-            "Quick Unzip - $name"
+        val initialTitle = if (isExtraction) {
+            val name = initialAppState.targetFile
+                ?.substringAfterLast("/")?.substringAfterLast("\\")
+                ?: ""
+            if (name.isNotEmpty()) "Quick Unzip - $name" else "Quick Unzip"
         } else {
             "Quick Unzip"
         }
 
-        val windowWidth = if (archivePath != null) 480 else 460
-        val windowHeight = if (archivePath != null) 180 else 280
+        // Extraction view is wider but shorter than the settings panel —
+        // settings has more rows (preferences + supported formats), the
+        // extraction view only needs archive name + progress + status.
+        val windowWidth = if (isExtraction) 520 else 460
+        val windowHeight = if (isExtraction) 140 else 220
 
         val app = imgui_app_create(initialTitle, windowWidth, windowHeight)
         if (app == null) {
