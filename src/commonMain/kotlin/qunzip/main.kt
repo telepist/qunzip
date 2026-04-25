@@ -52,6 +52,11 @@ fun mainCli(args: Array<String>) {
  */
 fun mainGui(args: Array<String>) {
     Logger.setMinSeverity(Severity.Assert)
+    // UiConfig.enableTuiMode() suppresses println-based notifications that
+    // would otherwise interleave with the TUI display. The GUI binary
+    // doesn't render a TUI, but extraction code still emits those println
+    // notifications, and the GUI has no console to print them to anyway —
+    // suppressing keeps stderr clean if a parent shell is somehow attached.
     UiConfig.enableTuiMode()
     val logger = Logger.withTag("MainGui")
 

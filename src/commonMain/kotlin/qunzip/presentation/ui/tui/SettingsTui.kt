@@ -54,7 +54,12 @@ fun SettingsTui(
                             settingsViewModel.setAutoCloseAfterExtraction(!prefs.autoCloseAfterExtraction)
                         }
                         MenuItem.CLI_SHIM -> {
-                            settingsViewModel.setCliShimInstalled(!settingsState.cliShimInstalled)
+                            // Ignore rapid space-presses while a previous toggle
+                            // is still writing to the registry — otherwise we
+                            // can issue concurrent registry writes that race.
+                            if (!settingsState.isCliShimWorking) {
+                                settingsViewModel.setCliShimInstalled(!settingsState.cliShimInstalled)
+                            }
                         }
                         MenuItem.QUIT -> {
                             onExit()

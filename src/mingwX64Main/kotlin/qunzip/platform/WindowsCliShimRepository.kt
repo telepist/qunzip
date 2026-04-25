@@ -32,12 +32,20 @@ class WindowsCliShimRepository(
 
     override suspend fun isInstalled(): Boolean {
         val dir = installDirProvider().normalizedDir()
+        if (dir.isEmpty()) return false
         val current = readUserPath() ?: return false
         return current.containsDir(dir)
     }
 
     override suspend fun install(): ShimResult {
         val dir = installDirProvider().normalizedDir()
+        if (dir.isEmpty()) {
+            // Defensive: refuse to write an empty entry into PATH. This can
+            // happen if getCurrentExecutablePath() falls back to a bare
+            // filename (no parent), e.g. in unusual launch contexts.
+            logger.w { "Refusing to add empty install dir to PATH" }
+            return ShimResult(success = false, message = "Could not determine install directory")
+        }
         val (current, type) = readUserPathWithType() ?: ("" to REG_EXPAND_SZ)
 
         if (current.containsDir(dir)) {
@@ -45,7 +53,10 @@ class WindowsCliShimRepository(
             return ShimResult(success = true, message = "Already on PATH")
         }
 
-        val updated = if (current.isBlank()) dir else "$current;$dir"
+        // Append with a single semicolon separator. Avoid a leading or
+        // double semicolon if `current` is blank or already trailing.
+        val trimmed = current.trimEnd(';')
+        val updated = if (trimmed.isEmpty()) dir else "$trimmed;$dir"
         val ok = writeUserPath(updated, type)
         if (ok) {
             broadcastEnvironmentChange()
@@ -57,6 +68,7 @@ class WindowsCliShimRepository(
 
     override suspend fun uninstall(): ShimResult {
         val dir = installDirProvider().normalizedDir()
+        if (dir.isEmpty()) return ShimResult(success = true, message = "Not on PATH")
         val (current, type) = readUserPathWithType() ?: return ShimResult(success = true, message = "PATH not set")
 
         if (!current.containsDir(dir)) {
@@ -120,7 +132,10 @@ class WindowsCliShimRepository(
 }
 
 private fun String.normalizedDir(): String =
-    this.trim().trimEnd('\\', '/').replace('/', '\\')
+    this.trim()
+        .trim('"')                 // strip surrounding quotes (`"C:\Foo"` is a common PATH form)
+        .trimEnd('\\', '/')
+        .replace('/', '\\')
 
 private fun String.containsDir(dir: String): Boolean =
     this.split(';').any { it.normalizedDir().equals(dir, ignoreCase = true) }

@@ -217,11 +217,17 @@ Root: HKCR; Subkey: ".tar\OpenWithProgids"; ValueType: string; ValueName: "Quick
 Root: HKCU; Subkey: "Software\Classes\.tar"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tar"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.tar\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tar"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCR; Subkey: ".tar.gz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tar_gz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".tar.gz\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tar_gz"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCR; Subkey: ".tar.bz2"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tar_bz2"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".tar.bz2\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tar_bz2"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCR; Subkey: ".tar.xz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tar_xz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".tar.xz\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tar_xz"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.tar.gz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tar_gz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tar.gz\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tar_gz"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.tar.bz2"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tar_bz2"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tar.bz2\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tar_bz2"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.tar.xz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tar_xz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tar.xz\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tar_xz"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCR; Subkey: ".gz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.gz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCR; Subkey: ".gz\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.gz"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.gz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.gz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
@@ -235,17 +241,29 @@ Root: HKCR; Subkey: ".xz\OpenWithProgids"; ValueType: string; ValueName: "QuickU
 Root: HKCU; Subkey: "Software\Classes\.xz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.xz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.xz\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.xz"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCR; Subkey: ".tgz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tgz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".tgz\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tgz"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCR; Subkey: ".tbz2"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tbz2"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".tbz2\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tbz2"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCR; Subkey: ".txz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.txz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".txz\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.txz"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.tgz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tgz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tgz\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tgz"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.tbz2"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.tbz2"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.tbz2\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.tbz2"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.txz"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.txz"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.txz\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.txz"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCR; Subkey: ".cab"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.cab"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".cab\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.cab"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCR; Subkey: ".arj"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.arj"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".arj\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.arj"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCR; Subkey: ".lzh"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.lzh"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
+Root: HKCR; Subkey: ".lzh\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.lzh"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.cab"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.cab"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.cab\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.cab"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.arj"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.arj"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.arj\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.arj"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 Root: HKCU; Subkey: "Software\Classes\.lzh"; ValueType: string; ValueName: ""; ValueData: "QuickUnzip.lzh"; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
+Root: HKCU; Subkey: "Software\Classes\.lzh\OpenWithProgids"; ValueType: string; ValueName: "QuickUnzip.lzh"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc; Check: not IsAdminInstallMode
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);

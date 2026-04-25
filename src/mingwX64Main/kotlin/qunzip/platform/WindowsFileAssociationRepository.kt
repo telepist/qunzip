@@ -84,16 +84,27 @@ class WindowsFileAssociationRepository(
 
         try {
             val rootKeyPair = registryHelper.getFileAssociationRootKey()
-            val progId = progIdForExtension(extension)
+            val (rootKey, prefix) = rootKeyPair
 
-            // Remove the extension association
-            if (!removeExtensionAssociation(extension, progId, rootKeyPair, registryHelper)) {
+            // Try to remove the extension association for the current ProgID
+            // and any legacy ProgID prefixes that older installs may have
+            // written. Without this, `--unregister-associations` would leave
+            // pre-rename `Qunzip.*` keys behind on standalone CLI invocations.
+            val sanitized = extension.removePrefix(".").replace('.', '_')
+            val progIds = listOf("QuickUnzip.$sanitized", "Qunzip.$sanitized")
+
+            var removedAny = false
+            for (progId in progIds) {
+                if (removeExtensionAssociation(extension, progId, rootKeyPair, registryHelper)) {
+                    removedAny = true
+                }
+                // Always best-effort delete the ProgID key tree itself —
+                // safe if it doesn't exist.
+                registryHelper.deleteKeyTree(rootKey, "${prefix}${progId}")
+            }
+            if (!removedAny) {
                 logger.w { "Could not remove association for .$extension (may not exist)" }
             }
-
-            // Also clean up the ProgID key itself
-            val (rootKey, prefix) = rootKeyPair
-            registryHelper.deleteKeyTree(rootKey, "${prefix}${progId}")
 
             // Notify Windows Shell of the change
             registryHelper.notifyShellAssociationChanged()
