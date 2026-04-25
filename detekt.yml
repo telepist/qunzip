@@ -1,0 +1,92 @@
+# Detekt configuration overrides. Anything not listed here uses the
+# default config (because buildUponDefaultConfig = true in build.gradle.kts).
+#
+# The aim here is to silence rules that are noise for this codebase, not to
+# water it down: keep the rules that catch real bugs (UnusedPrivateMember,
+# real complexity creep, etc.), drop the ones that flag intentional patterns
+# (Composable PascalCase, ImGui color literals, deliberate wildcard imports
+# for `platform.windows.*` etc.).
+
+naming:
+  # Composables (Mosaic + intended-PascalCase functions) trip this; kotlinx
+  # interop uses uppercase Win32 names too.
+  FunctionNaming:
+    active: false
+
+  # We have a few files that house several small related declarations
+  # (UiConfig in LaunchContext.kt, ProcessResult in TestHelpers.kt).
+  MatchingDeclarationName:
+    active: false
+
+style:
+  # K/N interop deliberately wildcards platform.windows.*, kotlinx.cinterop.*,
+  # etc. — the alternative is hundreds of explicit imports per file.
+  WildcardImport:
+    active: false
+
+  # ImGui colors and rect/vec2 dimensions are full of intentional float
+  # literals; named constants would be busywork.
+  MagicNumber:
+    active: false
+
+  # `return@launch` early-outs are common in viewmodels; `2` is too tight.
+  ReturnCount:
+    active: false
+
+  # TODOs in Linux/macOS platform stubs are precisely the right marker.
+  ForbiddenComment:
+    active: false
+
+  MaxLineLength:
+    # Wider than detekt's default of 120 — interface signatures with several
+    # String parameters and the test mocks that mirror them push past 140.
+    maxLineLength: 160
+
+  # Win32 message loops (readLineFromConsole, executeProcess polling) use
+  # multiple break/continue by design; refactoring them is worse than the
+  # original.
+  LoopWithTooManyJumpStatements:
+    active: false
+
+empty-blocks:
+  # No-op LaunchContext functions on platforms where there's nothing to do.
+  EmptyFunctionBlock:
+    active: false
+
+exceptions:
+  # Top-level error handlers in coroutines / use cases legitimately catch
+  # Exception to convert into a UI error state.
+  TooGenericExceptionCaught:
+    active: false
+
+  # `throw RuntimeException("…")` after a no-return native call (ExitProcess
+  # or exit) is the Kotlin idiom to satisfy the Nothing return type.
+  TooGenericExceptionThrown:
+    active: false
+
+  # ExtractArchiveUseCase uses `error is ExtractionError.PasswordRequired`
+  # inside a catch block to discriminate sealed-class errors. Refactoring
+  # to multiple catch clauses is doable but invasive.
+  InstanceOfCheckForException:
+    active: false
+
+complexity:
+  # Repository interfaces deliberately have many methods.
+  TooManyFunctions:
+    active: false
+
+  # We have a few legitimately long viewmodel / composable functions; tune
+  # rather than disable so future regressions still show up.
+  LongMethod:
+    threshold: 150
+  CyclomaticComplexMethod:
+    threshold: 35
+  NestedBlockDepth:
+    threshold: 5
+
+  # ApplicationViewModel constructor takes 8 dependencies (use cases +
+  # repositories + scope + logger + flag). A config object would just
+  # rename the boilerplate.
+  LongParameterList:
+    constructorThreshold: 9
+    functionThreshold: 7

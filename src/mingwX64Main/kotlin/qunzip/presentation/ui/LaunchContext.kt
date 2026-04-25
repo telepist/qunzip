@@ -37,7 +37,10 @@ actual fun isTerminal(): Boolean {
     return false
 }
 
-private val ATTACH_PARENT_PROCESS_ID = 0xFFFFFFFF.toUInt()
+private const val ATTACH_PARENT_PROCESS_ID: UInt = 0xFFFFFFFFu
+
+// Win32 console mode flag — not exposed by the K/N MinGW headers we use.
+private const val ENABLE_VIRTUAL_TERMINAL_PROCESSING: UInt = 0x0004u
 
 /**
  * Detect if launched standalone (double-click / file association) on Windows.
@@ -153,7 +156,6 @@ actual fun configureStandaloneConsole() {
         memScoped {
             val mode = alloc<UIntVar>()
             if (GetConsoleMode(handle, mode.ptr) != 0) {
-                val ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004u
                 SetConsoleMode(handle, mode.value or ENABLE_VIRTUAL_TERMINAL_PROCESSING)
             }
         }

@@ -2,6 +2,27 @@ plugins {
     kotlin("multiplatform") version "2.3.10"
     kotlin("plugin.serialization") version "2.3.10"
     kotlin("plugin.compose") version "2.3.10"
+    id("io.gitlab.arturbosch.detekt") version "1.23.7"
+}
+
+detekt {
+    // Run on all our Kotlin source — common + per-platform mains and tests.
+    source.setFrom(
+        files(
+            "src/commonMain/kotlin",
+            "src/commonTest/kotlin",
+            "src/mingwX64Main/kotlin",
+            "src/mingwX64Test/kotlin",
+            "src/linuxX64Main/kotlin",
+            "src/linuxArm64Main/kotlin",
+            "src/macosX64Main/kotlin",
+            "src/macosArm64Main/kotlin",
+        )
+    )
+    parallel = true
+    buildUponDefaultConfig = true
+    config.setFrom(files("detekt.yml"))
+    autoCorrect = false
 }
 
 // Application version

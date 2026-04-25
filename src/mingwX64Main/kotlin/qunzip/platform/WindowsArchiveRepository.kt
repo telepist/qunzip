@@ -11,6 +11,22 @@ import platform.posix.*
 import platform.windows.*
 import co.touchlab.kermit.Logger
 
+// Substrings 7-Zip prints (case-insensitive) when an archive is encrypted
+// or the supplied password is wrong. Used to translate exit-code failures
+// into ExtractionError.PasswordRequired so the GUI can re-prompt.
+private val PASSWORD_INDICATORS = listOf(
+    "wrong password",
+    "can not open encrypted archive",
+    "data error in encrypted file",
+    "enter password",
+    "encrypted",
+)
+
+private fun String.indicatesPasswordError(): Boolean {
+    val lower = lowercase()
+    return PASSWORD_INDICATORS.any { lower.contains(it) }
+}
+
 /**
  * Windows implementation of ArchiveRepository using 7zip command-line tool
  * Uses bundled 7z.exe from bin/7zip/ directory relative to the executable
@@ -114,7 +130,10 @@ class WindowsArchiveRepository(
             // Get archive info for progress tracking
             logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Starting getArchiveContents..." }
             val contents = getArchiveContents(archivePath, password)
-            logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] getArchiveContents completed: ${contents.fileCount} files, ${contents.totalSize} bytes" }
+            logger.d {
+                "[${startMark.elapsedNow().inWholeMilliseconds}ms] getArchiveContents completed: " +
+                    "${contents.fileCount} files, ${contents.totalSize} bytes"
+            }
             val totalFiles = contents.fileCount
 
             trySend(ExtractionProgress(
@@ -187,11 +206,7 @@ class WindowsArchiveRepository(
         // Run 7z t with empty password (-p"") and capture output to check for password indicators.
         // The empty password prevents 7zip from blocking on stdin waiting for user input.
         val output = execute7zipCommand(listOf("t", "-p\"\"", archivePath))
-        val lowerOutput = output.lowercase()
-        return lowerOutput.contains("wrong password") ||
-                lowerOutput.contains("can not open encrypted archive") ||
-                lowerOutput.contains("enter password") ||
-                lowerOutput.contains("encrypted")
+        return output.indicatesPasswordError()
     }
 
     // Private helper methods
@@ -312,16 +327,6 @@ class WindowsArchiveRepository(
         // Empty password (-p"") is harmless for non-encrypted archives.
         val passwordArg = " -p\"${password ?: ""}\""
         val command = "$sevenZipPath t \"$archivePath\"$passwordArg"
-        return executeCommandSilently(command)
-    }
-
-    private fun execute7zipExtract(archivePath: String, destinationPath: String, password: String? = null): Int {
-        // Use -o flag for output directory (no space between -o and path)
-        // Note: Conflict handling is done at application level, not by 7zip's -aou flag
-        // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
-        val passwordArg = " -p\"${password ?: ""}\""
-        val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y$passwordArg"
-        logger.d { "Extraction command: $command" }
         return executeCommandSilently(command)
     }
 
@@ -472,14 +477,8 @@ class WindowsArchiveRepository(
         val code = exitCode.value.toInt()
 
         // Check for password errors before returning
-        if (code != 0) {
-            val lowerOutput = allOutput.toString().lowercase()
-            if (lowerOutput.contains("wrong password") ||
-                lowerOutput.contains("can not open encrypted archive") ||
-                lowerOutput.contains("data error in encrypted file") ||
-                lowerOutput.contains("encrypted")) {
-                throw ExtractionError.PasswordRequired("Wrong password")
-            }
+        if (code != 0 && allOutput.toString().indicatesPasswordError()) {
+            throw ExtractionError.PasswordRequired("Wrong password")
         }
 
         return@memScoped code
@@ -668,7 +667,9 @@ private fun getBundled7zipPath(): String {
         }
 
         throw ExtractionError.IOError(
-            "Bundled 7z.exe not found. Ensure 7z.exe and 7z.dll are in the same directory as qunzip.exe, or in bin/7zip/ for development. Checked: ${candidates.distinct().joinToString()}"
+            "Bundled 7z.exe not found. Ensure 7z.exe and 7z.dll are in the same directory as " +
+                "qunzip.exe, or in bin/7zip/ for development. " +
+                "Checked: ${candidates.distinct().joinToString()}"
         )
     }
 }
