@@ -54,19 +54,13 @@ open class ValidateArchiveUseCase(
                 lastModified = fileInfo.lastModified
             )
 
-            // Test archive integrity using 7zip
-            val isValid = archiveRepository.testArchive(archivePath)
-            if (!isValid) {
-                // Check if the failure is because a password is required
-                if (archiveRepository.isPasswordRequired(archivePath)) {
-                    logger.i { "Archive requires a password: ${archive.name}" }
-                    return ValidationResult.PasswordRequired(archive)
-                }
-                return ValidationResult.Invalid(
-                    error = ExtractionError.CorruptedArchive("Archive integrity check failed")
-                )
-            }
-
+            // Note: we intentionally do NOT run a full archive integrity test here.
+            // `7z t` decompresses + CRCs every entry, which for large archives (multi-GB
+            // 7z ROM dumps, etc.) blocks the UI on "Preparing..." for minutes before
+            // extraction can begin. Corruption is rare and will surface during the
+            // subsequent listing/extraction calls with a real error; password-required
+            // archives are detected by `getArchiveContents` (header-encrypted) or by the
+            // extractor itself (content-only encryption).
             logger.i { "Archive validation successful: ${archive.name} (${archive.format.displayName})" }
 
             ValidationResult.Valid(archive)

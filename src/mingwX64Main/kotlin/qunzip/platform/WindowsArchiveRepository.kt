@@ -83,6 +83,16 @@ class WindowsArchiveRepository(
         // Parse 7zip output to extract file entries
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Parsing output (${output.length} chars)..." }
         val entries = parse7zipListOutput(output)
+
+        // Header-encrypted archives fail the list step itself — surface that as a
+        // password prompt so the validator no longer has to run `7z t` upfront.
+        // Only treat the output as a password error when no entries were produced;
+        // otherwise a benign filename containing "encrypted" could trip the check.
+        if (entries.isEmpty() && output.indicatesPasswordError()) {
+            throw ExtractionError.PasswordRequired(
+                if (password.isNullOrEmpty()) "Password required" else "Wrong password"
+            )
+        }
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Parsing completed: ${entries.size} entries" }
 
         val totalSize = entries.sumOf { it.size }
