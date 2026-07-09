@@ -212,6 +212,21 @@ class ApplicationViewModelTest {
         assertTrue(state.showCloseHint)
     }
 
+    @Test
+    fun `unsupported file reaches FAILED and does not hang`() = testScope.runTest {
+        // A .txt is not a supported archive → the app must reach a FAILED state
+        // (so the renderer can exit / show an error) instead of hanging forever
+        // on "Preparing…".
+        viewModel.handleApplicationStart(listOf("/test/notes.txt"))
+        advanceUntilIdle()
+
+        val extraction = viewModel.extractionViewModel.uiState.value
+        assertEquals(ExtractionStage.FAILED, extraction.progress?.stage)
+        assertNotNull(extraction.error)
+        // CLI (non-standalone) must flip shouldExit so the render loop terminates.
+        assertTrue(viewModel.uiState.value.shouldExit, "expected shouldExit after unsupported file")
+    }
+
     // --- Mocks ---
 
     private class MockExtractArchiveUseCase : ExtractArchiveUseCase(

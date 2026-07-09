@@ -204,6 +204,27 @@ class ExtractionViewModel(
         }
     }
 
+    /**
+     * Mark extraction as failed without running a flow — used for pre-extraction
+     * failures (e.g. an unsupported file type or a file-open error) so the UI
+     * reaches a FAILED state instead of hanging on "Preparing…" forever. The
+     * FAILED progress drives the ApplicationViewModel auto-exit observer.
+     */
+    fun reportError(archivePath: String, message: String) {
+        logger.w { "Reporting extraction error for $archivePath: $message" }
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                isExtracting = false,
+                isWaitingForPassword = false,
+                currentArchive = archivePath,
+                error = message,
+                progress = ExtractionProgress(archivePath, stage = ExtractionStage.FAILED)
+            )
+        }
+        _events.tryEmit(ExtractionEvent.ExtractionFailed(null))
+    }
+
     fun submitPassword(password: String) {
         val archivePath = _uiState.value.currentArchive ?: return
         logger.i { "Password submitted, retrying extraction" }

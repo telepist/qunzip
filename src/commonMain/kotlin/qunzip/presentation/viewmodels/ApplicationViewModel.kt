@@ -68,7 +68,17 @@ class ApplicationViewModel(
                     }
                     is FileAssociationEvent.UnsupportedFileOpened -> {
                         logger.w { "Unsupported file opened: ${event.filePath}" }
+                        // Surface a FAILED state so the UI shows an error and can
+                        // exit, rather than hanging on "Preparing…" forever.
+                        extractionViewModel.reportError(event.filePath, "Unsupported file type")
                         _events.tryEmit(ApplicationEvent.UnsupportedFileOpened(event.filePath))
+                    }
+                    is FileAssociationEvent.FileOpenError -> {
+                        logger.e(event.error) { "Error opening file: ${event.filePath}" }
+                        extractionViewModel.reportError(
+                            event.filePath,
+                            event.error.message ?: "Could not open file"
+                        )
                     }
                     else -> { /* Handle other file association events if needed */ }
                 }

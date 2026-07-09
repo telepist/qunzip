@@ -119,7 +119,11 @@ private fun runApp(
             if (useGui) {
                 exitProcess(0)
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Catch Throwable, not Exception: ExtractionError extends Throwable
+            // (e.g. a missing bundled 7z.exe) and the not-yet-implemented
+            // Linux/macOS platforms throw NotImplementedError (an Error). Either
+            // would otherwise escape as an uncaught crash with no error surfaced.
             logger.e(e) { "Fatal error during application startup" }
             exitProcess(1)
         } finally {
@@ -147,7 +151,7 @@ private fun handleRegisterAssociations() {
                 }
                 exitProcess(1)
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             println("Error: ${e.message}")
             exitProcess(1)
         }
@@ -165,7 +169,7 @@ private fun handleUnregisterAssociations() {
                 println("Successfully unregistered all $totalCount file associations")
             }
             exitProcess(0)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             println("Error: ${e.message}")
             exitProcess(1)
         }
@@ -185,7 +189,7 @@ private fun handleSetTrash(enabled: Boolean) {
                 println("Error: Failed to save preferences")
                 exitProcess(1)
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             println("Error: ${e.message}")
             exitProcess(1)
         }
@@ -206,7 +210,7 @@ private fun handleSetAutoClose(autoClose: Boolean) {
                 println("Error: Failed to save preferences")
                 exitProcess(1)
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             println("Error: ${e.message}")
             exitProcess(1)
         }
