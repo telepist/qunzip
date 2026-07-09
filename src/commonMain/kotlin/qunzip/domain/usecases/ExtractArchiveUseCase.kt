@@ -65,7 +65,11 @@ open class ExtractArchiveUseCase(
             }
 
             val contents = archiveRepository.getArchiveContents(actualArchivePath, password)
-            val strategy = determineExtractionStrategy(contents)
+            // Pure decision: strategy + output name. `compoundTempDir != null`
+            // means we took the two-stage tar path (foo.tar.gz), not a bare .gz.
+            val plan = ExtractionPlanner.plan(archive, contents, isCompoundTar = compoundTempDir != null)
+            val strategy = plan.strategy
+            val targetName = plan.targetName
 
             // Check disk space
             val requiredSpace = contents.totalSize
@@ -81,21 +85,7 @@ open class ExtractArchiveUseCase(
                 stage = ExtractionStage.EXTRACTING
             ))
 
-            // Determine target path and check for conflicts
-            // For compound formats, use the original archive name (without .tar.gz etc.)
-            // Only strip a double extension (foo.tar.gz -> foo) when we actually
-            // took the two-stage tar path; a bare foo.sql.gz uses the single entry.
-            val archiveNameForFolder = if (compoundTempDir != null) {
-                archive.name.substringBeforeLast('.').substringBeforeLast('.')
-            } else {
-                archive.nameWithoutExtension
-            }
-
-            val targetName = when (strategy) {
-                ExtractionStrategy.SINGLE_FILE_TO_DIRECTORY -> contents.topLevelEntries.first().name
-                ExtractionStrategy.SINGLE_FOLDER_TO_DIRECTORY -> contents.topLevelEntries.first().name
-                ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER -> archiveNameForFolder
-            }
+            // Determine target path and check for conflicts.
             val targetPath = fileSystemRepository.joinPath(parentDir, targetName)
             val hasConflict = fileSystemRepository.exists(targetPath)
 
@@ -218,20 +208,6 @@ open class ExtractArchiveUseCase(
             )
             emit(ExtractionProgress(archivePath = archivePath, stage = ExtractionStage.FAILED))
             throw error
-        }
-    }
-
-    private fun determineExtractionStrategy(contents: ArchiveContents): ExtractionStrategy {
-        return when {
-            contents.topLevelEntries.size == 1 && contents.topLevelEntries.first().isFile -> {
-                ExtractionStrategy.SINGLE_FILE_TO_DIRECTORY
-            }
-            contents.topLevelEntries.size == 1 && contents.topLevelEntries.first().isDirectory -> {
-                ExtractionStrategy.SINGLE_FOLDER_TO_DIRECTORY
-            }
-            else -> {
-                ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER
-            }
         }
     }
 
