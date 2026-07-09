@@ -121,9 +121,7 @@ private fun runApp(
             renderer.render(applicationViewModel)
             // Exit nonzero when the extraction ended in failure, so scripts (and
             // the file-association caller) can detect it.
-            val failed = applicationViewModel.extractionViewModel
-                .uiState.value.progress?.stage == qunzip.domain.entities.ExtractionStage.FAILED
-            exitProcess(if (failed) 1 else 0)
+            exitProcess(if (applicationViewModel.didExtractionFail) 1 else 0)
         } catch (e: Throwable) {
             // Catch Throwable, not Exception: ExtractionError extends Throwable
             // (e.g. a missing bundled 7z.exe) and the not-yet-implemented

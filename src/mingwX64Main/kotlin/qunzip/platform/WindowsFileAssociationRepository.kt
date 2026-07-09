@@ -2,6 +2,7 @@ package qunzip.platform
 
 import qunzip.domain.entities.FileAssociation
 import qunzip.domain.entities.AssociationResult
+import qunzip.domain.entities.ArchiveFormat
 import qunzip.domain.repositories.FileAssociationRepository
 import co.touchlab.kermit.Logger
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -204,13 +205,7 @@ class WindowsFileAssociationRepository(
         logger.d { "Getting all associations" }
 
         try {
-            // Get all common archive extensions
-            val commonExtensions = listOf(
-                "zip", "7z", "rar", "tar", "tar.gz", "tar.bz2", "tar.xz",
-                "gz", "bz2", "xz", "tgz", "tbz2", "txz", "cab", "arj", "lzh"
-            )
-
-            commonExtensions.mapNotNull { ext ->
+            supportedExtensions.mapNotNull { ext ->
                 getAssociation(ext)
             }
         } catch (e: Exception) {
@@ -237,10 +232,9 @@ class WindowsFileAssociationRepository(
     }
 
     companion object {
-        private val supportedExtensions = listOf(
-            "zip", "7z", "rar", "tar", "tar.gz", "tar.bz2", "tar.xz",
-            "gz", "bz2", "xz", "tgz", "tbz2", "txz", "cab", "arj", "lzh"
-        )
+        // Single source of truth: every extension any ArchiveFormat declares.
+        private val supportedExtensions: List<String> =
+            ArchiveFormat.entries.flatMap { it.extensions }.distinct()
 
         /**
          * Maps a file extension to its current (post-rename) ProgID.

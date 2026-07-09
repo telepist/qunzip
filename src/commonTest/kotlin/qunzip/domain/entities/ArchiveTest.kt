@@ -115,20 +115,20 @@ class ArchiveFormatTest {
     }
 
     @Test
-    fun `isCompoundTarFormat returns true for compressed tar formats`() {
-        assertTrue(ArchiveFormat.TAR_GZ.isCompoundTarFormat)
-        assertTrue(ArchiveFormat.TAR_BZ2.isCompoundTarFormat)
-        assertTrue(ArchiveFormat.TAR_XZ.isCompoundTarFormat)
+    fun `mayContainTar returns true for compressed tar formats`() {
+        assertTrue(ArchiveFormat.TAR_GZ.mayContainTar)
+        assertTrue(ArchiveFormat.TAR_BZ2.mayContainTar)
+        assertTrue(ArchiveFormat.TAR_XZ.mayContainTar)
     }
 
     @Test
-    fun `isCompoundTarFormat returns false for non-compound formats`() {
-        assertFalse(ArchiveFormat.ZIP.isCompoundTarFormat)
-        assertFalse(ArchiveFormat.SEVEN_ZIP.isCompoundTarFormat)
-        assertFalse(ArchiveFormat.RAR.isCompoundTarFormat)
-        assertFalse(ArchiveFormat.TAR.isCompoundTarFormat)
-        assertFalse(ArchiveFormat.CAB.isCompoundTarFormat)
-        assertFalse(ArchiveFormat.ARJ.isCompoundTarFormat)
-        assertFalse(ArchiveFormat.LZH.isCompoundTarFormat)
+    fun `mayContainTar returns false for non-compound formats`() {
+        assertFalse(ArchiveFormat.ZIP.mayContainTar)
+        assertFalse(ArchiveFormat.SEVEN_ZIP.mayContainTar)
+        assertFalse(ArchiveFormat.RAR.mayContainTar)
+        assertFalse(ArchiveFormat.TAR.mayContainTar)
+        assertFalse(ArchiveFormat.CAB.mayContainTar)
+        assertFalse(ArchiveFormat.ARJ.mayContainTar)
+        assertFalse(ArchiveFormat.LZH.mayContainTar)
     }
 }

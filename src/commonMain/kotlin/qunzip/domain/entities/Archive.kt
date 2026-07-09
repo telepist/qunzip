@@ -25,8 +25,13 @@ enum class ArchiveFormat(val extensions: List<String>, val displayName: String) 
     ARJ(listOf("arj"), "ARJ Archive"),
     LZH(listOf("lzh"), "LZH Archive");
 
-    /** Whether this is a compressed tar format that requires two-stage extraction (decompress + untar). */
-    val isCompoundTarFormat: Boolean
+    /**
+     * Whether this format *may* wrap a tar and thus need two-stage extraction
+     * (decompress, then untar). It only "may" because these extensions also cover
+     * a bare compressed single file (e.g. backup.sql.gz), which is extracted
+     * directly — the use case checks the inner entry to decide.
+     */
+    val mayContainTar: Boolean
         get() = this == TAR_GZ || this == TAR_BZ2 || this == TAR_XZ
 
     companion object {

@@ -54,6 +54,10 @@ class ApplicationViewModel(
     private val _events = MutableSharedFlow<ApplicationEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<ApplicationEvent> = _events.asSharedFlow()
 
+    /** Whether the extraction ended in failure — drives the process exit code. */
+    val didExtractionFail: Boolean
+        get() = extractionViewModel.uiState.value.progress?.stage == ExtractionStage.FAILED
+
     init {
         // Observe child ViewModel events and coordinate.
         // Use UNDISPATCHED start so collectors subscribe synchronously before any

@@ -41,7 +41,7 @@ open class ExtractArchiveUseCase(
             // 7-Zip extracts it directly. So only take the two-stage path when the
             // inner entry is actually a .tar; otherwise treat it as a normal archive.
             val actualArchivePath: String
-            val innerName = if (archive.format.isCompoundTarFormat) {
+            val innerName = if (archive.format.mayContainTar) {
                 archiveRepository.getArchiveContents(archivePath, password)
                     .topLevelEntries.firstOrNull()?.name
             } else null
