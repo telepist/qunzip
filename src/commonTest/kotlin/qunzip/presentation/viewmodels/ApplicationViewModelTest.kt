@@ -282,15 +282,6 @@ class ApplicationViewModelTest {
     }
 
     private class MockValidateArchiveUseCase : ValidateArchiveUseCase(
-        archiveRepository = object : ArchiveRepository {
-            override suspend fun getArchiveInfo(archivePath: String) = null
-            override suspend fun getArchiveContents(archivePath: String, password: String?) = ArchiveContents(emptyList(), 0L)
-            override suspend fun extractArchive(archivePath: String, destinationPath: String, password: String?) = flowOf<ExtractionProgress>()
-            override suspend fun testArchive(archivePath: String, password: String?) = true
-            override fun isFormatSupported(format: ArchiveFormat) = true
-            override fun getSupportedFormats() = ArchiveFormat.entries
-            override suspend fun isPasswordRequired(archivePath: String) = false
-        },
         fileSystemRepository = object : FileSystemRepository {
             override suspend fun exists(path: String) = true
             override suspend fun isReadable(path: String) = true

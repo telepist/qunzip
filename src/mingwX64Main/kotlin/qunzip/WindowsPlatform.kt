@@ -33,7 +33,6 @@ internal actual fun initializeDependencies(): ApplicationDependencies {
     )
 
     val validateArchiveUseCase = ValidateArchiveUseCase(
-        archiveRepository = archiveRepository,
         fileSystemRepository = fileSystemRepository
     )
 

@@ -22,7 +22,7 @@ internal fun buildWindowsCommandLine(program: String, args: List<String>): Strin
  * precedes a quote (including the closing one).
  */
 internal fun quoteWindowsArg(arg: String): String {
-    if (arg.isNotEmpty() && arg.none { it == ' ' || it == '\t' || it == '"' }) {
+    if (arg.isNotEmpty() && arg.none(::needsWindowsQuoting)) {
         return arg
     }
     val sb = StringBuilder()
@@ -47,3 +47,6 @@ internal fun quoteWindowsArg(arg: String): String {
     sb.append('"')
     return sb.toString()
 }
+
+/** A character that forces an argument to be wrapped in double quotes. */
+private fun needsWindowsQuoting(c: Char): Boolean = c == ' ' || c == '\t' || c == '"'

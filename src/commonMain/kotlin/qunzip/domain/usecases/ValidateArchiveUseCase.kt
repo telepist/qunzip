@@ -1,12 +1,10 @@
 package qunzip.domain.usecases
 
 import qunzip.domain.entities.*
-import qunzip.domain.repositories.ArchiveRepository
 import qunzip.domain.repositories.FileSystemRepository
 import co.touchlab.kermit.Logger
 
 open class ValidateArchiveUseCase(
-    private val archiveRepository: ArchiveRepository,
     private val fileSystemRepository: FileSystemRepository,
     private val logger: Logger = Logger.withTag("ArchiveValidator")
 ) {
