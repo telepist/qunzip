@@ -76,7 +76,10 @@ class MosaicTuiRenderer(
                     LaunchedEffect(Unit) {
                         awaitExtractionDone(viewModel)
                         delay(300)
-                        exitProcess(0)
+                        // Exit nonzero on failure so callers can detect it. This
+                        // path self-exits (it can't cleanly return to runApp from
+                        // inside runMosaic), so the exit code is decided here.
+                        exitProcess(if (viewModel.didExtractionFail) 1 else 0)
                     }
                 }
             } else {
