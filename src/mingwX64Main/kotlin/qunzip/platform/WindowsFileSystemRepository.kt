@@ -235,11 +235,17 @@ class WindowsFileSystemRepository(
                     val name = findData.cFileName.toKString()
                     if (name == "." || name == "..") continue
                     val child = "$path\\$name"
-                    val isDir = (findData.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY.toUInt()) != 0u
-                    if (isDir) {
-                        deleteDirectoryRecursive(child)
-                    } else {
-                        DeleteFileA(child)
+                    val attrs = findData.dwFileAttributes
+                    val isDir = (attrs and FILE_ATTRIBUTE_DIRECTORY.toUInt()) != 0u
+                    val isReparse = (attrs and FILE_ATTRIBUTE_REPARSE_POINT.toUInt()) != 0u
+                    when {
+                        // Never follow a junction/symlink — that would delete the
+                        // link *target's* contents, escaping this tree. Remove the
+                        // link itself instead (RemoveDirectoryA on a directory
+                        // reparse point unlinks it without touching the target).
+                        isReparse -> if (isDir) RemoveDirectoryA(child) else DeleteFileA(child)
+                        isDir -> deleteDirectoryRecursive(child)
+                        else -> DeleteFileA(child)
                     }
                 } while (FindNextFileA(handle, findData.ptr) != 0)
             } finally {
