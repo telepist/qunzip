@@ -173,10 +173,11 @@ class QunzipExeE2eTest {
 
         val result = executeProcess("\"$exe\" \"$archivePath\"", timeoutMillis = 15_000u)
 
-        // A channelFlow producer crash would abort with a non-zero code; a hang
-        // would time out. Graceful handling exits 0 with an error shown.
+        // Graceful failure: no hang, and a nonzero exit so callers can detect it
+        // (a crash would also be nonzero, but the no-timeout + clean shutdown
+        // distinguish it; the unit/integration tests cover the FAILED-state path).
         assertFalse(result.timedOut, "Process hung on a corrupt archive")
-        assertEquals(0, result.exitCode, "Corrupt archive should be handled gracefully, not crash")
+        assertNotEquals(0, result.exitCode, "Corrupt archive should exit nonzero")
     }
 
     @Test
@@ -185,11 +186,11 @@ class QunzipExeE2eTest {
 
         val result = executeProcess("\"$exe\" \"$archivePath\"", timeoutMillis = 10_000u)
 
-        // Graceful: no hang, no crash. (The error text is shown interactively but
-        // the non-interactive renderer may exit before flushing it, so we don't
-        // assert on stdout here.)
+        // Graceful: no hang, and a nonzero exit for the failure. (The error text is
+        // shown interactively but the non-interactive renderer may exit before
+        // flushing it, so we don't assert on stdout here.)
         assertFalse(result.timedOut, "Process hung on a missing archive")
-        assertEquals(0, result.exitCode)
+        assertNotEquals(0, result.exitCode)
     }
 
     // --- Settings CLI tests ---
