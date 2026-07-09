@@ -2,6 +2,7 @@ package qunzip.platform
 
 import qunzip.domain.entities.UserPreferences
 import qunzip.domain.repositories.PreferencesRepository
+import qunzip.data.prefs.PreferencesPaths
 import co.touchlab.kermit.Logger
 import kotlinx.cinterop.*
 import kotlinx.serialization.encodeToString
@@ -29,21 +30,24 @@ class WindowsPreferencesRepository(
     // and shared between qunzip.exe and QuickUnzip.exe. Falls back to the exe
     // directory when APPDATA is unavailable (unusual / portable use).
     private val preferencesFile: String by lazy {
-        "${getPreferencesDirectory()}\\settings.json"
+        PreferencesPaths.preferencesFile(
+            PreferencesPaths.preferencesDirectory(getenv("APPDATA")?.toKString(), getExecutableDirectory())
+        )
     }
 
     // Older versions stored settings.json next to the exe; read it once for
     // migration if the per-user file doesn't exist yet.
     private val legacyPreferencesFile: String by lazy {
-        "${getExecutableDirectory()}\\settings.json"
+        PreferencesPaths.preferencesFile(getExecutableDirectory())
     }
 
     override suspend fun loadPreferences(): UserPreferences {
-        val path = when {
-            fileExists(preferencesFile) -> preferencesFile
-            fileExists(legacyPreferencesFile) -> legacyPreferencesFile
-            else -> null
-        }
+        val path = PreferencesPaths.chooseLoadPath(
+            newPath = preferencesFile,
+            legacyPath = legacyPreferencesFile,
+            newExists = fileExists(preferencesFile),
+            legacyExists = fileExists(legacyPreferencesFile),
+        )
         logger.d { "Loading preferences from: ${path ?: "(defaults)"}" }
 
         if (path == null) {
@@ -101,11 +105,6 @@ class WindowsPreferencesRepository(
     }
 
     // Helper methods
-
-    private fun getPreferencesDirectory(): String {
-        val appData = getenv("APPDATA")?.toKString()?.takeIf { it.isNotBlank() }
-        return if (appData != null) "$appData\\QuickUnzip" else getExecutableDirectory()
-    }
 
     private fun getExecutableDirectory(): String = memScoped {
         val buffer = allocArray<ByteVar>(MAX_PATH)
