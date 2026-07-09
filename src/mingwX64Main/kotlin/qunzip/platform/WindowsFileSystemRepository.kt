@@ -2,6 +2,10 @@ package qunzip.platform
 
 import qunzip.domain.repositories.FileSystemRepository
 import qunzip.domain.usecases.FileInfo
+import qunzip.util.windowsParentDirectory
+import qunzip.util.windowsFilename
+import qunzip.util.windowsFileExtension
+import qunzip.util.windowsFilenameWithoutExtension
 import kotlinx.cinterop.*
 import platform.posix.*
 import platform.windows.*
@@ -53,21 +57,7 @@ class WindowsFileSystemRepository(
         )
     }
 
-    override fun getParentDirectory(filePath: String): String {
-        // Handle both forward and backslashes
-        val normalizedPath = filePath.replace('/', '\\')
-        val lastSeparator = normalizedPath.lastIndexOf('\\')
-
-        return if (lastSeparator > 0) {
-            val parent = normalizedPath.substring(0, lastSeparator)
-            // A drive root ("C:") must keep its trailing backslash — "C:" alone
-            // refers to the drive's current directory, not its root, so 7-Zip
-            // would extract to the wrong place.
-            if (parent.length == 2 && parent[1] == ':') "$parent\\" else parent
-        } else {
-            "."
-        }
-    }
+    override fun getParentDirectory(filePath: String): String = windowsParentDirectory(filePath)
 
     override fun joinPath(vararg components: String): String {
         return components.joinToString("\\")
@@ -282,28 +272,9 @@ class WindowsFileSystemRepository(
                 (path.startsWith("\\\\"))
     }
 
-    override fun getFileExtension(path: String): String {
-        val filename = getFilename(path)
-        val lastDot = filename.lastIndexOf('.')
-        return if (lastDot > 0) {
-            filename.substring(lastDot + 1)
-        } else {
-            ""
-        }
-    }
+    override fun getFileExtension(path: String): String = windowsFileExtension(path)
 
-    override fun getFilenameWithoutExtension(path: String): String {
-        val filename = getFilename(path)
-        val lastDot = filename.lastIndexOf('.')
-        return if (lastDot > 0) {
-            filename.substring(0, lastDot)
-        } else {
-            filename
-        }
-    }
+    override fun getFilenameWithoutExtension(path: String): String = windowsFilenameWithoutExtension(path)
 
-    override fun getFilename(path: String): String {
-        val normalizedPath = path.replace('/', '\\')
-        return normalizedPath.substringAfterLast('\\')
-    }
+    override fun getFilename(path: String): String = windowsFilename(path)
 }
