@@ -147,4 +147,22 @@ class ArchiveExtractionIntegrationTest {
         assertTrue(stages.contains(ExtractionStage.COMPLETED), "Expected COMPLETED stage")
         assertTrue(fileExistsAt(destDir), "Destination directory should exist")
     }
+
+    // --- deleteDirectory ---
+
+    @Test
+    fun `deleteDirectory removes a non-empty directory tree`() = runTest {
+        // RemoveDirectoryA only removes empty dirs; the temp folders the use case
+        // cleans up (e.g. the compound-tar intermediate) are non-empty, so this
+        // must recurse. Build a nested, file-populated tree and delete it.
+        val fs = WindowsFileSystemRepository()
+        val dir = "$tempDir\\non-empty"
+        val sub = "$dir\\sub"
+        assertTrue(fs.createDirectory(sub), "should create nested dirs")
+        assertTrue(copyFile(getFixturePath("single-file.zip"), "$dir\\a.bin"))
+        assertTrue(copyFile(getFixturePath("single-file.zip"), "$sub\\b.bin"))
+
+        assertTrue(fs.deleteDirectory(dir), "deleteDirectory should succeed on a non-empty tree")
+        assertFalse(access(dir, F_OK) == 0, "directory should no longer exist after delete")
+    }
 }

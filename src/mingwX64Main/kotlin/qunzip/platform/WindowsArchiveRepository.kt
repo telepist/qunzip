@@ -425,16 +425,40 @@ class WindowsArchiveRepository(
             return@memScoped -1
         }
 
-        // Read output and parse progress
+        // Read output and parse progress. Accumulate raw bytes per line and decode
+        // each complete line as UTF-8 (7-Zip runs with -sccUTF-8), so a multi-byte
+        // filename that straddles a 4 KB read boundary isn't corrupted in the
+        // "current file" display.
         val buffer = allocArray<ByteVar>(4096)
         val bytesRead = alloc<UIntVar>()
-        val lineBuffer = StringBuilder()
+        val lineBytes = ArrayList<Byte>()
         val allOutput = StringBuilder()
         var lastPercentage = -1
         var currentFile: String? = null
 
         // Regex to match percentage like "  45%" or " 100%"
         val percentRegex = Regex("""^\s*(\d+)%""")
+
+        fun handleLine() {
+            if (lineBytes.isEmpty()) return
+            val line = lineBytes.toByteArray().decodeToString().trim()
+            lineBytes.clear()
+            if (line.isEmpty()) return
+            allOutput.append(line).append('\n')
+            // Check for percentage progress
+            val percentMatch = percentRegex.find(line)
+            if (percentMatch != null) {
+                val percent = percentMatch.groupValues[1].toIntOrNull() ?: 0
+                if (percent != lastPercentage && percent in 0..100) {
+                    lastPercentage = percent
+                    onProgress(totalBytes * percent / 100, currentFile)
+                }
+            }
+            // Check for file being extracted: "- filename"
+            if (line.startsWith("- ")) {
+                currentFile = line.substring(2).trim()
+            }
+        }
 
         while (true) {
             val readSuccess = ReadFile(
@@ -446,49 +470,18 @@ class WindowsArchiveRepository(
             )
             if (readSuccess == 0 || bytesRead.value == 0u) break
 
-            buffer[bytesRead.value.toInt()] = 0
-            val chunk = buffer.toKString()
-            allOutput.append(chunk)
-
-            // Process character by character, treating \r and \n as line endings
-            for (char in chunk) {
-                if (char == '\r' || char == '\n') {
-                    val line = lineBuffer.toString().trim()
-                    if (line.isNotEmpty()) {
-                        // Check for percentage progress
-                        val percentMatch = percentRegex.find(line)
-                        if (percentMatch != null) {
-                            val percent = percentMatch.groupValues[1].toIntOrNull() ?: 0
-                            if (percent != lastPercentage && percent in 0..100) {
-                                lastPercentage = percent
-                                val bytesExtracted = (totalBytes * percent / 100)
-                                onProgress(bytesExtracted, currentFile)
-                            }
-                        }
-                        // Check for file being extracted: "- filename"
-                        if (line.startsWith("- ")) {
-                            currentFile = line.substring(2).trim()
-                        }
-                    }
-                    lineBuffer.clear()
-                } else {
-                    lineBuffer.append(char)
+            // Treat \r and \n as line endings; skip embedded null bytes.
+            for (i in 0 until bytesRead.value.toInt()) {
+                val b = buffer[i]
+                when {
+                    b == '\r'.code.toByte() || b == '\n'.code.toByte() -> handleLine()
+                    b != 0.toByte() -> lineBytes.add(b)
                 }
             }
         }
 
-        // Process remaining buffer
-        val remaining = lineBuffer.toString().trim()
-        if (remaining.isNotEmpty()) {
-            allOutput.append(remaining)
-            val percentMatch = percentRegex.find(remaining)
-            if (percentMatch != null) {
-                val percent = percentMatch.groupValues[1].toIntOrNull() ?: 0
-                if (percent != lastPercentage && percent in 0..100) {
-                    onProgress((totalBytes * percent / 100), currentFile)
-                }
-            }
-        }
+        // Process any trailing line without a terminator
+        handleLine()
 
         // Wait for process and get exit code
         WaitForSingleObject(processInfo.hProcess, INFINITE)

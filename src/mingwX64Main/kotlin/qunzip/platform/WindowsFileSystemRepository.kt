@@ -219,8 +219,34 @@ class WindowsFileSystemRepository(
 
     override suspend fun deleteDirectory(path: String): Boolean {
         logger.d { "Deleting directory: $path" }
-        val result = RemoveDirectoryA(path)
-        return result != 0
+        // RemoveDirectoryA only removes EMPTY directories, so recurse: delete the
+        // contents first (files and subdirectories), then the directory itself.
+        // Needed because temp folders (e.g. the compound-tar intermediate, or a
+        // partially-extracted destination cleaned up on failure) are non-empty.
+        return deleteDirectoryRecursive(path)
+    }
+
+    private fun deleteDirectoryRecursive(path: String): Boolean = memScoped {
+        val findData = alloc<_WIN32_FIND_DATAA>()
+        val handle = FindFirstFileA("$path\\*", findData.ptr)
+        if (handle != INVALID_HANDLE_VALUE) {
+            try {
+                do {
+                    val name = findData.cFileName.toKString()
+                    if (name == "." || name == "..") continue
+                    val child = "$path\\$name"
+                    val isDir = (findData.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY.toUInt()) != 0u
+                    if (isDir) {
+                        deleteDirectoryRecursive(child)
+                    } else {
+                        DeleteFileA(child)
+                    }
+                } while (FindNextFileA(handle, findData.ptr) != 0)
+            } finally {
+                FindClose(handle)
+            }
+        }
+        RemoveDirectoryA(path) != 0
     }
 
     override suspend fun getFileSize(path: String): Long {
