@@ -28,63 +28,54 @@ object SevenZipOutputParser {
     }
 
     /**
-     * Parse the output of `7z l -slt` into archive entries. Entry blocks start
-     * after the `----------` separator, each beginning with `Path = `.
+     * Parse the output of `7z l -slt` into archive entries. Entries begin after
+     * the `----------` separator; each starts with a `Path = ` line followed by
+     * its fields. A new `Path = ` (or end of input) ends the current entry — so
+     * this does not depend on blank lines between blocks, which lets the caller
+     * stream trimmed, blank-stripped lines.
      */
     fun parseListOutput(output: String): List<ArchiveEntry> {
-        val entries = mutableListOf<ArchiveEntry>()
         val lines = output.split("\n")
 
         // Skip until the "----------" separator that marks the start of entries.
         var i = 0
-        var foundSeparator = false
-        while (i < lines.size) {
-            if (lines[i].trim().startsWith("----------")) {
-                foundSeparator = true
-                i++
-                break
-            }
-            i++
-        }
-        if (!foundSeparator) return emptyList()
+        while (i < lines.size && !lines[i].trim().startsWith("----------")) i++
+        if (i >= lines.size) return emptyList()
+        i++ // past the separator
 
-        while (i < lines.size) {
-            if (lines[i].trim().startsWith("Path = ")) {
-                parseEntryBlock(lines, i)?.let { entries.add(it) }
-            }
-            i++
-        }
-        return entries
-    }
-
-    private fun parseEntryBlock(lines: List<String>, startIndex: Int): ArchiveEntry? {
+        val entries = mutableListOf<ArchiveEntry>()
         var path: String? = null
-        var isDirectory = false
-        var size: Long = 0
-        var compressedSize: Long? = null
+        var isDir = false
+        var size = 0L
+        var packed: Long? = null
 
-        var i = startIndex
-        while (i < lines.size && lines[i].trim().isNotEmpty()) {
+        fun flush() {
+            val p = path ?: return
+            val normalized = p.replace('\\', '/')
+            entries.add(
+                ArchiveEntry(
+                    path = normalized,
+                    name = normalized.substringAfterLast('/'),
+                    isDirectory = isDir,
+                    size = size,
+                    compressedSize = packed,
+                )
+            )
+            path = null; isDir = false; size = 0L; packed = null
+        }
+
+        while (i < lines.size) {
             val line = lines[i].trim()
             when {
-                line.startsWith("Path = ") -> path = line.substring(7).trim()
-                line.startsWith("Folder = ") -> isDirectory = line.substring(9).trim() == "+"
+                line.startsWith("Path = ") -> { flush(); path = line.substring(7).trim() }
+                line.startsWith("Folder = ") -> isDir = line.substring(9).trim() == "+"
                 line.startsWith("Size = ") -> size = line.substring(7).trim().toLongOrNull() ?: 0
-                line.startsWith("Packed Size = ") -> compressedSize = line.substring(14).trim().toLongOrNull()
+                line.startsWith("Packed Size = ") -> packed = line.substring(14).trim().toLongOrNull()
             }
             i++
         }
-
-        val p = path ?: return null
-        // Normalize path separators to forward slashes.
-        val normalizedPath = p.replace('\\', '/')
-        return ArchiveEntry(
-            path = normalizedPath,
-            name = normalizedPath.substringAfterLast('/'),
-            isDirectory = isDirectory,
-            size = size,
-            compressedSize = compressedSize,
-        )
+        flush()
+        return entries
     }
 
     private val percentRegex = Regex("""^\s*(\d+)%""")

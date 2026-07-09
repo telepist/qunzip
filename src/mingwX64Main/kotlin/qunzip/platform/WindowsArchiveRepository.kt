@@ -5,7 +5,7 @@ import qunzip.domain.repositories.ArchiveRepository
 import qunzip.domain.usecases.FileInfo
 import qunzip.data.sevenzip.SevenZipOutputParser
 import qunzip.data.sevenzip.SevenZipProgressLine
-import qunzip.util.buildWindowsCommandLine
+import qunzip.data.process.ProcessRunner
 import qunzip.util.joinWindowsPath
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -26,6 +26,7 @@ import kotlin.time.Instant
 @OptIn(ExperimentalForeignApi::class)
 class WindowsArchiveRepository(
     private val sevenZipPath: String = getBundled7zipPath(),
+    private val processRunner: ProcessRunner = WindowsProcessRunner(),
     private val logger: Logger = Logger.withTag("WindowsArchiveRepository")
 ) : ArchiveRepository {
 
@@ -67,8 +68,10 @@ class WindowsArchiveRepository(
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Running 7z l -slt..." }
         // -sccUTF-8: emit console output (paths) as UTF-8 instead of the OEM
         // console code page, so non-ASCII entry names decode correctly below.
-        val args = mutableListOf("l", "-slt", "-sccUTF-8", archivePath, "-p${password ?: ""}")
-        val output = execute7zipCommand(args)
+        val args = listOf("l", "-slt", "-sccUTF-8", archivePath, "-p${password ?: ""}")
+        val sb = StringBuilder()
+        processRunner.run(sevenZipPath, args) { line -> sb.append(line).append('\n') }
+        val output = sb.toString()
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] 7z command completed, output size: ${output.length} chars" }
 
         // Parse 7zip output to extract file entries
@@ -101,8 +104,12 @@ class WindowsArchiveRepository(
         logger.d { "Testing archive integrity: $archivePath" }
 
         return try {
-            // Execute 7zip test command: 7z t archive.zip [-p"password"]
-            val exitCode = execute7zipTest(archivePath, password)
+            // 7z t archive.zip -p"password" (always pass -p so it never blocks on
+            // stdin for encrypted archives).
+            val exitCode = processRunner.run(
+                sevenZipPath,
+                listOf("t", archivePath, "-p${password ?: ""}"),
+            )
             val isValid = exitCode == 0
 
             if (isValid) {
@@ -145,36 +152,46 @@ class WindowsArchiveRepository(
                 stage = ExtractionStage.EXTRACTING
             ))
 
-            // Execute 7zip extraction with real-time byte-level progress tracking
+            // Extract with real-time progress. -bsp1 emits percentages, -bb1 the
+            // "- <file>" lines, -sccUTF-8 makes both UTF-8. shouldContinue kills the
+            // child if the collecting coroutine is cancelled (window closed / cancel).
             logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Starting extraction..." }
-            val exitCode = execute7zipExtractWithProgress(
-                archivePath,
-                destinationPath,
-                contents.totalSize,
-                password,
-                // Stop and kill the 7z child if the collecting coroutine is
-                // cancelled (window closed / cancel pressed), so it doesn't keep
-                // extracting in the background.
-                shouldContinue = { isActive }
-            ) { bytesExtracted, currentFile ->
-                // Send progress update with actual bytes extracted
-                trySend(ExtractionProgress(
-                    archivePath = archivePath,
-                    filesProcessed = if (totalFiles > 0 && contents.totalSize > 0)
-                        ((bytesExtracted.toDouble() / contents.totalSize) * totalFiles).toInt().coerceAtMost(totalFiles)
-                        else 0,
-                    totalFiles = totalFiles,
-                    totalBytes = contents.totalSize,
-                    bytesProcessed = bytesExtracted,
-                    currentFile = currentFile,
-                    stage = ExtractionStage.EXTRACTING
-                ))
+            val args = listOf(
+                "x", archivePath, "-o$destinationPath", "-y", "-bsp1", "-bb1", "-sccUTF-8", "-p${password ?: ""}"
+            )
+            val allOutput = StringBuilder()
+            var lastPercentage = -1
+            var currentFile: String? = null
+            val exitCode = processRunner.run(sevenZipPath, args, shouldContinue = { isActive }) { line ->
+                allOutput.append(line).append('\n')
+                when (val parsed = SevenZipOutputParser.parseProgressLine(line)) {
+                    is SevenZipProgressLine.Percent -> if (parsed.value != lastPercentage) {
+                        lastPercentage = parsed.value
+                        val bytesExtracted = contents.totalSize * parsed.value / 100
+                        trySend(ExtractionProgress(
+                            archivePath = archivePath,
+                            filesProcessed = if (totalFiles > 0 && contents.totalSize > 0)
+                                ((bytesExtracted.toDouble() / contents.totalSize) * totalFiles).toInt().coerceAtMost(totalFiles)
+                                else 0,
+                            totalFiles = totalFiles,
+                            totalBytes = contents.totalSize,
+                            bytesProcessed = bytesExtracted,
+                            currentFile = currentFile,
+                            stage = ExtractionStage.EXTRACTING
+                        ))
+                    }
+                    is SevenZipProgressLine.CurrentFile -> currentFile = parsed.name
+                    null -> { /* not a progress line */ }
+                }
             }
 
             if (exitCode != 0) {
                 // If we were cancelled the child was terminated on purpose — don't
                 // surface that as an extraction error.
                 if (!isActive) return@channelFlow
+                if (SevenZipOutputParser.indicatesPasswordError(allOutput.toString())) {
+                    throw ExtractionError.PasswordRequired("Wrong password")
+                }
                 throw ExtractionError.SevenZipError(exitCode, "7zip extraction failed")
             }
 
@@ -214,8 +231,9 @@ class WindowsArchiveRepository(
 
         // Run 7z t with an empty password (-p) and capture output to check for password indicators.
         // The empty password prevents 7zip from blocking on stdin waiting for user input.
-        val output = execute7zipCommand(listOf("t", "-p", archivePath))
-        return SevenZipOutputParser.indicatesPasswordError(output)
+        val sb = StringBuilder()
+        processRunner.run(sevenZipPath, listOf("t", "-p", archivePath)) { line -> sb.append(line).append('\n') }
+        return SevenZipOutputParser.indicatesPasswordError(sb.toString())
     }
 
     // Private helper methods
@@ -248,364 +266,6 @@ class WindowsArchiveRepository(
             isDirectory = (data.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY.toUInt()) != 0u
         )
     }
-
-    /**
-     * Execute 7zip command and capture output without showing a console window
-     * Uses CreateProcessW with CREATE_NO_WINDOW and pipes for stdout
-     */
-    private fun execute7zipCommand(args: List<String>): String = memScoped {
-        // Quote the program path and every argument with proper Windows rules so
-        // paths and passwords containing spaces or quotes survive intact.
-        val command = buildWindowsCommandLine(sevenZipPath, args)
-        logger.d { "Executing 7zip command: $command" }
-
-        // Create pipe for stdout
-        val securityAttrs = alloc<SECURITY_ATTRIBUTES>()
-        securityAttrs.nLength = sizeOf<SECURITY_ATTRIBUTES>().toUInt()
-        securityAttrs.bInheritHandle = TRUE
-        securityAttrs.lpSecurityDescriptor = null
-
-        val stdoutReadHandle = alloc<HANDLEVar>()
-        val stdoutWriteHandle = alloc<HANDLEVar>()
-
-        if (CreatePipe(stdoutReadHandle.ptr, stdoutWriteHandle.ptr, securityAttrs.ptr, 0u) == 0) {
-            throw ExtractionError.IOError("Failed to create pipe for 7zip output")
-        }
-
-        // Ensure the read handle is not inherited
-        SetHandleInformation(stdoutReadHandle.value, HANDLE_FLAG_INHERIT.toUInt(), 0u)
-
-        val startupInfo = alloc<STARTUPINFOW>()
-        val processInfo = alloc<PROCESS_INFORMATION>()
-
-        startupInfo.cb = sizeOf<STARTUPINFOW>().toUInt()
-        startupInfo.dwFlags = (STARTF_USESHOWWINDOW or STARTF_USESTDHANDLES).toUInt()
-        startupInfo.wShowWindow = SW_HIDE.toUShort()
-        startupInfo.hStdOutput = stdoutWriteHandle.value
-        startupInfo.hStdError = stdoutWriteHandle.value
-        startupInfo.hStdInput = null
-
-        val success = CreateProcessW(
-            lpApplicationName = null,
-            lpCommandLine = command.wcstr.ptr,
-            lpProcessAttributes = null,
-            lpThreadAttributes = null,
-            bInheritHandles = TRUE,
-            dwCreationFlags = CREATE_NO_WINDOW.toUInt(),
-            lpEnvironment = null,
-            lpCurrentDirectory = null,
-            lpStartupInfo = startupInfo.ptr,
-            lpProcessInformation = processInfo.ptr
-        )
-
-        // Close write end of pipe in parent process
-        CloseHandle(stdoutWriteHandle.value)
-
-        if (success == 0) {
-            CloseHandle(stdoutReadHandle.value)
-            throw ExtractionError.IOError("Failed to execute 7zip command: ${GetLastError()}")
-        }
-
-        // Collect raw chunks, then decode once as UTF-8 (7-Zip is invoked with
-        // -sccUTF-8). Decoding per-chunk would corrupt a multi-byte UTF-8 sequence
-        // straddling a read boundary. Chunks (not a per-byte list) avoid boxing
-        // for large listings.
-        val chunks = mutableListOf<ByteArray>()
-        val buffer = allocArray<ByteVar>(4096)
-        val bytesRead = alloc<UIntVar>()
-
-        while (true) {
-            val readSuccess = ReadFile(
-                stdoutReadHandle.value,
-                buffer,
-                4095u,
-                bytesRead.ptr,
-                null
-            )
-            if (readSuccess == 0 || bytesRead.value == 0u) break
-            val n = bytesRead.value.toInt()
-            chunks.add(ByteArray(n) { buffer[it] })
-        }
-
-        // Wait for process and cleanup
-        WaitForSingleObject(processInfo.hProcess, INFINITE)
-        CloseHandle(processInfo.hProcess)
-        CloseHandle(processInfo.hThread)
-        CloseHandle(stdoutReadHandle.value)
-
-        val total = chunks.sumOf { it.size }
-        val combined = ByteArray(total)
-        var offset = 0
-        for (chunk in chunks) {
-            chunk.copyInto(combined, offset)
-            offset += chunk.size
-        }
-        return@memScoped combined.decodeToString()
-    }
-
-    private fun execute7zipTest(archivePath: String, password: String? = null): Int {
-        // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
-        // Empty password (-p) is harmless for non-encrypted archives.
-        val command = buildWindowsCommandLine(sevenZipPath, listOf("t", archivePath, "-p${password ?: ""}"))
-        return executeCommandSilently(command)
-    }
-
-    /**
-     * Execute 7zip extraction with real-time progress tracking
-     * Parses 7zip's progress output (-bsp1) to get percentage updates
-     * Calls the callback with percentage progress (0-100)
-     */
-    private fun execute7zipExtractWithProgress(
-        archivePath: String,
-        destinationPath: String,
-        totalBytes: Long,
-        password: String? = null,
-        shouldContinue: () -> Boolean = { true },
-        onProgress: (bytesExtracted: Long, currentFile: String?) -> Unit
-    ): Int = memScoped {
-        // Use -bsp1 to output progress to stdout, -bb1 for file names
-        // Note: Conflict handling is done at application level, not by 7zip's -aou flag
-        // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
-        // -sccUTF-8 makes 7-Zip print the "- <path>" progress lines as UTF-8, so
-        // the current-file display shows non-ASCII names correctly (they're
-        // decoded as UTF-8 below).
-        val command = buildWindowsCommandLine(
-            sevenZipPath,
-            listOf("x", archivePath, "-o$destinationPath", "-y", "-bsp1", "-bb1", "-sccUTF-8", "-p${password ?: ""}")
-        )
-        logger.d { "Extraction command with progress: $command" }
-
-        // Create pipe for stdout
-        val securityAttrs = alloc<SECURITY_ATTRIBUTES>()
-        securityAttrs.nLength = sizeOf<SECURITY_ATTRIBUTES>().toUInt()
-        securityAttrs.bInheritHandle = TRUE
-        securityAttrs.lpSecurityDescriptor = null
-
-        val stdoutReadHandle = alloc<HANDLEVar>()
-        val stdoutWriteHandle = alloc<HANDLEVar>()
-
-        if (CreatePipe(stdoutReadHandle.ptr, stdoutWriteHandle.ptr, securityAttrs.ptr, 0u) == 0) {
-            logger.e { "Failed to create pipe for progress tracking" }
-            return@memScoped executeCommandSilently(
-                buildWindowsCommandLine(
-                    sevenZipPath,
-                    listOf("x", archivePath, "-o$destinationPath", "-y", "-p${password ?: ""}")
-                )
-            )
-        }
-
-        // Ensure the read handle is not inherited
-        SetHandleInformation(stdoutReadHandle.value, HANDLE_FLAG_INHERIT.toUInt(), 0u)
-
-        // Put the 7z child in a kill-on-close job object: if this process exits
-        // while extraction is still running (window closed, crash, exitProcess),
-        // Windows closes the job handle and terminates the child, so it can't keep
-        // extracting orphaned. Create the process suspended, assign it, then resume.
-        val job = CreateJobObjectW(null, null)
-        if (job != null) {
-            val jobInfo = alloc<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>()
-            jobInfo.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE.toUInt()
-            val setOk = SetInformationJobObject(
-                job,
-                // JobObjectExtendedLimitInformation (9) — passed by value; the K/N
-                // Windows headers map JOBOBJECTINFOCLASS to a UInt.
-                9u,
-                jobInfo.ptr,
-                sizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>().toUInt()
-            )
-            // If configuring kill-on-close failed the child wouldn't be terminated
-            // when we exit — log it so the degraded behaviour is diagnosable.
-            if (setOk == 0) {
-                logger.w { "SetInformationJobObject(kill-on-close) failed: ${GetLastError()}" }
-            }
-        }
-
-        val startupInfo = alloc<STARTUPINFOW>()
-        val processInfo = alloc<PROCESS_INFORMATION>()
-
-        startupInfo.cb = sizeOf<STARTUPINFOW>().toUInt()
-        startupInfo.dwFlags = (STARTF_USESHOWWINDOW or STARTF_USESTDHANDLES).toUInt()
-        startupInfo.wShowWindow = SW_HIDE.toUShort()
-        startupInfo.hStdOutput = stdoutWriteHandle.value
-        startupInfo.hStdError = stdoutWriteHandle.value
-        startupInfo.hStdInput = null
-
-        val creationFlags = if (job != null) {
-            (CREATE_NO_WINDOW or CREATE_SUSPENDED).toUInt()
-        } else {
-            CREATE_NO_WINDOW.toUInt()
-        }
-        val success = CreateProcessW(
-            lpApplicationName = null,
-            lpCommandLine = command.wcstr.ptr,
-            lpProcessAttributes = null,
-            lpThreadAttributes = null,
-            bInheritHandles = TRUE,
-            dwCreationFlags = creationFlags,
-            lpEnvironment = null,
-            lpCurrentDirectory = null,
-            lpStartupInfo = startupInfo.ptr,
-            lpProcessInformation = processInfo.ptr
-        )
-
-        // Close write end of pipe in parent process
-        CloseHandle(stdoutWriteHandle.value)
-
-        if (success == 0) {
-            job?.let { CloseHandle(it) }
-            CloseHandle(stdoutReadHandle.value)
-            logger.e { "Failed to create process for extraction: ${GetLastError()}" }
-            return@memScoped -1
-        }
-
-        // Assign to the job and resume (the process was created suspended).
-        if (job != null) {
-            AssignProcessToJobObject(job, processInfo.hProcess)
-            ResumeThread(processInfo.hThread)
-        }
-
-        // Read output and parse progress. Accumulate raw bytes per line and decode
-        // each complete line as UTF-8 (7-Zip runs with -sccUTF-8), so a multi-byte
-        // filename that straddles a 4 KB read boundary isn't corrupted in the
-        // "current file" display.
-        val buffer = allocArray<ByteVar>(4096)
-        val bytesRead = alloc<UIntVar>()
-        val lineBytes = ArrayList<Byte>()
-        val allOutput = StringBuilder()
-        var lastPercentage = -1
-        var currentFile: String? = null
-
-        fun handleLine() {
-            if (lineBytes.isEmpty()) return
-            val line = lineBytes.toByteArray().decodeToString().trim()
-            lineBytes.clear()
-            if (line.isEmpty()) return
-            allOutput.append(line).append('\n')
-            when (val parsed = SevenZipOutputParser.parseProgressLine(line)) {
-                is SevenZipProgressLine.Percent -> {
-                    if (parsed.value != lastPercentage) {
-                        lastPercentage = parsed.value
-                        onProgress(totalBytes * parsed.value / 100, currentFile)
-                    }
-                }
-                is SevenZipProgressLine.CurrentFile -> currentFile = parsed.name
-                null -> { /* not a progress line */ }
-            }
-        }
-
-        // Treat \r and \n as line endings; skip embedded null bytes.
-        fun consume(n: Int) {
-            for (i in 0 until n) {
-                val b = buffer[i]
-                when {
-                    b == '\r'.code.toByte() || b == '\n'.code.toByte() -> handleLine()
-                    b != 0.toByte() -> lineBytes.add(b)
-                }
-            }
-        }
-
-        // Drain all currently-available pipe data without blocking, so the loop
-        // below can poll for cancellation between reads.
-        val bytesAvail = alloc<UIntVar>()
-        fun drainAvailable() {
-            while (true) {
-                if (PeekNamedPipe(stdoutReadHandle.value, null, 0u, null, bytesAvail.ptr, null) == 0) break
-                if (bytesAvail.value == 0u) break
-                val toRead = minOf(bytesAvail.value, 4095u)
-                if (ReadFile(stdoutReadHandle.value, buffer, toRead, bytesRead.ptr, null) == 0 ||
-                    bytesRead.value == 0u) break
-                consume(bytesRead.value.toInt())
-            }
-        }
-
-        var processExited = false
-        var cancelled = false
-        while (!processExited) {
-            drainAvailable()
-            if (!shouldContinue()) {
-                logger.i { "Extraction cancelled — terminating 7-Zip child process" }
-                TerminateProcess(processInfo.hProcess, 1u)
-                cancelled = true
-                WaitForSingleObject(processInfo.hProcess, 5000u)
-                break
-            }
-            // Wait briefly for exit; loop back to drain + re-check cancellation.
-            if (WaitForSingleObject(processInfo.hProcess, 100u) == 0u /* WAIT_OBJECT_0 */) {
-                processExited = true
-            }
-        }
-
-        // Final drain of anything still buffered, then flush any trailing line.
-        drainAvailable()
-        handleLine()
-
-        val exitCode = alloc<UIntVar>()
-        GetExitCodeProcess(processInfo.hProcess, exitCode.ptr)
-
-        // Cleanup. Closing the job handle after the child has exited is harmless;
-        // if we were exiting abruptly the OS would close it and kill the child.
-        CloseHandle(processInfo.hProcess)
-        CloseHandle(processInfo.hThread)
-        CloseHandle(stdoutReadHandle.value)
-        job?.let { CloseHandle(it) }
-
-        val code = if (cancelled) 1 else exitCode.value.toInt()
-
-        // Check for password errors before returning
-        if (code != 0 && SevenZipOutputParser.indicatesPasswordError(allOutput.toString())) {
-            throw ExtractionError.PasswordRequired("Wrong password")
-        }
-
-        return@memScoped code
-    }
-
-    /**
-     * Execute a command silently without showing a console window
-     * Uses CreateProcessW with CREATE_NO_WINDOW flag
-     * Returns the exit code
-     */
-    private fun executeCommandSilently(command: String): Int = memScoped {
-        val startupInfo = alloc<STARTUPINFOW>()
-        val processInfo = alloc<PROCESS_INFORMATION>()
-
-        // Initialize startup info
-        startupInfo.cb = sizeOf<STARTUPINFOW>().toUInt()
-        startupInfo.dwFlags = STARTF_USESHOWWINDOW.toUInt()
-        startupInfo.wShowWindow = SW_HIDE.toUShort()
-
-        // Create process with no window
-        val success = CreateProcessW(
-            lpApplicationName = null,
-            lpCommandLine = command.wcstr.ptr,
-            lpProcessAttributes = null,
-            lpThreadAttributes = null,
-            bInheritHandles = FALSE,
-            dwCreationFlags = CREATE_NO_WINDOW.toUInt(),
-            lpEnvironment = null,
-            lpCurrentDirectory = null,
-            lpStartupInfo = startupInfo.ptr,
-            lpProcessInformation = processInfo.ptr
-        )
-
-        if (success == 0) {
-            logger.e { "Failed to create process: ${GetLastError()}" }
-            return@memScoped -1
-        }
-
-        // Wait for process to complete
-        WaitForSingleObject(processInfo.hProcess, INFINITE)
-
-        // Get exit code
-        val exitCode = alloc<UIntVar>()
-        GetExitCodeProcess(processInfo.hProcess, exitCode.ptr)
-
-        // Close handles
-        CloseHandle(processInfo.hProcess)
-        CloseHandle(processInfo.hThread)
-
-        return@memScoped exitCode.value.toInt()
-    }
-
 }
 
 /**
