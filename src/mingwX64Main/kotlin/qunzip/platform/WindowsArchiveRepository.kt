@@ -3,6 +3,8 @@ package qunzip.platform
 import qunzip.domain.entities.*
 import qunzip.domain.repositories.ArchiveRepository
 import qunzip.domain.usecases.FileInfo
+import qunzip.data.sevenzip.SevenZipOutputParser
+import qunzip.data.sevenzip.SevenZipProgressLine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.isActive
@@ -12,25 +14,6 @@ import platform.posix.*
 import platform.windows.*
 import co.touchlab.kermit.Logger
 import kotlin.time.Instant
-
-// Substrings 7-Zip prints (case-insensitive) when an archive is encrypted
-// or the supplied password is wrong. Used to translate exit-code failures
-// into ExtractionError.PasswordRequired so the GUI can re-prompt.
-// Deliberately specific multi-word phrases. A bare "encrypted" would also match
-// entry names (extraction output includes filenames via -bb1) or the archive
-// path, so a CRC/disk error on an archive containing "encrypted" in a name would
-// be misreported as a wrong password.
-private val PASSWORD_INDICATORS = listOf(
-    "wrong password",
-    "can not open encrypted archive",
-    "data error in encrypted file",
-    "enter password",
-)
-
-private fun String.indicatesPasswordError(): Boolean {
-    val lower = lowercase()
-    return PASSWORD_INDICATORS.any { lower.contains(it) }
-}
 
 /**
  * Windows implementation of ArchiveRepository using 7zip command-line tool
@@ -88,13 +71,13 @@ class WindowsArchiveRepository(
 
         // Parse 7zip output to extract file entries
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Parsing output (${output.length} chars)..." }
-        val entries = parse7zipListOutput(output)
+        val entries = SevenZipOutputParser.parseListOutput(output)
 
         // Header-encrypted archives fail the list step itself — surface that as a
         // password prompt so the validator no longer has to run `7z t` upfront.
         // Only treat the output as a password error when no entries were produced;
         // otherwise a benign filename containing "encrypted" could trip the check.
-        if (entries.isEmpty() && output.indicatesPasswordError()) {
+        if (entries.isEmpty() && SevenZipOutputParser.indicatesPasswordError(output)) {
             throw ExtractionError.PasswordRequired(
                 if (password.isNullOrEmpty()) "Password required" else "Wrong password"
             )
@@ -230,7 +213,7 @@ class WindowsArchiveRepository(
         // Run 7z t with an empty password (-p) and capture output to check for password indicators.
         // The empty password prevents 7zip from blocking on stdin waiting for user input.
         val output = execute7zipCommand(listOf("t", "-p", archivePath))
-        return output.indicatesPasswordError()
+        return SevenZipOutputParser.indicatesPasswordError(output)
     }
 
     // Private helper methods
@@ -490,27 +473,21 @@ class WindowsArchiveRepository(
         var lastPercentage = -1
         var currentFile: String? = null
 
-        // Regex to match percentage like "  45%" or " 100%"
-        val percentRegex = Regex("""^\s*(\d+)%""")
-
         fun handleLine() {
             if (lineBytes.isEmpty()) return
             val line = lineBytes.toByteArray().decodeToString().trim()
             lineBytes.clear()
             if (line.isEmpty()) return
             allOutput.append(line).append('\n')
-            // Check for percentage progress
-            val percentMatch = percentRegex.find(line)
-            if (percentMatch != null) {
-                val percent = percentMatch.groupValues[1].toIntOrNull() ?: 0
-                if (percent != lastPercentage && percent in 0..100) {
-                    lastPercentage = percent
-                    onProgress(totalBytes * percent / 100, currentFile)
+            when (val parsed = SevenZipOutputParser.parseProgressLine(line)) {
+                is SevenZipProgressLine.Percent -> {
+                    if (parsed.value != lastPercentage) {
+                        lastPercentage = parsed.value
+                        onProgress(totalBytes * parsed.value / 100, currentFile)
+                    }
                 }
-            }
-            // Check for file being extracted: "- filename"
-            if (line.startsWith("- ")) {
-                currentFile = line.substring(2).trim()
+                is SevenZipProgressLine.CurrentFile -> currentFile = parsed.name
+                null -> { /* not a progress line */ }
             }
         }
 
@@ -573,7 +550,7 @@ class WindowsArchiveRepository(
         val code = if (cancelled) 1 else exitCode.value.toInt()
 
         // Check for password errors before returning
-        if (code != 0 && allOutput.toString().indicatesPasswordError()) {
+        if (code != 0 && SevenZipOutputParser.indicatesPasswordError(allOutput.toString())) {
             throw ExtractionError.PasswordRequired("Wrong password")
         }
 
@@ -627,90 +604,6 @@ class WindowsArchiveRepository(
         return@memScoped exitCode.value.toInt()
     }
 
-    private fun parse7zipListOutput(output: String): List<ArchiveEntry> {
-        val entries = mutableListOf<ArchiveEntry>()
-        val lines = output.split("\n")
-
-        // Skip until we find the "----------" separator that marks the start of entries
-        var i = 0
-        var foundSeparator = false
-        while (i < lines.size) {
-            val line = lines[i].trim()
-
-            if (line.startsWith("----------")) {
-                foundSeparator = true
-                i++
-                break
-            }
-            i++
-        }
-
-        if (!foundSeparator) {
-            logger.w { "Could not find entry separator in 7zip output" }
-            return emptyList()
-        }
-
-        // Now parse actual entry blocks
-        while (i < lines.size) {
-            val line = lines[i].trim()
-
-            // Look for entry blocks starting with "Path = "
-            if (line.startsWith("Path = ")) {
-                val entry = parseEntryBlock(lines, i)
-                if (entry != null) {
-                    entries.add(entry)
-                }
-            }
-            i++
-        }
-
-        return entries
-    }
-
-    private fun parseEntryBlock(lines: List<String>, startIndex: Int): ArchiveEntry? {
-        var path: String? = null
-        var isDirectory = false
-        var size: Long = 0
-        var compressedSize: Long? = null
-
-        var i = startIndex
-        while (i < lines.size && lines[i].trim().isNotEmpty()) {
-            val line = lines[i].trim()
-
-            when {
-                line.startsWith("Path = ") -> {
-                    path = line.substring(7).trim()
-                }
-                line.startsWith("Folder = ") -> {
-                    isDirectory = line.substring(9).trim() == "+"
-                }
-                line.startsWith("Size = ") -> {
-                    size = line.substring(7).trim().toLongOrNull() ?: 0
-                }
-                line.startsWith("Packed Size = ") -> {
-                    compressedSize = line.substring(14).trim().toLongOrNull()
-                }
-            }
-
-            i++
-        }
-
-        return if (path != null) {
-            // Normalize path separators to forward slashes
-            val normalizedPath = path.replace('\\', '/')
-            val name = normalizedPath.substringAfterLast('/')
-
-            ArchiveEntry(
-                path = normalizedPath,
-                name = name,
-                isDirectory = isDirectory,
-                size = size,
-                compressedSize = compressedSize
-            )
-        } else {
-            null
-        }
-    }
 }
 
 /**
