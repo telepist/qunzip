@@ -157,20 +157,35 @@ class RegistryHelper {
     }
 
     /**
-     * Recursively deletes a registry key and all its subkeys.
-     * Uses RegDeleteTreeA which handles nested subkeys.
-     * Returns true on success or if the key doesn't exist.
+     * Recursively deletes a registry key and all its subkeys. RegDeleteKeyW only
+     * removes a key with no subkeys (and RegDeleteTree isn't in the MinGW
+     * headers), so enumerate and delete children first, then the key itself.
+     * Returns true if the key no longer exists afterward.
      */
     fun deleteKeyTree(rootKey: HKEY?, subKey: String): Boolean {
-        // RegDeleteTreeA is not available in MinGW headers, so we
-        // recursively delete using SHDeleteKeyA from shlwapi.
-        // As a simpler approach, delete known subkeys manually then the key.
-        // For ProgIDs the structure is: ProgID\DefaultIcon, ProgID\shell\open\command
-        deleteKey(rootKey, "$subKey\\shell\\open\\command")
-        deleteKey(rootKey, "$subKey\\shell\\open")
-        deleteKey(rootKey, "$subKey\\shell")
-        deleteKey(rootKey, "$subKey\\DefaultIcon")
+        val key = openKey(rootKey, subKey, (KEY_READ or KEY_WRITE).toUInt())
+        if (key != null) {
+            try {
+                // Always enumerate index 0: after deleting it, the next child
+                // becomes index 0. Stop when there are none left (or a delete fails,
+                // to avoid an infinite loop).
+                while (true) {
+                    val child = firstSubKeyName(key) ?: break
+                    if (!deleteKeyTree(rootKey, "$subKey\\$child")) break
+                }
+            } finally {
+                closeKey(key)
+            }
+        }
         return deleteKey(rootKey, subKey)
+    }
+
+    private fun firstSubKeyName(hKey: HKEY?): String? = memScoped {
+        val nameBuf = allocArray<UShortVar>(256)
+        val nameLen = alloc<UIntVar>()
+        nameLen.value = 256u
+        val result = RegEnumKeyExW(hKey, 0u, nameBuf, nameLen.ptr, null, null, null, null)
+        if (result == ERROR_SUCCESS) nameBuf.toKStringFromUtf16() else null
     }
 
     /**
@@ -201,6 +216,9 @@ class RegistryHelper {
         if (testKey != null) {
             closeKey(testKey)
             deleteKey(HKEY_CLASSES_ROOT, "Software\\QuickUnzip\\AdminTest")
+            // Clean up the parent we just created so the probe leaves no litter
+            // (only succeeds if now empty, which it is unless something else uses it).
+            deleteKey(HKEY_CLASSES_ROOT, "Software\\QuickUnzip")
             return true
         }
         return false
@@ -318,7 +336,9 @@ fun associateExtensionWithProgId(
  * @param extension File extension (without the dot, e.g., "zip")
  * @param progId The ProgID to check against (only removes if currently associated with this ProgID)
  * @param rootKeyPair Pair of root key and path prefix from getFileAssociationRootKey()
- * @return true if successful or already removed
+ * @return true only if our extension key was actually removed (so callers can
+ *         report whether anything changed); false if it wasn't present or is
+ *         owned by another application.
  */
 @OptIn(ExperimentalForeignApi::class)
 fun removeExtensionAssociation(
@@ -332,18 +352,18 @@ fun removeExtensionAssociation(
 
     // Open the extension key to check current association
     val extKey = helper.openKey(rootKey, prefix + extWithDot, KEY_READ.toUInt())
-    if (extKey != null) {
-        val currentProgId = helper.getStringValue(extKey, null)
-        helper.closeKey(extKey)
+        ?: return false // not present
+    val currentProgId = helper.getStringValue(extKey, null)
+    helper.closeKey(extKey)
 
-        // Only remove if it's currently associated with our ProgID
-        if (currentProgId == progId) {
-            return helper.deleteKey(rootKey, prefix + extWithDot)
-        }
+    // Only remove if it's currently associated with our ProgID (don't clobber
+    // another app's association). Use deleteKeyTree — the extension key has an
+    // OpenWithProgids subkey, so plain RegDeleteKeyW would fail.
+    return if (currentProgId == progId) {
+        helper.deleteKeyTree(rootKey, prefix + extWithDot)
+    } else {
+        false
     }
-
-    // If not found or not associated with our ProgID, consider it successful
-    return true
 }
 
 /**

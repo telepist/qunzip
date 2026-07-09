@@ -83,38 +83,44 @@ class WindowsFileAssociationRepository(
         logger.i { "Unregistering association for .$extension" }
 
         try {
-            val rootKeyPair = registryHelper.getFileAssociationRootKey()
-            val (rootKey, prefix) = rootKeyPair
-
-            // Try to remove the extension association for the current ProgID
-            // and any legacy ProgID prefixes that older installs may have
-            // written. Without this, `--unregister-associations` would leave
-            // pre-rename `Qunzip.*` keys behind on standalone CLI invocations.
+            // Remove the current ProgID and any legacy `Qunzip.*` prefix older
+            // installs wrote. Try BOTH the per-user (HKCU\Software\Classes) and
+            // system-wide (HKCR) hive: an association may have been registered
+            // under a different privilege level than this unregister run (the
+            // installer registers elevated; a later CLI call may be unelevated).
+            // Deletes in a hive we can't write just fail harmlessly.
             val sanitized = extension.removePrefix(".").replace('.', '_')
             val progIds = listOf("QuickUnzip.$sanitized", "Qunzip.$sanitized")
+            val hives = listOf(
+                Pair(HKEY_CURRENT_USER, "$HKCU_CLASSES_PATH\\"),
+                Pair(HKEY_CLASSES_ROOT, "")
+            )
 
             var removedAny = false
-            for (progId in progIds) {
-                if (removeExtensionAssociation(extension, progId, rootKeyPair, registryHelper)) {
-                    removedAny = true
+            for (hive in hives) {
+                val (rootKey, prefix) = hive
+                for (progId in progIds) {
+                    if (removeExtensionAssociation(extension, progId, hive, registryHelper)) {
+                        removedAny = true
+                    }
+                    // Best-effort delete of the ProgID tree itself; true only if it existed.
+                    if (registryHelper.deleteKeyTree(rootKey, "${prefix}${progId}")) {
+                        removedAny = true
+                    }
                 }
-                // Always best-effort delete the ProgID key tree itself —
-                // safe if it doesn't exist.
-                registryHelper.deleteKeyTree(rootKey, "${prefix}${progId}")
-            }
-            if (!removedAny) {
-                logger.w { "Could not remove association for .$extension (may not exist)" }
             }
 
             // Notify Windows Shell of the change
             registryHelper.notifyShellAssociationChanged()
 
-            logger.i { "Successfully unregistered association for .$extension" }
-            AssociationResult(
-                success = true,
-                extension = extension,
-                message = "Successfully unregistered .$extension"
-            )
+            val message = if (removedAny) {
+                logger.i { "Unregistered association for .$extension" }
+                "Successfully unregistered .$extension"
+            } else {
+                logger.w { "No association found to remove for .$extension" }
+                "No association found for .$extension"
+            }
+            AssociationResult(success = true, extension = extension, message = message)
         } catch (e: Exception) {
             logger.e(e) { "Exception while unregistering association for .$extension" }
             AssociationResult(
