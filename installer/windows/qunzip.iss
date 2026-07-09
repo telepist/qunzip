@@ -56,12 +56,19 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "fileassoc"; Description: "Register file associations for archives (.zip, .7z, .rar, etc.)"; GroupDescription: "File Associations:"; Flags: checkedonce
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
+[InstallDelete]
+; Remove legacy side-by-side manifests left by older versions. The manifest is
+; now embedded in each exe (RT_MANIFEST); these orphaned files are unused (an
+; embedded manifest wins over a sidecar) but would otherwise linger confusingly.
+Type: files; Name: "{app}\QuickUnzip.exe.manifest"
+Type: files; Name: "{app}\qunzip.exe.manifest"
+
 [Files]
-; Main executables and dependencies
+; Main executables and dependencies. The application manifest (DPI,
+; common-controls, activeCodePage=UTF-8) is embedded in each exe via RT_MANIFEST,
+; so no side-by-side .manifest files are shipped.
 Source: "..\..\build\installer-staging\windows\{#MyAppGuiExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\build\installer-staging\windows\QuickUnzip.exe.manifest"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\build\installer-staging\windows\{#MyAppCliExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\build\installer-staging\windows\qunzip.exe.manifest"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\build\installer-staging\windows\7z.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\build\installer-staging\windows\7z.dll"; DestDir: "{app}"; Flags: ignoreversion
 

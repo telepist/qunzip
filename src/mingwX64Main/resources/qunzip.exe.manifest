@@ -23,6 +23,13 @@
     <windowsSettings>
       <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
       <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <!-- Make the process ANSI code page UTF-8. This fixes non-ASCII archive
+           paths (e.g. "Pojat telttaretkellä.zip"): without it GetACP() is the
+           legacy locale code page (1252 here), so the CRT-decoded argv and every
+           narrow file call (access/stat/fopen…) mangle non-ASCII bytes, and the
+           archive is reported "not found". UTF-8 aligns those with Kotlin/Native's
+           UTF-8 strings. Requires Windows 10 1903+. -->
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
     </windowsSettings>
   </application>
 </assembly>

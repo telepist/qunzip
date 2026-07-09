@@ -212,9 +212,11 @@ tasks.register<Exec>("compileWindowsResources") {
     val rcFile = file("src/mingwX64Main/resources/qunzip.rc")
     val resFile = file("build/resources/qunzip.res")
     val iconFile = file("installer/windows/icon.ico")
+    val manifestFile = file("src/mingwX64Main/resources/qunzip.exe.manifest")
 
     inputs.file(rcFile)
     inputs.file(iconFile).optional()
+    inputs.file(manifestFile) // embedded via RT_MANIFEST in the .rc
     outputs.file(resFile)
 
     doFirst {
@@ -231,6 +233,8 @@ tasks.register<Exec>("compileWindowsResources") {
     workingDir = projectDir
     commandLine("windres",
         "--include-dir=${iconFile.parentFile.absolutePath}",
+        // Directory holding qunzip.exe.manifest referenced by the .rc (RT_MANIFEST).
+        "--include-dir=${rcFile.parentFile.absolutePath}",
         rcFile.absolutePath,
         "-O", "coff",
         "-o", resFile.absolutePath)
@@ -310,6 +314,16 @@ tasks.named("compileKotlinMingwX64") {
     dependsOn("buildCimgui")
 }
 
+// The compiled resource (qunzip.res) is passed to the linker via linkerOpts,
+// which Gradle does NOT track as a task input — so a change to qunzip.rc or the
+// embedded manifest alone would leave the link tasks up-to-date and ship a stale
+// binary. Register the .res as an explicit input so link tasks relink when it
+// changes.
+tasks.matching { it.name.startsWith("link") && it.name.endsWith("MingwX64") }.configureEach {
+    inputs.file("build/resources/qunzip.res").withPropertyName("windowsResources")
+    dependsOn("compileWindowsResources")
+}
+
 // ============================================================================
 // 7-Zip Download Task
 // ============================================================================
@@ -368,35 +382,31 @@ tasks.register("download7zip") {
     }
 }
 
-// Copy 7-Zip dependencies and per-binary side-by-side manifest to each output dir.
-// Windows looks for `<exe>.manifest` next to the exe — so qunzip.exe.manifest for
-// the CLI binary and QuickUnzip.exe.manifest for the GUI binary.
-fun Copy.copyRuntimeResources(intoDir: String, manifestName: String) {
+// Copy the 7-Zip dependencies next to each built exe. The application manifest
+// (DPI, common-controls, activeCodePage=UTF-8) is embedded directly in the exe
+// via qunzip.rc (RT_MANIFEST), so no side-by-side <exe>.manifest is shipped.
+fun Copy.copyRuntimeResources(intoDir: String) {
     from("bin/7zip") {
         include("7z.exe", "7z.dll")
-    }
-    from("src/mingwX64Main/resources") {
-        include("qunzip.exe.manifest")
-        rename("qunzip.exe.manifest", manifestName)
     }
     into(intoDir)
 }
 
 tasks.register<Copy>("copy7zipToCliDebugMingwX64") {
     dependsOn("download7zip", "linkCliDebugExecutableMingwX64")
-    copyRuntimeResources("build/bin/mingwX64/cliDebugExecutable", "qunzip.exe.manifest")
+    copyRuntimeResources("build/bin/mingwX64/cliDebugExecutable")
 }
 tasks.register<Copy>("copy7zipToCliReleaseMingwX64") {
     dependsOn("download7zip", "linkCliReleaseExecutableMingwX64")
-    copyRuntimeResources("build/bin/mingwX64/cliReleaseExecutable", "qunzip.exe.manifest")
+    copyRuntimeResources("build/bin/mingwX64/cliReleaseExecutable")
 }
 tasks.register<Copy>("copy7zipToGuiDebugMingwX64") {
     dependsOn("download7zip", "linkGuiDebugExecutableMingwX64")
-    copyRuntimeResources("build/bin/mingwX64/guiDebugExecutable", "QuickUnzip.exe.manifest")
+    copyRuntimeResources("build/bin/mingwX64/guiDebugExecutable")
 }
 tasks.register<Copy>("copy7zipToGuiReleaseMingwX64") {
     dependsOn("download7zip", "linkGuiReleaseExecutableMingwX64")
-    copyRuntimeResources("build/bin/mingwX64/guiReleaseExecutable", "QuickUnzip.exe.manifest")
+    copyRuntimeResources("build/bin/mingwX64/guiReleaseExecutable")
 }
 
 tasks.named("linkCliDebugExecutableMingwX64")   { finalizedBy("copy7zipToCliDebugMingwX64") }
@@ -414,10 +424,10 @@ tasks.register<Copy>("prepareInstallerResources") {
     dependsOn("copy7zipToCliReleaseMingwX64", "copy7zipToGuiReleaseMingwX64")
 
     from("build/bin/mingwX64/cliReleaseExecutable") {
-        include("qunzip.exe", "qunzip.exe.manifest")
+        include("qunzip.exe")
     }
     from("build/bin/mingwX64/guiReleaseExecutable") {
-        include("QuickUnzip.exe", "QuickUnzip.exe.manifest")
+        include("QuickUnzip.exe")
     }
     from("bin/7zip") {
         include("7z.exe", "7z.dll", "License.txt")

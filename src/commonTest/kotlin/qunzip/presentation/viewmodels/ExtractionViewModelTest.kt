@@ -5,6 +5,7 @@ package qunzip.presentation.viewmodels
 import qunzip.domain.entities.*
 import qunzip.domain.repositories.PreferencesRepository
 import qunzip.domain.usecases.*
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
 import app.cash.turbine.test
@@ -312,6 +313,31 @@ class ExtractionViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state.isWaitingForPassword)
         assertEquals("Wrong password", state.error)
+    }
+
+    @Test
+    fun `extraction error thrown mid-flow is handled gracefully as FAILED`() = testScope.runTest {
+        // Regression: the extraction repository is a channelFlow that rethrows an
+        // ExtractionError (e.g. SevenZipError) after emitting FAILED. That rethrow
+        // must be handled in-flow, not escape and crash the process. Verify the
+        // ViewModel surfaces it as an error + FAILED progress (which keeps the
+        // standalone window open) rather than letting it propagate.
+        val archivePath = "/test/broken.zip"
+        val archive = Archive(archivePath, "broken.zip", ArchiveFormat.ZIP, 1024L)
+        mockValidateUseCase.result = ValidationResult.Valid(archive)
+        mockExtractUseCase.progressFlow = flow {
+            emit(ExtractionProgress(archivePath, stage = ExtractionStage.EXTRACTING))
+            throw ExtractionError.SevenZipError(2, "7zip extraction failed")
+        }
+
+        // Must not throw out of the launch / crash the test.
+        viewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(ExtractionStage.FAILED, state.progress?.stage)
+        assertFalse(state.isWaitingForPassword)
+        assertNotNull(state.error)
     }
 
     @Test

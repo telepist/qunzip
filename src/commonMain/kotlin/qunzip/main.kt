@@ -16,10 +16,14 @@ import co.touchlab.kermit.Severity
  * Always renders the Mosaic TUI in the current terminal. Handles all
  * settings/admin flags (--register-associations, --set-trash-on, etc.).
  */
-fun mainCli(args: Array<String>) {
+fun mainCli(entryArgs: Array<String>) {
     Logger.setMinSeverity(Severity.Assert)
     UiConfig.enableTuiMode()
     val logger = Logger.withTag("MainCli")
+
+    // Re-read argv as UTF-16 on Windows so non-ASCII paths survive (see
+    // resolveCommandLineArgs). No-op on other platforms.
+    val args = resolveCommandLineArgs(entryArgs)
 
     // --force-standalone: simulate the GUI exe's auto-close behavior from CLI for testing.
     val forceStandalone = args.contains("--force-standalone")
@@ -50,7 +54,7 @@ fun mainCli(args: Array<String>) {
  * GUI entry point — used by QuickUnzip.exe (Windows subsystem). Always
  * renders the ImGui dialog. No console flash, no CLI-flag handling.
  */
-fun mainGui(args: Array<String>) {
+fun mainGui(entryArgs: Array<String>) {
     Logger.setMinSeverity(Severity.Assert)
     // UiConfig.enableTuiMode() suppresses println-based notifications that
     // would otherwise interleave with the TUI display. The GUI binary
@@ -59,6 +63,10 @@ fun mainGui(args: Array<String>) {
     // suppressing keeps stderr clean if a parent shell is somehow attached.
     UiConfig.enableTuiMode()
     val logger = Logger.withTag("MainGui")
+
+    // Re-read argv as UTF-16 on Windows so non-ASCII paths survive (see
+    // resolveCommandLineArgs). No-op on other platforms.
+    val args = resolveCommandLineArgs(entryArgs)
 
     // The GUI exe ignores any flags — it only consumes a file path. CLI flags
     // belong to qunzip.exe.

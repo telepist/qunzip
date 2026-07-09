@@ -76,7 +76,9 @@ class WindowsArchiveRepository(
         // Execute 7zip list command: 7z l -slt archive.zip -p"password"
         // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Running 7z l -slt..." }
-        val args = mutableListOf("l", "-slt", archivePath, "-p\"${password ?: ""}\"")
+        // -sccUTF-8: emit console output (paths) as UTF-8 instead of the OEM
+        // console code page, so non-ASCII entry names decode correctly below.
+        val args = mutableListOf("l", "-slt", "-sccUTF-8", archivePath, "-p\"${password ?: ""}\"")
         val output = execute7zipCommand(args)
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] 7z command completed, output size: ${output.length} chars" }
 
@@ -227,17 +229,27 @@ class WindowsArchiveRepository(
     }
 
     private fun getFileStats(path: String): FileInfo? = memScoped {
-        val statBuf = alloc<stat>()
-        if (stat(path, statBuf.ptr) != 0) {
+        // Use GetFileAttributesExW rather than stat(): mingw's struct stat has a
+        // 32-bit st_size, which wraps for files >= 4 GiB (a 6 GB archive would
+        // report ~1.5 GB). The Win32 API gives a full 64-bit size and is
+        // Unicode-safe for the path.
+        val data = alloc<WIN32_FILE_ATTRIBUTE_DATA>()
+        if (GetFileAttributesExW(path, GET_FILEEX_INFO_LEVELS.GetFileExInfoStandard, data.ptr) == 0) {
             return null
         }
 
+        val size = (data.nFileSizeHigh.toLong() shl 32) or data.nFileSizeLow.toLong()
+        // FILETIME is 100-ns ticks since 1601-01-01; convert to Unix epoch seconds.
+        val ticks = (data.ftLastWriteTime.dwHighDateTime.toLong() shl 32) or
+            data.ftLastWriteTime.dwLowDateTime.toLong()
+        val epochSeconds = (ticks - 116444736000000000L) / 10_000_000L
+
         FileInfo(
             path = path,
-            size = statBuf.st_size.toLong(),
-            lastModified = Instant.fromEpochSeconds(statBuf.st_mtime),
+            size = size,
+            lastModified = Instant.fromEpochSeconds(epochSeconds),
             isReadable = true,
-            isDirectory = (statBuf.st_mode.toInt() and S_IFDIR) != 0
+            isDirectory = (data.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY.toUInt()) != 0u
         )
     }
 
@@ -301,8 +313,10 @@ class WindowsArchiveRepository(
             throw ExtractionError.IOError("Failed to execute 7zip command: ${GetLastError()}")
         }
 
-        // Read output from pipe
-        val output = StringBuilder()
+        // Read the raw bytes, then decode once as UTF-8 (7-Zip is invoked with
+        // -sccUTF-8). Decoding per-chunk or byte-by-byte would corrupt multi-byte
+        // UTF-8 sequences that straddle a read boundary or single-byte handling.
+        val outBytes = ArrayList<Byte>()
         val buffer = allocArray<ByteVar>(4096)
         val bytesRead = alloc<UIntVar>()
 
@@ -315,12 +329,8 @@ class WindowsArchiveRepository(
                 null
             )
             if (readSuccess == 0 || bytesRead.value == 0u) break
-            // Convert bytes to string, handling potential null bytes in output
             for (i in 0 until bytesRead.value.toInt()) {
-                val byte = buffer[i]
-                if (byte != 0.toByte()) {
-                    output.append(byte.toInt().toChar())
-                }
+                outBytes.add(buffer[i])
             }
         }
 
@@ -330,7 +340,7 @@ class WindowsArchiveRepository(
         CloseHandle(processInfo.hThread)
         CloseHandle(stdoutReadHandle.value)
 
-        return@memScoped output.toString()
+        return@memScoped outBytes.toByteArray().decodeToString()
     }
 
     private fun execute7zipTest(archivePath: String, password: String? = null): Int {
@@ -357,7 +367,10 @@ class WindowsArchiveRepository(
         // Note: Conflict handling is done at application level, not by 7zip's -aou flag
         // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
         val passwordArg = " -p\"${password ?: ""}\""
-        val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y -bsp1 -bb1$passwordArg"
+        // -sccUTF-8 makes 7-Zip print the "- <path>" progress lines as UTF-8, so
+        // the current-file display shows non-ASCII names correctly (they're
+        // decoded as UTF-8 below).
+        val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y -bsp1 -bb1 -sccUTF-8$passwordArg"
         logger.d { "Extraction command with progress: $command" }
 
         // Create pipe for stdout

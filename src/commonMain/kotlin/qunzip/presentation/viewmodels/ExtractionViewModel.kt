@@ -7,6 +7,7 @@ import qunzip.domain.usecases.ValidateArchiveUseCase
 import qunzip.domain.usecases.ValidationResult
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import co.touchlab.kermit.Logger
@@ -110,6 +111,17 @@ class ExtractionViewModel(
                             _events.tryEmit(ExtractionEvent.ExtractionCompleted)
                         }
                     }
+                    // The use case emits a FAILED progress and then rethrows the
+                    // error. Handle that rethrow here, inside the flow: the
+                    // extraction repository is a channelFlow whose producer runs
+                    // as a child coroutine, so on Kotlin/Native its failure
+                    // propagates up the Job hierarchy to this launch's uncaught
+                    // handler and crashes the whole process — a plain try/catch
+                    // around collect does NOT stop it. Flow.catch intercepts the
+                    // upstream failure in-flow and lets us surface it as UI state.
+                    .catch { throwable ->
+                        handleExtractionThrowable(archivePath, throwable)
+                    }
                     .collect { progress ->
                         _uiState.update {
                             it.copy(
@@ -139,36 +151,56 @@ class ExtractionViewModel(
                         }
                     }
 
-            } catch (e: ExtractionError.PasswordRequired) {
-                // Wrong password - go back to password prompt
-                logger.w { "Wrong password, prompting again" }
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isExtracting = false,
-                        isWaitingForPassword = true,
-                        error = e.message
-                    )
-                }
-                _events.tryEmit(ExtractionEvent.PasswordRequired)
-            } catch (e: Exception) {
-                logger.e(e) { "Unexpected error during extraction" }
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isExtracting = false,
-                        isWaitingForPassword = false,
-                        error = e.message ?: "Unknown error occurred",
-                        // Mark FAILED so the auto-exit observer fires for thrown
-                        // errors too (e.g., file system issues mid-extraction).
-                        progress = ExtractionProgress(
-                            archivePath = archivePath,
-                            stage = ExtractionStage.FAILED
-                        )
-                    )
-                }
-                _events.tryEmit(ExtractionEvent.ExtractionFailed(e))
+            } catch (e: CancellationException) {
+                throw e // never swallow cancellation
+            } catch (e: Throwable) {
+                // Safety net for the validation phase (validation, preference load)
+                // and any error thrown at use-case invocation before the flow is
+                // collected; flow-phase errors are handled by the in-flow .catch
+                // above. Note ExtractionError extends Throwable (not Exception),
+                // so this must catch Throwable to handle it. Same handling either way.
+                handleExtractionThrowable(archivePath, e)
             }
+        }
+    }
+
+    /**
+     * Translate a thrown extraction error into UI state. Shared by the in-flow
+     * [kotlinx.coroutines.flow.catch] handler and the outer try/catch so a
+     * failure never escapes to crash the process, and the window stays open
+     * showing the error (see ApplicationViewModel's auto-exit observer, which
+     * keeps standalone windows open on FAILED).
+     */
+    private fun handleExtractionThrowable(archivePath: String, throwable: Throwable) {
+        if (throwable is ExtractionError.PasswordRequired) {
+            // Wrong/missing password — go back to the password prompt.
+            logger.w { "Wrong password, prompting again" }
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    isExtracting = false,
+                    isWaitingForPassword = true,
+                    error = throwable.message
+                )
+            }
+            _events.tryEmit(ExtractionEvent.PasswordRequired)
+        } else {
+            logger.e(throwable) { "Unexpected error during extraction" }
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    isExtracting = false,
+                    isWaitingForPassword = false,
+                    error = throwable.message ?: "Unknown error occurred",
+                    // Mark FAILED so the auto-exit observer fires; for a standalone
+                    // (double-click) launch this keeps the window open on error.
+                    progress = ExtractionProgress(
+                        archivePath = archivePath,
+                        stage = ExtractionStage.FAILED
+                    )
+                )
+            }
+            _events.tryEmit(ExtractionEvent.ExtractionFailed(throwable))
         }
     }
 

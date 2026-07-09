@@ -21,6 +21,19 @@ object UiConfig {
 }
 
 /**
+ * Resolve the real command-line arguments for the process.
+ *
+ * On Windows the Kotlin/Native entry point receives argv from the C runtime,
+ * which decodes the command line with the legacy ANSI code page. Non-ASCII
+ * paths (e.g. an archive named "Pojat telttaretkellä.zip") arrive corrupted —
+ * bytes that aren't valid UTF-8 become U+FFFD — so the archive is later
+ * reported "not found". The Windows actual re-reads the true UTF-16 command
+ * line via GetCommandLineW/CommandLineToArgvW and drops argv[0]. Other
+ * platforms already receive UTF-8 argv and return [entryArgs] unchanged.
+ */
+expect fun resolveCommandLineArgs(entryArgs: Array<String>): Array<String>
+
+/**
  * Detect how the application was launched
  * Returns true if running in a terminal/console
  */

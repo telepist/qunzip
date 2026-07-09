@@ -30,17 +30,26 @@ class WindowsFileSystemRepository(
     }
 
     override suspend fun getFileInfo(path: String): FileInfo = memScoped {
-        val statBuf = alloc<stat>()
-        if (stat(path, statBuf.ptr) != 0) {
+        // Use GetFileAttributesExW, not stat(): mingw's struct stat has a 32-bit
+        // st_size that wraps for files >= 4 GiB (a 6 GB archive would report
+        // ~1.5 GB). The Win32 API returns a full 64-bit size and is Unicode-safe.
+        val data = alloc<WIN32_FILE_ATTRIBUTE_DATA>()
+        if (GetFileAttributesExW(path, GET_FILEEX_INFO_LEVELS.GetFileExInfoStandard, data.ptr) == 0) {
             throw Exception("Failed to get file info for: $path")
         }
 
+        val size = (data.nFileSizeHigh.toLong() shl 32) or data.nFileSizeLow.toLong()
+        // FILETIME is 100-ns ticks since 1601-01-01; convert to Unix epoch seconds.
+        val ticks = (data.ftLastWriteTime.dwHighDateTime.toLong() shl 32) or
+            data.ftLastWriteTime.dwLowDateTime.toLong()
+        val epochSeconds = (ticks - 116444736000000000L) / 10_000_000L
+
         FileInfo(
             path = path,
-            size = statBuf.st_size.toLong(),
-            lastModified = Instant.fromEpochSeconds(statBuf.st_mtime),
+            size = size,
+            lastModified = Instant.fromEpochSeconds(epochSeconds),
             isReadable = isReadable(path),
-            isDirectory = (statBuf.st_mode.toInt() and S_IFDIR) != 0
+            isDirectory = (data.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY.toUInt()) != 0u
         )
     }
 

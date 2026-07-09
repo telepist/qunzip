@@ -193,6 +193,25 @@ class ApplicationViewModelTest {
         assertTrue(state.showCloseHint)
     }
 
+    @Test
+    fun `standalone reaching FAILED keeps window open regardless of autoClose`() = testScope.runTest {
+        // A double-click launch that fails must NOT auto-close, even with the
+        // default autoCloseAfterExtraction=true — otherwise the error dialog
+        // just flashes and the user never sees why extraction failed.
+        rebuildAsStandalone(autoCloseAfterExtraction = true)
+        val archivePath = "/test/broken.zip"
+        mockExtract.progressFlow = flowOf(
+            ExtractionProgress(archivePath, stage = ExtractionStage.FAILED)
+        )
+
+        viewModel.extractionViewModel.extractArchive(archivePath)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertFalse(state.shouldExit, "standalone failure must keep the window open")
+        assertTrue(state.showCloseHint)
+    }
+
     // --- Mocks ---
 
     private class MockExtractArchiveUseCase : ExtractArchiveUseCase(

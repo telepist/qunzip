@@ -10,6 +10,26 @@ import platform.posix.getenv
 // All detection here keys off GetConsoleWindow() so the same code handles both.
 
 /**
+ * Re-read the process command line as UTF-16 and return the arguments after
+ * argv[0]. This sidesteps the ANSI-code-page corruption of the C-runtime argv
+ * (see the expect declaration) so non-ASCII archive paths survive intact.
+ */
+@OptIn(ExperimentalForeignApi::class)
+actual fun resolveCommandLineArgs(entryArgs: Array<String>): Array<String> = memScoped {
+    val commandLine = GetCommandLineW()?.toKStringFromUtf16() ?: return@memScoped entryArgs
+    val argc = alloc<IntVar>()
+    val argv = CommandLineToArgvW(commandLine, argc.ptr) ?: return@memScoped entryArgs
+    try {
+        val count = argc.value
+        if (count <= 1) return@memScoped emptyArray()
+        // Skip argv[0] (the executable path); keep the rest as UTF-16 → Kotlin strings.
+        Array(count - 1) { i -> argv[i + 1]!!.toKStringFromUtf16() }
+    } finally {
+        LocalFree(argv)
+    }
+}
+
+/**
  * Check if running in a terminal on Windows
  * Returns true if stdout is attached to a console or we're in MSYS2/Cygwin
  */

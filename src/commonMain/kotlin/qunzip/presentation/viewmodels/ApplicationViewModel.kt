@@ -98,30 +98,38 @@ class ApplicationViewModel(
             extractionViewModel.uiState
                 .mapNotNull { it.progress?.stage }
                 .filter { it == ExtractionStage.COMPLETED || it == ExtractionStage.FAILED }
-                .collect { handleExtractionFinished() }
+                .collect { stage -> handleExtractionFinished(succeeded = stage == ExtractionStage.COMPLETED) }
         }
     }
 
     /**
      * Decide whether to auto-exit after extraction finishes.
-     * - CLI launch: always exit (user gets their shell back, output stays in scrollback)
-     * - Standalone launch (double-click): exit if autoCloseAfterExtraction is true (default).
-     *   When false, keeps the window open so the user can see the result.
+     * - CLI launch: always exit (user gets their shell back, output stays in scrollback).
+     * - Standalone launch (double-click):
+     *   - On failure: never auto-close, regardless of the autoClose preference —
+     *     the window must stay open so the user can read the error message.
+     *   - On success: exit if autoCloseAfterExtraction is true (default); otherwise
+     *     keep the window open so the user can see the result.
      */
-    private fun handleExtractionFinished() {
+    private fun handleExtractionFinished(succeeded: Boolean) {
         if (!isStandaloneLaunch) {
-            // CLI: always exit
+            // CLI: always exit (any error remains visible in terminal scrollback)
             _uiState.update { it.copy(shouldExit = true) }
-        } else {
-            // Standalone (double-click): check user preference
-            scope.launch {
-                val prefs = preferencesRepository.loadPreferences()
-                if (prefs.autoCloseAfterExtraction) {
-                    _uiState.update { it.copy(shouldExit = true) }
-                } else {
-                    // Keep window visible, show hint to close
-                    _uiState.update { it.copy(showCloseHint = true) }
-                }
+            return
+        }
+        if (!succeeded) {
+            // Standalone failure: keep the window open so the error is readable.
+            _uiState.update { it.copy(showCloseHint = true) }
+            return
+        }
+        // Standalone success: check user preference
+        scope.launch {
+            val prefs = preferencesRepository.loadPreferences()
+            if (prefs.autoCloseAfterExtraction) {
+                _uiState.update { it.copy(shouldExit = true) }
+            } else {
+                // Keep window visible, show hint to close
+                _uiState.update { it.copy(showCloseHint = true) }
             }
         }
     }

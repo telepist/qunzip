@@ -4,6 +4,14 @@
 
 1 ICON "icon.ico"
 
+// Embed the application manifest (RT_MANIFEST, ID 1) directly in the binary so
+// its settings — DPI awareness, common-controls v6, and activeCodePage=UTF-8 —
+// travel with the exe. An embedded manifest takes precedence over any external
+// <exe>.manifest sidecar, so a stale sidecar left at the install location can't
+// override it. activeCodePage=UTF-8 is what makes non-ASCII archive paths work
+// (GetACP()=65001 → narrow file calls match Kotlin/Native's UTF-8 strings).
+1 24 "qunzip.exe.manifest"
+
 1 VERSIONINFO
 FILEVERSION 1,0,0,0
 PRODUCTVERSION 1,0,0,0
