@@ -227,3 +227,20 @@ fun fileExistsAt(path: String): Boolean {
 fun copyFile(src: String, dst: String): Boolean {
     return CopyFileA(src, dst, FALSE) != 0
 }
+
+/**
+ * Run a cmd.exe built-in (copy, mkdir, …) via a wide command line. Use this for
+ * paths containing non-ASCII characters: the test process runs on the legacy
+ * ANSI code page, so the narrow file helpers would mangle them, but the wide
+ * command line here preserves the UTF-16 path.
+ */
+fun cmd(args: String): ProcessResult =
+    executeProcess("cmd /c $args", timeoutMillis = 10_000u)
+
+/**
+ * Recursive bare listing of a directory (`dir /s /b`). Non-ASCII path segments
+ * may be mangled in the captured output, but ASCII file names within are intact,
+ * so callers can assert on a known entry name.
+ */
+fun listDirRecursive(dir: String): String =
+    executeProcess("cmd /c dir /s /b \"$dir\"", timeoutMillis = 10_000u).stdout

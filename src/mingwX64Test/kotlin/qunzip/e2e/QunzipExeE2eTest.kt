@@ -109,6 +109,89 @@ class QunzipExeE2eTest {
         assertEquals(0, result.exitCode, "Expected exit code 0")
     }
 
+    // --- Non-ASCII path tests (UTF-16 argv + UTF-8 code page fix) ---
+
+    // The archive name/dir are created via wide-API subprocesses (cmd) because
+    // the test process itself runs on the legacy ANSI code page; the narrow
+    // copyFile/fileExistsAt helpers would mangle non-ASCII paths.
+
+    @Test
+    fun `extracts an archive whose name is non-ASCII`() {
+        val archivePath = "$tempDir\\Pojat telttaretkellä.zip"
+        assertEquals(0, cmd("copy /y \"${getFixturePath("multiple-files.zip")}\" \"$archivePath\"").exitCode)
+
+        val result = executeProcess("\"$exe\" \"$archivePath\"", timeoutMillis = 15_000u)
+
+        assertFalse(result.timedOut, "Process timed out")
+        assertEquals(0, result.exitCode)
+        assertFalse(result.stdout.contains("not found", ignoreCase = true),
+            "Archive with a non-ASCII name was not found — argv/code-page regression")
+        // Extraction actually produced the files (folder name is non-ASCII, but
+        // the entries are ASCII so we can find them in a recursive listing).
+        assertTrue(listDirRecursive(tempDir).contains("file1.txt"),
+            "Expected extracted files under a non-ASCII folder")
+    }
+
+    @Test
+    fun `extracts an archive inside a non-ASCII directory`() {
+        val dir = "$tempDir\\Näyte ählä"
+        assertEquals(0, cmd("mkdir \"$dir\"").exitCode)
+        val archivePath = "$dir\\archive.zip"
+        assertEquals(0, cmd("copy /y \"${getFixturePath("multiple-files.zip")}\" \"$archivePath\"").exitCode)
+
+        val result = executeProcess("\"$exe\" \"$archivePath\"", timeoutMillis = 15_000u)
+
+        assertFalse(result.timedOut, "Process timed out")
+        assertEquals(0, result.exitCode)
+        assertFalse(result.stdout.contains("not found", ignoreCase = true))
+        assertTrue(listDirRecursive(dir).contains("file1.txt"))
+    }
+
+    // --- Path-with-spaces test (argument quoting fix) ---
+
+    @Test
+    fun `extracts an archive in a path containing spaces`() {
+        val dir = "$tempDir\\a folder with spaces"
+        assertEquals(0, cmd("mkdir \"$dir\"").exitCode)
+        val archivePath = "$dir\\multiple-files.zip"
+        assertTrue(copyFile(getFixturePath("multiple-files.zip"), archivePath))
+
+        val result = executeProcess("\"$exe\" \"$archivePath\"", timeoutMillis = 15_000u)
+
+        assertFalse(result.timedOut, "Process timed out")
+        assertEquals(0, result.exitCode)
+        assertFalse(result.stdout.contains("not found", ignoreCase = true))
+        assertTrue(listDirRecursive(dir).contains("file1.txt"))
+    }
+
+    // --- Error-handling tests (must fail gracefully, never crash or hang) ---
+
+    @Test
+    fun `corrupt archive fails gracefully without crashing or hanging`() {
+        val archivePath = "$tempDir\\corrupt.zip"
+        assertTrue(copyFile(getFixturePath("corrupt.zip"), archivePath))
+
+        val result = executeProcess("\"$exe\" \"$archivePath\"", timeoutMillis = 15_000u)
+
+        // A channelFlow producer crash would abort with a non-zero code; a hang
+        // would time out. Graceful handling exits 0 with an error shown.
+        assertFalse(result.timedOut, "Process hung on a corrupt archive")
+        assertEquals(0, result.exitCode, "Corrupt archive should be handled gracefully, not crash")
+    }
+
+    @Test
+    fun `nonexistent archive fails gracefully`() {
+        val archivePath = "$tempDir\\does-not-exist.zip"
+
+        val result = executeProcess("\"$exe\" \"$archivePath\"", timeoutMillis = 10_000u)
+
+        // Graceful: no hang, no crash. (The error text is shown interactively but
+        // the non-interactive renderer may exit before flushing it, so we don't
+        // assert on stdout here.)
+        assertFalse(result.timedOut, "Process hung on a missing archive")
+        assertEquals(0, result.exitCode)
+    }
+
     // --- Settings CLI tests ---
 
     @Test
