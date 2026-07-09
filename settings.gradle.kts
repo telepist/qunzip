@@ -19,4 +19,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "kotlin-cmd"
+rootProject.name = "qunzip"
