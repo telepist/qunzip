@@ -5,6 +5,8 @@ import qunzip.domain.repositories.ArchiveRepository
 import qunzip.domain.usecases.FileInfo
 import qunzip.data.sevenzip.SevenZipOutputParser
 import qunzip.data.sevenzip.SevenZipProgressLine
+import qunzip.util.buildWindowsCommandLine
+import qunzip.util.joinWindowsPath
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.isActive
@@ -661,72 +663,6 @@ private fun getBundled7zipPath(): String {
                 "Checked: ${candidates.distinct().joinToString()}"
         )
     }
-}
-
-/**
- * Build a Windows command line from a program path and arguments, quoting each
- * token per the CommandLineToArgvW rules that CreateProcessW/7-Zip follow. This
- * keeps paths and passwords that contain spaces or double quotes intact, and
- * quotes the program path itself (the install dir is "…\Quick Unzip", which has
- * a space).
- */
-private fun buildWindowsCommandLine(program: String, args: List<String>): String =
-    (listOf(program) + args).joinToString(" ") { quoteWindowsArg(it) }
-
-/**
- * Quote a single argument using the standard MSVCRT/CommandLineToArgvW algorithm:
- * wrap in double quotes when it contains whitespace or a quote, escape embedded
- * quotes with a backslash, and double any run of backslashes that immediately
- * precedes a quote (including the closing one).
- */
-private fun quoteWindowsArg(arg: String): String {
-    if (arg.isNotEmpty() && arg.none { it == ' ' || it == '\t' || it == '"' }) {
-        return arg
-    }
-    val sb = StringBuilder()
-    sb.append('"')
-    var backslashes = 0
-    for (c in arg) {
-        when (c) {
-            '\\' -> backslashes++
-            '"' -> {
-                repeat(backslashes * 2 + 1) { sb.append('\\') }
-                backslashes = 0
-                sb.append('"')
-            }
-            else -> {
-                repeat(backslashes) { sb.append('\\') }
-                backslashes = 0
-                sb.append(c)
-            }
-        }
-    }
-    repeat(backslashes * 2) { sb.append('\\') }
-    sb.append('"')
-    return sb.toString()
-}
-
-private fun joinWindowsPath(vararg parts: String): String {
-    val builder = StringBuilder()
-
-    parts.filter { it.isNotEmpty() }.forEachIndexed { index, rawPart ->
-        val part = when (index) {
-            0 -> rawPart.trimEnd('\\', '/')
-            else -> rawPart.trim('\\', '/')
-        }
-
-        if (part.isEmpty()) {
-            return@forEachIndexed
-        }
-
-        if (builder.isNotEmpty()) {
-            builder.append('\\')
-        }
-
-        builder.append(part)
-    }
-
-    return builder.toString().ifEmpty { "" }
 }
 
 @OptIn(ExperimentalForeignApi::class)
