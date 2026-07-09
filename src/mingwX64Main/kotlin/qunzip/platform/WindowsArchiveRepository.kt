@@ -5,6 +5,7 @@ import qunzip.domain.repositories.ArchiveRepository
 import qunzip.domain.usecases.FileInfo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.isActive
 import kotlin.time.TimeSource
 import kotlinx.cinterop.*
 import platform.posix.*
@@ -162,7 +163,11 @@ class WindowsArchiveRepository(
                 archivePath,
                 destinationPath,
                 contents.totalSize,
-                password
+                password,
+                // Stop and kill the 7z child if the collecting coroutine is
+                // cancelled (window closed / cancel pressed), so it doesn't keep
+                // extracting in the background.
+                shouldContinue = { isActive }
             ) { bytesExtracted, currentFile ->
                 // Send progress update with actual bytes extracted
                 trySend(ExtractionProgress(
@@ -179,6 +184,9 @@ class WindowsArchiveRepository(
             }
 
             if (exitCode != 0) {
+                // If we were cancelled the child was terminated on purpose — don't
+                // surface that as an extraction error.
+                if (!isActive) return@channelFlow
                 throw ExtractionError.SevenZipError(exitCode, "7zip extraction failed")
             }
 
@@ -357,6 +365,7 @@ class WindowsArchiveRepository(
         destinationPath: String,
         totalBytes: Long,
         password: String? = null,
+        shouldContinue: () -> Boolean = { true },
         onProgress: (bytesExtracted: Long, currentFile: String?) -> Unit
     ): Int = memScoped {
         // Use -bsp1 to output progress to stdout, -bb1 for file names
@@ -393,6 +402,24 @@ class WindowsArchiveRepository(
         // Ensure the read handle is not inherited
         SetHandleInformation(stdoutReadHandle.value, HANDLE_FLAG_INHERIT.toUInt(), 0u)
 
+        // Put the 7z child in a kill-on-close job object: if this process exits
+        // while extraction is still running (window closed, crash, exitProcess),
+        // Windows closes the job handle and terminates the child, so it can't keep
+        // extracting orphaned. Create the process suspended, assign it, then resume.
+        val job = CreateJobObjectW(null, null)
+        if (job != null) {
+            val jobInfo = alloc<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>()
+            jobInfo.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE.toUInt()
+            SetInformationJobObject(
+                job,
+                // JobObjectExtendedLimitInformation (9) — passed by value; the K/N
+                // Windows headers map JOBOBJECTINFOCLASS to a UInt.
+                9u,
+                jobInfo.ptr,
+                sizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>().toUInt()
+            )
+        }
+
         val startupInfo = alloc<STARTUPINFOW>()
         val processInfo = alloc<PROCESS_INFORMATION>()
 
@@ -403,13 +430,18 @@ class WindowsArchiveRepository(
         startupInfo.hStdError = stdoutWriteHandle.value
         startupInfo.hStdInput = null
 
+        val creationFlags = if (job != null) {
+            (CREATE_NO_WINDOW or CREATE_SUSPENDED).toUInt()
+        } else {
+            CREATE_NO_WINDOW.toUInt()
+        }
         val success = CreateProcessW(
             lpApplicationName = null,
             lpCommandLine = command.wcstr.ptr,
             lpProcessAttributes = null,
             lpThreadAttributes = null,
             bInheritHandles = TRUE,
-            dwCreationFlags = CREATE_NO_WINDOW.toUInt(),
+            dwCreationFlags = creationFlags,
             lpEnvironment = null,
             lpCurrentDirectory = null,
             lpStartupInfo = startupInfo.ptr,
@@ -420,9 +452,16 @@ class WindowsArchiveRepository(
         CloseHandle(stdoutWriteHandle.value)
 
         if (success == 0) {
+            job?.let { CloseHandle(it) }
             CloseHandle(stdoutReadHandle.value)
             logger.e { "Failed to create process for extraction: ${GetLastError()}" }
             return@memScoped -1
+        }
+
+        // Assign to the job and resume (the process was created suspended).
+        if (job != null) {
+            AssignProcessToJobObject(job, processInfo.hProcess)
+            ResumeThread(processInfo.hThread)
         }
 
         // Read output and parse progress. Accumulate raw bytes per line and decode
@@ -460,18 +499,9 @@ class WindowsArchiveRepository(
             }
         }
 
-        while (true) {
-            val readSuccess = ReadFile(
-                stdoutReadHandle.value,
-                buffer,
-                4095u,
-                bytesRead.ptr,
-                null
-            )
-            if (readSuccess == 0 || bytesRead.value == 0u) break
-
-            // Treat \r and \n as line endings; skip embedded null bytes.
-            for (i in 0 until bytesRead.value.toInt()) {
+        // Treat \r and \n as line endings; skip embedded null bytes.
+        fun consume(n: Int) {
+            for (i in 0 until n) {
                 val b = buffer[i]
                 when {
                     b == '\r'.code.toByte() || b == '\n'.code.toByte() -> handleLine()
@@ -480,20 +510,52 @@ class WindowsArchiveRepository(
             }
         }
 
-        // Process any trailing line without a terminator
+        // Drain all currently-available pipe data without blocking, so the loop
+        // below can poll for cancellation between reads.
+        val bytesAvail = alloc<UIntVar>()
+        fun drainAvailable() {
+            while (true) {
+                if (PeekNamedPipe(stdoutReadHandle.value, null, 0u, null, bytesAvail.ptr, null) == 0) break
+                if (bytesAvail.value == 0u) break
+                val toRead = minOf(bytesAvail.value, 4095u)
+                if (ReadFile(stdoutReadHandle.value, buffer, toRead, bytesRead.ptr, null) == 0 ||
+                    bytesRead.value == 0u) break
+                consume(bytesRead.value.toInt())
+            }
+        }
+
+        var processExited = false
+        var cancelled = false
+        while (!processExited) {
+            drainAvailable()
+            if (!shouldContinue()) {
+                logger.i { "Extraction cancelled — terminating 7-Zip child process" }
+                TerminateProcess(processInfo.hProcess, 1u)
+                cancelled = true
+                WaitForSingleObject(processInfo.hProcess, 5000u)
+                break
+            }
+            // Wait briefly for exit; loop back to drain + re-check cancellation.
+            if (WaitForSingleObject(processInfo.hProcess, 100u) == 0u /* WAIT_OBJECT_0 */) {
+                processExited = true
+            }
+        }
+
+        // Final drain of anything still buffered, then flush any trailing line.
+        drainAvailable()
         handleLine()
 
-        // Wait for process and get exit code
-        WaitForSingleObject(processInfo.hProcess, INFINITE)
         val exitCode = alloc<UIntVar>()
         GetExitCodeProcess(processInfo.hProcess, exitCode.ptr)
 
-        // Cleanup
+        // Cleanup. Closing the job handle after the child has exited is harmless;
+        // if we were exiting abruptly the OS would close it and kill the child.
         CloseHandle(processInfo.hProcess)
         CloseHandle(processInfo.hThread)
         CloseHandle(stdoutReadHandle.value)
+        job?.let { CloseHandle(it) }
 
-        val code = exitCode.value.toInt()
+        val code = if (cancelled) 1 else exitCode.value.toInt()
 
         // Check for password errors before returning
         if (code != 0 && allOutput.toString().indicatesPasswordError()) {
