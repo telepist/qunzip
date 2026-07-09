@@ -78,7 +78,7 @@ class WindowsArchiveRepository(
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] Running 7z l -slt..." }
         // -sccUTF-8: emit console output (paths) as UTF-8 instead of the OEM
         // console code page, so non-ASCII entry names decode correctly below.
-        val args = mutableListOf("l", "-slt", "-sccUTF-8", archivePath, "-p\"${password ?: ""}\"")
+        val args = mutableListOf("l", "-slt", "-sccUTF-8", archivePath, "-p${password ?: ""}")
         val output = execute7zipCommand(args)
         logger.d { "[${startMark.elapsedNow().inWholeMilliseconds}ms] 7z command completed, output size: ${output.length} chars" }
 
@@ -216,9 +216,9 @@ class WindowsArchiveRepository(
     override suspend fun isPasswordRequired(archivePath: String): Boolean {
         logger.d { "Checking if password required: $archivePath" }
 
-        // Run 7z t with empty password (-p"") and capture output to check for password indicators.
+        // Run 7z t with an empty password (-p) and capture output to check for password indicators.
         // The empty password prevents 7zip from blocking on stdin waiting for user input.
-        val output = execute7zipCommand(listOf("t", "-p\"\"", archivePath))
+        val output = execute7zipCommand(listOf("t", "-p", archivePath))
         return output.indicatesPasswordError()
     }
 
@@ -258,13 +258,10 @@ class WindowsArchiveRepository(
      * Uses CreateProcessW with CREATE_NO_WINDOW and pipes for stdout
      */
     private fun execute7zipCommand(args: List<String>): String = memScoped {
-        // Quote arguments that contain spaces
-        val quotedArgs = args.map { arg ->
-            if (arg.contains(' ') || arg.contains('(') || arg.contains(')')) "\"$arg\"" else arg
-        }
-        logger.d { "Executing 7zip command: $sevenZipPath ${quotedArgs.joinToString(" ")}" }
-
-        val command = "$sevenZipPath ${quotedArgs.joinToString(" ")}"
+        // Quote the program path and every argument with proper Windows rules so
+        // paths and passwords containing spaces or quotes survive intact.
+        val command = buildWindowsCommandLine(sevenZipPath, args)
+        logger.d { "Executing 7zip command: $command" }
 
         // Create pipe for stdout
         val securityAttrs = alloc<SECURITY_ATTRIBUTES>()
@@ -345,9 +342,8 @@ class WindowsArchiveRepository(
 
     private fun execute7zipTest(archivePath: String, password: String? = null): Int {
         // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
-        // Empty password (-p"") is harmless for non-encrypted archives.
-        val passwordArg = " -p\"${password ?: ""}\""
-        val command = "$sevenZipPath t \"$archivePath\"$passwordArg"
+        // Empty password (-p) is harmless for non-encrypted archives.
+        val command = buildWindowsCommandLine(sevenZipPath, listOf("t", archivePath, "-p${password ?: ""}"))
         return executeCommandSilently(command)
     }
 
@@ -366,11 +362,13 @@ class WindowsArchiveRepository(
         // Use -bsp1 to output progress to stdout, -bb1 for file names
         // Note: Conflict handling is done at application level, not by 7zip's -aou flag
         // Always pass -p to prevent 7zip from blocking on stdin for encrypted archives.
-        val passwordArg = " -p\"${password ?: ""}\""
         // -sccUTF-8 makes 7-Zip print the "- <path>" progress lines as UTF-8, so
         // the current-file display shows non-ASCII names correctly (they're
         // decoded as UTF-8 below).
-        val command = "$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y -bsp1 -bb1 -sccUTF-8$passwordArg"
+        val command = buildWindowsCommandLine(
+            sevenZipPath,
+            listOf("x", archivePath, "-o$destinationPath", "-y", "-bsp1", "-bb1", "-sccUTF-8", "-p${password ?: ""}")
+        )
         logger.d { "Extraction command with progress: $command" }
 
         // Create pipe for stdout
@@ -384,8 +382,12 @@ class WindowsArchiveRepository(
 
         if (CreatePipe(stdoutReadHandle.ptr, stdoutWriteHandle.ptr, securityAttrs.ptr, 0u) == 0) {
             logger.e { "Failed to create pipe for progress tracking" }
-            return@memScoped executeCommandSilently("$sevenZipPath x \"$archivePath\" -o\"$destinationPath\" -y -p\"${password ?: ""}\"")
-
+            return@memScoped executeCommandSilently(
+                buildWindowsCommandLine(
+                    sevenZipPath,
+                    listOf("x", archivePath, "-o$destinationPath", "-y", "-p${password ?: ""}")
+                )
+            )
         }
 
         // Ensure the read handle is not inherited
@@ -696,6 +698,49 @@ private fun getBundled7zipPath(): String {
                 "Checked: ${candidates.distinct().joinToString()}"
         )
     }
+}
+
+/**
+ * Build a Windows command line from a program path and arguments, quoting each
+ * token per the CommandLineToArgvW rules that CreateProcessW/7-Zip follow. This
+ * keeps paths and passwords that contain spaces or double quotes intact, and
+ * quotes the program path itself (the install dir is "…\Quick Unzip", which has
+ * a space).
+ */
+private fun buildWindowsCommandLine(program: String, args: List<String>): String =
+    (listOf(program) + args).joinToString(" ") { quoteWindowsArg(it) }
+
+/**
+ * Quote a single argument using the standard MSVCRT/CommandLineToArgvW algorithm:
+ * wrap in double quotes when it contains whitespace or a quote, escape embedded
+ * quotes with a backslash, and double any run of backslashes that immediately
+ * precedes a quote (including the closing one).
+ */
+private fun quoteWindowsArg(arg: String): String {
+    if (arg.isNotEmpty() && arg.none { it == ' ' || it == '\t' || it == '"' }) {
+        return arg
+    }
+    val sb = StringBuilder()
+    sb.append('"')
+    var backslashes = 0
+    for (c in arg) {
+        when (c) {
+            '\\' -> backslashes++
+            '"' -> {
+                repeat(backslashes * 2 + 1) { sb.append('\\') }
+                backslashes = 0
+                sb.append('"')
+            }
+            else -> {
+                repeat(backslashes) { sb.append('\\') }
+                backslashes = 0
+                sb.append(c)
+            }
+        }
+    }
+    repeat(backslashes * 2) { sb.append('\\') }
+    sb.append('"')
+    return sb.toString()
 }
 
 private fun joinWindowsPath(vararg parts: String): String {

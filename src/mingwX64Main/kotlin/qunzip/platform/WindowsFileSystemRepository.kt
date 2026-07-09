@@ -59,7 +59,11 @@ class WindowsFileSystemRepository(
         val lastSeparator = normalizedPath.lastIndexOf('\\')
 
         return if (lastSeparator > 0) {
-            normalizedPath.substring(0, lastSeparator)
+            val parent = normalizedPath.substring(0, lastSeparator)
+            // A drive root ("C:") must keep its trailing backslash — "C:" alone
+            // refers to the drive's current directory, not its root, so 7-Zip
+            // would extract to the wrong place.
+            if (parent.length == 2 && parent[1] == ':') "$parent\\" else parent
         } else {
             "."
         }
@@ -94,13 +98,21 @@ class WindowsFileSystemRepository(
         return mkdir(path) == 0
     }
 
-    override suspend fun getAvailableSpace(path: String): Long {
+    override suspend fun getAvailableSpace(path: String): Long = memScoped {
         logger.d { "Getting available space for: $path" }
 
-        // For now, return a large value (proper implementation requires Windows-specific structs)
-        // This is a simplified version
-        logger.w { "Disk space check not fully implemented, returning large default" }
-        return Long.MAX_VALUE
+        // Free bytes available to the caller on the volume that holds `path`.
+        val freeBytesAvailable = alloc<ULARGE_INTEGER>()
+        if (GetDiskFreeSpaceExW(path, freeBytesAvailable.ptr, null, null) != 0) {
+            val free = freeBytesAvailable.QuadPart
+            // Clamp values above Long range (petabyte-scale volumes) rather than wrap.
+            return@memScoped if (free > Long.MAX_VALUE.toULong()) Long.MAX_VALUE else free.toLong()
+        }
+
+        // If we can't determine free space, don't block a valid extraction —
+        // fall back to "assume enough" (the previous behaviour).
+        logger.w { "GetDiskFreeSpaceExW failed for $path (${GetLastError()}); assuming space available" }
+        return@memScoped Long.MAX_VALUE
     }
 
     override suspend fun moveToTrash(filePath: String): Boolean {

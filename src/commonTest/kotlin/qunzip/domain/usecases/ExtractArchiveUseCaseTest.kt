@@ -125,6 +125,68 @@ class ExtractArchiveUseCaseTest {
     }
 
     @Test
+    fun `failed move throws FAILED and never reports COMPLETED or trashes the archive`() = runTest {
+        // A failed moveFile must not be treated as success: the flow must emit
+        // FAILED and throw (not COMPLETED), and the source archive must not be
+        // trashed — so the extraction is safe to retry.
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("document.pdf", "document.pdf", false, 1024L)),
+            totalSize = 1024L
+        )
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+        mockFileSystemRepository.existingPaths = setOf("/test/document.pdf") // force temp-folder path
+        mockFileSystemRepository.moveFileResult = false
+
+        val collected = mutableListOf<ExtractionProgress>()
+        val thrown: Throwable? = try {
+            useCase(archivePath, ExtractionOptions(moveToTrashAfterExtraction = true))
+                .collect { collected += it }
+            null
+        } catch (e: Throwable) {
+            e
+        }
+
+        assertTrue(thrown is ExtractionError.IOError, "expected IOError, got $thrown")
+        assertEquals(ExtractionStage.FAILED, collected.last().stage)
+        assertFalse(collected.any { it.stage == ExtractionStage.COMPLETED })
+        // Archive must be preserved (not trashed) so the user can retry.
+        assertFalse(mockFileSystemRepository.moveToTrashCalled)
+    }
+
+    @Test
+    fun `failed directory creation throws and emits FAILED`() = runTest {
+        val archivePath = "/test/archive.zip"
+        val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
+        val contents = ArchiveContents(
+            entries = listOf(
+                ArchiveEntry("a.txt", "a.txt", false, 512L),
+                ArchiveEntry("b.txt", "b.txt", false, 512L)
+            ),
+            totalSize = 1024L
+        )
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+        mockFileSystemRepository.createDirectoryResult = false
+
+        val collected = mutableListOf<ExtractionProgress>()
+        val thrown: Throwable? = try {
+            useCase(archivePath).collect { collected += it }
+            null
+        } catch (e: Throwable) {
+            e
+        }
+
+        assertTrue(thrown is ExtractionError.IOError, "expected IOError, got $thrown")
+        assertEquals(ExtractionStage.FAILED, collected.last().stage)
+        assertFalse(collected.any { it.stage == ExtractionStage.COMPLETED })
+    }
+
+    @Test
     fun `single file conflict notification shows renamed path`() = runTest {
         val archivePath = "/test/archive.zip"
         val archive = Archive(archivePath, "archive.zip", ArchiveFormat.ZIP, 1024L)
@@ -359,8 +421,8 @@ class ExtractArchiveUseCaseTest {
         // The final extraction should use the inner contents' strategy (multi-file -> folder)
         assertTrue(mockFileSystemRepository.createDirectoryCalled)
         assertEquals("/test/archive", mockFileSystemRepository.createdDirectory)
-        // Should delete the intermediate .tar file
-        assertTrue(mockFileSystemRepository.deletedFiles.contains("/test/archive.tar"))
+        // Should clean up the temp folder holding the intermediate .tar
+        assertTrue(mockFileSystemRepository.deleteDirectoryCalled)
     }
 
     @Test
@@ -394,8 +456,8 @@ class ExtractArchiveUseCaseTest {
         assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
         // Single folder -> extract to parent dir
         assertEquals("/test", mockArchiveRepository.lastExtractionPath)
-        // Intermediate .tar cleaned up
-        assertTrue(mockFileSystemRepository.deletedFiles.contains("/test/project.tar"))
+        // Intermediate .tar is cleaned up via its temp folder, not deleteFile.
+        assertTrue(mockFileSystemRepository.deleteDirectoryCalled)
     }
 
     // ========== Options Tests ==========
@@ -650,11 +712,19 @@ class ExtractArchiveUseCaseTest {
         var throwOnGetContents: Throwable? = null
         var throwInExtractFlow: Throwable? = null
 
+        // Resolve per-path overrides by exact path, falling back to basename so
+        // tests can key an intermediate like "/test/archive.tar" and still match
+        // when the use case decompresses it into a temp folder (qunzip_<hash>).
+        private fun <V> Map<String, V>.lookup(path: String): V? =
+            this[path] ?: entries.firstOrNull {
+                it.key.substringAfterLast('/') == path.substringAfterLast('/')
+            }?.value
+
         override suspend fun getArchiveInfo(archivePath: String) =
-            archiveInfoMap[archivePath] ?: archiveInfo
+            archiveInfoMap.lookup(archivePath) ?: archiveInfo
         override suspend fun getArchiveContents(archivePath: String, password: String?): ArchiveContents {
             throwOnGetContents?.let { throw it }
-            return archiveContentsMap[archivePath] ?: archiveContents
+            return archiveContentsMap.lookup(archivePath) ?: archiveContents
         }
         override suspend fun testArchive(archivePath: String, password: String?) = true
 
@@ -664,7 +734,7 @@ class ExtractArchiveUseCaseTest {
             extractCallCount++
             lastExtractionPath = destinationPath
             lastPassword = password
-            val contents = archiveContentsMap[archivePath] ?: archiveContents
+            val contents = archiveContentsMap.lookup(archivePath) ?: archiveContents
             val toThrow = throwInExtractFlow
             return if (toThrow != null) {
                 kotlinx.coroutines.flow.flow {
@@ -700,6 +770,8 @@ class ExtractArchiveUseCaseTest {
         var moveToTrashCalled = false
         var moveFileCalled = false
         var moveFileDestination: String? = null
+        var moveFileResult = true
+        var createDirectoryResult = true
         var deleteDirectoryCalled = false
         val deletedFiles = mutableListOf<String>()
 
@@ -713,7 +785,7 @@ class ExtractArchiveUseCaseTest {
         override suspend fun createDirectory(path: String): Boolean {
             createDirectoryCalled = true
             createdDirectory = path
-            return true
+            return createDirectoryResult
         }
 
         override suspend fun getAvailableSpace(path: String) = availableSpace
@@ -730,7 +802,7 @@ class ExtractArchiveUseCaseTest {
         override suspend fun moveFile(sourcePath: String, destinationPath: String): Boolean {
             moveFileCalled = true
             moveFileDestination = destinationPath
-            return true
+            return moveFileResult
         }
 
         override suspend fun deleteFile(path: String): Boolean {

@@ -19,6 +19,10 @@ open class ExtractArchiveUseCase(
     ): Flow<ExtractionProgress> = flow {
         // Track directories we create so we can clean up on failure
         var createdDir: String? = null
+        // Temp folder holding the decompressed intermediate .tar for compound
+        // formats; tracked separately so it's always cleaned up (it outlives
+        // `createdDir`, which gets reassigned during the inner extraction).
+        var compoundTempDir: String? = null
         try {
             emit(ExtractionProgress(archivePath, stage = ExtractionStage.STARTING))
 
@@ -33,20 +37,25 @@ open class ExtractArchiveUseCase(
             // For compound tar formats (.tar.gz, .tar.bz2, .tar.xz), first decompress
             // to get the intermediate .tar, then extract that.
             val actualArchivePath: String
-            var intermediateTarPath: String? = null
 
             if (archive.format.isCompoundTarFormat) {
                 val outerContents = archiveRepository.getArchiveContents(archivePath, password)
                 val tarName = outerContents.topLevelEntries.firstOrNull()?.name
 
-                // Decompress outer layer to parent dir
-                archiveRepository.extractArchive(archivePath, parentDir, password)
-                    .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
-
                 if (tarName != null) {
-                    val tarPath = fileSystemRepository.joinPath(parentDir, tarName)
-                    intermediateTarPath = tarPath
-                    actualArchivePath = tarPath
+                    // Decompress the outer layer into an isolated temp folder — never
+                    // into the parent dir — so we can't overwrite (or later delete) a
+                    // pre-existing <name>.tar the user already has there.
+                    val tarTemp = createTempFolder(parentDir)
+                    if (!fileSystemRepository.createDirectory(tarTemp)) {
+                        throw ExtractionError.IOError("Failed to create temp folder: $tarTemp")
+                    }
+                    compoundTempDir = tarTemp
+
+                    archiveRepository.extractArchive(archivePath, tarTemp, password)
+                        .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
+
+                    actualArchivePath = fileSystemRepository.joinPath(tarTemp, tarName)
                 } else {
                     actualArchivePath = archivePath
                 }
@@ -73,7 +82,7 @@ open class ExtractArchiveUseCase(
 
             // Determine target path and check for conflicts
             // For compound formats, use the original archive name (without .tar.gz etc.)
-            val archiveNameForFolder = if (intermediateTarPath != null) {
+            val archiveNameForFolder = if (archive.format.isCompoundTarFormat) {
                 archive.name.substringBeforeLast('.').substringBeforeLast('.')
             } else {
                 archive.nameWithoutExtension
@@ -91,7 +100,9 @@ open class ExtractArchiveUseCase(
             val finalPath: String
             if (strategy == ExtractionStrategy.MULTIPLE_FILES_TO_FOLDER) {
                 finalPath = generateUniquePath(targetPath)
-                fileSystemRepository.createDirectory(finalPath)
+                if (!fileSystemRepository.createDirectory(finalPath)) {
+                    throw ExtractionError.IOError("Failed to create directory: $finalPath")
+                }
                 createdDir = finalPath
 
                 archiveRepository.extractArchive(actualArchivePath, finalPath, password)
@@ -99,7 +110,9 @@ open class ExtractArchiveUseCase(
             } else if (hasConflict) {
                 // Single file or folder with conflict: use temp folder
                 val tempFolder = createTempFolder(parentDir)
-                fileSystemRepository.createDirectory(tempFolder)
+                if (!fileSystemRepository.createDirectory(tempFolder)) {
+                    throw ExtractionError.IOError("Failed to create temp folder: $tempFolder")
+                }
                 createdDir = tempFolder
 
                 archiveRepository.extractArchive(actualArchivePath, tempFolder, password)
@@ -113,7 +126,13 @@ open class ExtractArchiveUseCase(
                     generateUniquePath(targetPath)
                 }
 
-                fileSystemRepository.moveFile(extractedItem, finalPath)
+                // If the move fails, do NOT delete the temp folder here — throw and
+                // let the failure path handle cleanup, so we never report success
+                // for a destination that doesn't exist. The source archive is still
+                // present (it's only trashed on success), so a retry is safe.
+                if (!fileSystemRepository.moveFile(extractedItem, finalPath)) {
+                    throw ExtractionError.IOError("Failed to move extracted item to: $finalPath")
+                }
                 fileSystemRepository.deleteDirectory(tempFolder)
                 createdDir = null // Temp folder cleaned up successfully
             } else {
@@ -123,9 +142,10 @@ open class ExtractArchiveUseCase(
                     .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
             }
 
-            // Clean up intermediate .tar file from compound extraction
-            if (intermediateTarPath != null) {
-                fileSystemRepository.deleteFile(intermediateTarPath)
+            // Clean up the temp folder holding the intermediate .tar (compound formats)
+            compoundTempDir?.let { dir ->
+                try { fileSystemRepository.deleteDirectory(dir) } catch (_: Throwable) {}
+                compoundTempDir = null
             }
 
             emit(ExtractionProgress(
@@ -159,9 +179,12 @@ open class ExtractArchiveUseCase(
             ))
 
         } catch (error: ExtractionError) {
-            // Clean up any directory we created before the failure
+            // Clean up anything we created before the failure
             if (createdDir != null) {
                 try { fileSystemRepository.deleteDirectory(createdDir) } catch (_: Throwable) {}
+            }
+            compoundTempDir?.let { dir ->
+                try { fileSystemRepository.deleteDirectory(dir) } catch (_: Throwable) {}
             }
             // Don't show notification or emit FAILED for password errors —
             // the ViewModel will re-prompt for the password
@@ -175,9 +198,12 @@ open class ExtractArchiveUseCase(
             emit(ExtractionProgress(archivePath = archivePath, stage = ExtractionStage.FAILED))
             throw error
         } catch (throwable: Throwable) {
-            // Clean up any directory we created before the failure
+            // Clean up anything we created before the failure
             if (createdDir != null) {
                 try { fileSystemRepository.deleteDirectory(createdDir) } catch (_: Throwable) {}
+            }
+            compoundTempDir?.let { dir ->
+                try { fileSystemRepository.deleteDirectory(dir) } catch (_: Throwable) {}
             }
             val error = ExtractionError.UnknownError(
                 message = throwable.message ?: "Unknown error occurred",
