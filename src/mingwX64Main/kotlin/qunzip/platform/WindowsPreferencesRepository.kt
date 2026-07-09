@@ -24,22 +24,35 @@ class WindowsPreferencesRepository(
         ignoreUnknownKeys = true
     }
 
+    // Store settings under %APPDATA%\QuickUnzip so they're writable on every
+    // install (a system-wide Program Files install is not writable unelevated),
+    // and shared between qunzip.exe and QuickUnzip.exe. Falls back to the exe
+    // directory when APPDATA is unavailable (unusual / portable use).
     private val preferencesFile: String by lazy {
-        // Store settings.json in the same directory as the executable
-        val executableDir = getExecutableDirectory()
-        "$executableDir\\settings.json"
+        "${getPreferencesDirectory()}\\settings.json"
+    }
+
+    // Older versions stored settings.json next to the exe; read it once for
+    // migration if the per-user file doesn't exist yet.
+    private val legacyPreferencesFile: String by lazy {
+        "${getExecutableDirectory()}\\settings.json"
     }
 
     override suspend fun loadPreferences(): UserPreferences {
-        logger.d { "Loading preferences from: $preferencesFile" }
+        val path = when {
+            fileExists(preferencesFile) -> preferencesFile
+            fileExists(legacyPreferencesFile) -> legacyPreferencesFile
+            else -> null
+        }
+        logger.d { "Loading preferences from: ${path ?: "(defaults)"}" }
 
-        if (!fileExists(preferencesFile)) {
+        if (path == null) {
             logger.d { "No preferences file found, using defaults" }
             return UserPreferences.DEFAULT
         }
 
         return try {
-            val content = readFile(preferencesFile)
+            val content = readFile(path)
             if (content.isBlank()) {
                 logger.w { "Preferences file is empty, using defaults" }
                 return UserPreferences.DEFAULT
@@ -58,7 +71,10 @@ class WindowsPreferencesRepository(
 
         return try {
             val content = json.encodeToString(preferences)
-            writeFile(preferencesFile, content)
+            if (!writeFileAtomically(preferencesFile, content)) {
+                logger.e { "Failed to write preferences file" }
+                return false
+            }
             logger.i { "Preferences saved successfully" }
             true
         } catch (e: Exception) {
@@ -76,6 +92,11 @@ class WindowsPreferencesRepository(
     }
 
     // Helper methods
+
+    private fun getPreferencesDirectory(): String {
+        val appData = getenv("APPDATA")?.toKString()?.takeIf { it.isNotBlank() }
+        return if (appData != null) "$appData\\QuickUnzip" else getExecutableDirectory()
+    }
 
     private fun getExecutableDirectory(): String = memScoped {
         val buffer = allocArray<ByteVar>(MAX_PATH)
@@ -111,13 +132,38 @@ class WindowsPreferencesRepository(
         }
     }
 
-    private fun writeFile(path: String, content: String): Boolean {
-        val file = fopen(path, "w") ?: return false
-        try {
-            fputs(content, file)
-            return true
-        } finally {
-            fclose(file)
+    /**
+     * Write [content] to [path] atomically: create the parent directory if
+     * needed, write to a temp file (checking every step), then replace the
+     * target with MoveFileEx. Returns false — without touching the existing
+     * file — on any failure, so a full disk or permission error can't leave a
+     * truncated settings.json (which would load as defaults).
+     */
+    private fun writeFileAtomically(path: String, content: String): Boolean {
+        val dir = path.substringBeforeLast('\\', missingDelimiterValue = "")
+        if (dir.isNotEmpty() && access(dir, F_OK) != 0) {
+            mkdir(dir)
         }
+
+        val tempPath = "$path.tmp"
+        val file = fopen(tempPath, "w") ?: return false
+        var ok = true
+        try {
+            if (fputs(content, file) < 0) ok = false
+        } finally {
+            if (fclose(file) != 0) ok = false
+        }
+
+        if (!ok) {
+            remove(tempPath)
+            return false
+        }
+
+        // Atomically move the fully-written temp file over the target.
+        if (MoveFileExA(tempPath, path, MOVEFILE_REPLACE_EXISTING.toUInt()) == 0) {
+            remove(tempPath)
+            return false
+        }
+        return true
     }
 }
