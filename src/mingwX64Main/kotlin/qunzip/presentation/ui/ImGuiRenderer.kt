@@ -160,9 +160,12 @@ class ImGuiRenderer : UiRenderer {
             }
             else -> {
                 if (state.isWaitingForPassword) {
+                    // Show the guidance and leave the window open (the GUI can't
+                    // prompt for a password). Don't cancel here — cancelling sets a
+                    // FAILED "Cancelled" state that would overwrite this message on
+                    // the next frame. The user closes the window when done reading.
                     safeTextColored(1f, 0.8f, 0.2f, 1f, "Password-protected archive.")
                     safeTextColored(0.6f, 0.6f, 0.6f, 1f, "Use CLI mode: qunzip <archive>")
-                    viewModel.extractionViewModel.cancelExtraction()
                 }
             }
         }

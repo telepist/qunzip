@@ -16,12 +16,15 @@ import kotlin.time.Instant
 // Substrings 7-Zip prints (case-insensitive) when an archive is encrypted
 // or the supplied password is wrong. Used to translate exit-code failures
 // into ExtractionError.PasswordRequired so the GUI can re-prompt.
+// Deliberately specific multi-word phrases. A bare "encrypted" would also match
+// entry names (extraction output includes filenames via -bb1) or the archive
+// path, so a CRC/disk error on an archive containing "encrypted" in a name would
+// be misreported as a wrong password.
 private val PASSWORD_INDICATORS = listOf(
     "wrong password",
     "can not open encrypted archive",
     "data error in encrypted file",
     "enter password",
-    "encrypted",
 )
 
 private fun String.indicatesPasswordError(): Boolean {
@@ -318,10 +321,11 @@ class WindowsArchiveRepository(
             throw ExtractionError.IOError("Failed to execute 7zip command: ${GetLastError()}")
         }
 
-        // Read the raw bytes, then decode once as UTF-8 (7-Zip is invoked with
-        // -sccUTF-8). Decoding per-chunk or byte-by-byte would corrupt multi-byte
-        // UTF-8 sequences that straddle a read boundary or single-byte handling.
-        val outBytes = ArrayList<Byte>()
+        // Collect raw chunks, then decode once as UTF-8 (7-Zip is invoked with
+        // -sccUTF-8). Decoding per-chunk would corrupt a multi-byte UTF-8 sequence
+        // straddling a read boundary. Chunks (not a per-byte list) avoid boxing
+        // for large listings.
+        val chunks = mutableListOf<ByteArray>()
         val buffer = allocArray<ByteVar>(4096)
         val bytesRead = alloc<UIntVar>()
 
@@ -334,9 +338,8 @@ class WindowsArchiveRepository(
                 null
             )
             if (readSuccess == 0 || bytesRead.value == 0u) break
-            for (i in 0 until bytesRead.value.toInt()) {
-                outBytes.add(buffer[i])
-            }
+            val n = bytesRead.value.toInt()
+            chunks.add(ByteArray(n) { buffer[it] })
         }
 
         // Wait for process and cleanup
@@ -345,7 +348,14 @@ class WindowsArchiveRepository(
         CloseHandle(processInfo.hThread)
         CloseHandle(stdoutReadHandle.value)
 
-        return@memScoped outBytes.toByteArray().decodeToString()
+        val total = chunks.sumOf { it.size }
+        val combined = ByteArray(total)
+        var offset = 0
+        for (chunk in chunks) {
+            chunk.copyInto(combined, offset)
+            offset += chunk.size
+        }
+        return@memScoped combined.decodeToString()
     }
 
     private fun execute7zipTest(archivePath: String, password: String? = null): Int {

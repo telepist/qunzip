@@ -69,8 +69,11 @@ fun mainGui(entryArgs: Array<String>) {
     val args = resolveCommandLineArgs(entryArgs)
 
     // The GUI exe ignores any flags — it only consumes a file path. CLI flags
-    // belong to qunzip.exe.
+    // belong to qunzip.exe. If dropping flags leaves nothing but there WAS an
+    // argument (e.g. a relative path like "-weird.zip"), keep the first one so we
+    // still try to open it rather than silently falling into settings mode.
     val cleanedArgs = args.filterNot { it.startsWith("-") }
+        .ifEmpty { args.take(1) }
     runApp(cleanedArgs, useGui = true, isStandalone = true, logger = logger)
 }
 
