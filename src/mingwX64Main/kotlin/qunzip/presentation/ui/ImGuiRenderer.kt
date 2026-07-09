@@ -38,10 +38,10 @@ class ImGuiRenderer : UiRenderer {
             "Quick Unzip"
         }
 
-        // Extraction view is wider but shorter than the settings panel —
-        // settings has more rows (preferences + supported formats), the
-        // extraction view only needs archive name + progress + status.
-        val windowWidth = if (isExtraction) 520 else 460
+        // Extraction and settings share a width; the extraction view is just
+        // shorter — settings has more rows (preferences + supported formats),
+        // the extraction view only needs archive name + progress + status.
+        val windowWidth = 460
         val windowHeight = if (isExtraction) 140 else 220
 
         val app = imgui_app_create(initialTitle, windowWidth, windowHeight)
@@ -146,7 +146,7 @@ class ImGuiRenderer : UiRenderer {
                 val bytes = formatBytes(progress.bytesProcessed)
                 safeText("$files  -  $bytes")
                 progress.currentFile?.let { file ->
-                    val display = if (file.length > 55) "..." + file.takeLast(52) else file
+                    val display = if (file.length > 46) "..." + file.takeLast(43) else file
                     safeTextColored(0.5f, 0.5f, 0.5f, 1f, display)
                 }
             }
