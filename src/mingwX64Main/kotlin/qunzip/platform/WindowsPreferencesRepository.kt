@@ -59,6 +59,15 @@ class WindowsPreferencesRepository(
             }
             json.decodeFromString<UserPreferences>(content).also {
                 logger.d { "Loaded preferences: $it" }
+                // One-time migration: if we loaded from the old exe-dir location,
+                // copy it to %APPDATA% and remove the legacy file so subsequent
+                // loads/saves use the new, always-writable path.
+                if (path == legacyPreferencesFile) {
+                    if (writeFileAtomically(preferencesFile, content)) {
+                        remove(legacyPreferencesFile)
+                        logger.i { "Migrated preferences to $preferencesFile" }
+                    }
+                }
             }
         } catch (e: Exception) {
             logger.e(e) { "Failed to parse preferences, using defaults" }

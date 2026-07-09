@@ -420,7 +420,7 @@ class WindowsArchiveRepository(
         if (job != null) {
             val jobInfo = alloc<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>()
             jobInfo.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE.toUInt()
-            SetInformationJobObject(
+            val setOk = SetInformationJobObject(
                 job,
                 // JobObjectExtendedLimitInformation (9) — passed by value; the K/N
                 // Windows headers map JOBOBJECTINFOCLASS to a UInt.
@@ -428,6 +428,11 @@ class WindowsArchiveRepository(
                 jobInfo.ptr,
                 sizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>().toUInt()
             )
+            // If configuring kill-on-close failed the child wouldn't be terminated
+            // when we exit — log it so the degraded behaviour is diagnosable.
+            if (setOk == 0) {
+                logger.w { "SetInformationJobObject(kill-on-close) failed: ${GetLastError()}" }
+            }
         }
 
         val startupInfo = alloc<STARTUPINFOW>()
