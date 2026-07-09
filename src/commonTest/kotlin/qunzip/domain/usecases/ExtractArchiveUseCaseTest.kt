@@ -426,6 +426,31 @@ class ExtractArchiveUseCaseTest {
     }
 
     @Test
+    fun `bare gz of a non-tar file extracts as a single file`() = runTest {
+        // backup.sql.gz classifies as TAR_GZ (compound) by extension, but its
+        // content is a single non-tar file — it must extract in one stage, not
+        // decompress-then-untar (which would fail).
+        val archivePath = "/test/backup.sql.gz"
+        val archive = Archive(archivePath, "backup.sql.gz", ArchiveFormat.TAR_GZ, 512L)
+        val contents = ArchiveContents(
+            entries = listOf(ArchiveEntry("backup.sql", "backup.sql", false, 1024L)),
+            totalSize = 1024L
+        )
+        mockArchiveRepository.archiveInfo = archive
+        mockArchiveRepository.archiveContents = contents
+        mockFileSystemRepository.parentDirectory = "/test"
+
+        val progressList = useCase(archivePath).toList()
+
+        assertEquals(ExtractionStage.COMPLETED, progressList.last().stage)
+        // Single stage only — no decompress-then-untar.
+        assertEquals(1, mockArchiveRepository.extractCallCount)
+        // Extracted directly to the parent dir (single file, no conflict, no temp).
+        assertEquals("/test", mockArchiveRepository.lastExtractionPath)
+        assertFalse(mockFileSystemRepository.createDirectoryCalled)
+    }
+
+    @Test
     fun `tar_gz with single folder in tar extracts directly`() = runTest {
         val archivePath = "/test/project.tar.gz"
         val archive = Archive(archivePath, "project.tar.gz", ArchiveFormat.TAR_GZ, 2048L)

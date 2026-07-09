@@ -34,31 +34,32 @@ open class ExtractArchiveUseCase(
             val parentDir = fileSystemRepository.getParentDirectory(archivePath)
             val password = options.password
 
-            // For compound tar formats (.tar.gz, .tar.bz2, .tar.xz), first decompress
-            // to get the intermediate .tar, then extract that.
+            // The compound tar extensions (.tar.gz/.bz2/.xz) need two stages —
+            // decompress the outer layer, then extract the inner .tar. But those
+            // same extensions also cover a bare compressed single file
+            // (e.g. backup.sql.gz), where the decompressed content is NOT a tar and
+            // 7-Zip extracts it directly. So only take the two-stage path when the
+            // inner entry is actually a .tar; otherwise treat it as a normal archive.
             val actualArchivePath: String
+            val innerName = if (archive.format.isCompoundTarFormat) {
+                archiveRepository.getArchiveContents(archivePath, password)
+                    .topLevelEntries.firstOrNull()?.name
+            } else null
 
-            if (archive.format.isCompoundTarFormat) {
-                val outerContents = archiveRepository.getArchiveContents(archivePath, password)
-                val tarName = outerContents.topLevelEntries.firstOrNull()?.name
-
-                if (tarName != null) {
-                    // Decompress the outer layer into an isolated temp folder — never
-                    // into the parent dir — so we can't overwrite (or later delete) a
-                    // pre-existing <name>.tar the user already has there.
-                    val tarTemp = createTempFolder(parentDir)
-                    if (!fileSystemRepository.createDirectory(tarTemp)) {
-                        throw ExtractionError.IOError("Failed to create temp folder: $tarTemp")
-                    }
-                    compoundTempDir = tarTemp
-
-                    archiveRepository.extractArchive(archivePath, tarTemp, password)
-                        .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
-
-                    actualArchivePath = fileSystemRepository.joinPath(tarTemp, tarName)
-                } else {
-                    actualArchivePath = archivePath
+            if (innerName != null && innerName.endsWith(".tar", ignoreCase = true)) {
+                // Decompress the outer layer into an isolated temp folder — never
+                // into the parent dir — so we can't overwrite (or later delete) a
+                // pre-existing <name>.tar the user already has there.
+                val tarTemp = createTempFolder(parentDir)
+                if (!fileSystemRepository.createDirectory(tarTemp)) {
+                    throw ExtractionError.IOError("Failed to create temp folder: $tarTemp")
                 }
+                compoundTempDir = tarTemp
+
+                archiveRepository.extractArchive(archivePath, tarTemp, password)
+                    .collect { progress -> emit(progress.copy(stage = ExtractionStage.EXTRACTING)) }
+
+                actualArchivePath = fileSystemRepository.joinPath(tarTemp, innerName)
             } else {
                 actualArchivePath = archivePath
             }
@@ -82,7 +83,9 @@ open class ExtractArchiveUseCase(
 
             // Determine target path and check for conflicts
             // For compound formats, use the original archive name (without .tar.gz etc.)
-            val archiveNameForFolder = if (archive.format.isCompoundTarFormat) {
+            // Only strip a double extension (foo.tar.gz -> foo) when we actually
+            // took the two-stage tar path; a bare foo.sql.gz uses the single entry.
+            val archiveNameForFolder = if (compoundTempDir != null) {
                 archive.name.substringBeforeLast('.').substringBeforeLast('.')
             } else {
                 archive.nameWithoutExtension
